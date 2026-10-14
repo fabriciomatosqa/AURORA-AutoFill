@@ -34,8 +34,15 @@ class ShortcutMatcher:
             if not character or len(character) != 1 or character in "\r\n\t":
                 return None
             self._buffer = (self._buffer + character)[-64:]
+            if character == " ":
+                for shortcut in self._shortcuts:
+                    if self._buffer.endswith(shortcut + " "):
+                        self._buffer = ""
+                        return shortcut + " "
             for shortcut in self._shortcuts:
                 if self._buffer.endswith(shortcut):
+                    if any(s != shortcut and s.startswith(shortcut) for s in self._shortcuts):
+                        return None
                     self._buffer = ""
                     return shortcut
             return None
@@ -54,6 +61,7 @@ class GlobalHotkeyListener:
         self._keyboard = None
         self._pending = None
         self._pending_key = None
+        self._modifiers: set[str] = set()
 
     def update_shortcuts(self, shortcuts: list[str]) -> None:
         self._matcher.configure(shortcuts)
@@ -79,11 +87,26 @@ class GlobalHotkeyListener:
             return False, f"Atalhos globais indisponíveis: {exc}"
 
     def _on_press(self, key: object) -> None:
-        if not self._enabled or self._pending is not None:
+        name = getattr(key, "name", "")
+        if name.startswith(("shift", "ctrl", "alt", "cmd")):
+            self._modifiers.add(name)
+            if not name.startswith("shift"):
+                self._matcher.clear()
+                self._pending = self._pending_key = None
+            return
+        if not self._enabled:
+            return
+        if self._pending is not None:
+            # Outra tecla chegou antes da expansão: não editar texto incerto.
+            self._pending = self._pending_key = None
+            self._matcher.clear()
+        if any(not m.startswith("shift") for m in self._modifiers):
             return
         try:
             character = getattr(key, "char", None)
             name = getattr(key, "name", "")
+            if name == "space":
+                character = " "
             matched = self._matcher.feed(character, name)
             if matched:
                 self._pending = matched
@@ -93,6 +116,7 @@ class GlobalHotkeyListener:
             self._matcher.clear()
 
     def _on_release(self, key: object) -> None:
+        self._modifiers.discard(getattr(key, "name", ""))
         if not self._enabled or self._pending is None:
             return
         # A liberação da tecla é a fronteira mais segura para colar no
@@ -101,7 +125,9 @@ class GlobalHotkeyListener:
         if not same:
             same = (getattr(key, 'vk', None) is not None and
                     getattr(key, 'vk', None) == getattr(self._pending_key, 'vk', None))
-        if not same:
+        if same:
+            self._pending_key = None
+        if self._pending_key is not None or self._modifiers:
             return
         matched = self._pending
         self._pending = None
@@ -117,9 +143,9 @@ class GlobalHotkeyListener:
 
 
 def type_backspace_and_paste(backspaces: int, cursor_left_moves: int = 0) -> None:
-    """Apaga o atalho e cola texto Unicode via clipboard, sem digitar letra a letra.
+    """Substitui o atalho por texto do clipboard, sem digitar letra a letra.
 
-    Em Windows, usa SendInput para apagar e enviar Ctrl+V; o clipboard deve
+    Em Windows, usa SendInput para selecionar e enviar Ctrl+V; o clipboard deve
     ter sido preenchido pela GUI antes desta chamada. Em Linux/X11, pynput.
     """
     import sys
@@ -235,11 +261,7 @@ def _send_windows_unicode(backspaces: int, text: str, left_moves: int) -> None:
 
 
 def _send_windows_paste(backspaces: int, left_moves: int = 0) -> None:
-    """Usa VK_BACK e Ctrl+V Win32, inclusive no Bloco de Notas do Windows 11.
-
-    O intervalo entre excluir e colar evita que o alvo processe os eventos fora
-    de ordem. O Windows sempre cola como Unicode se CF_UNICODETEXT está no clipboard.
-    """
+    """Seleciona o atalho e envia Ctrl+V; falha de colagem não o apaga previamente."""
     import ctypes
     from ctypes import wintypes
     from time import sleep
@@ -275,18 +297,25 @@ def _send_windows_paste(backspaces: int, left_moves: int = 0) -> None:
             packed = (INPUT * len(chunk))(*chunk)
             count = api(len(chunk), packed, ctypes.sizeof(INPUT))
             if count != len(chunk):
+                # Um envio parcial não deve deixar Shift/Ctrl presos.
+                releases = (INPUT * 2)(event(0x10, True), event(VK_CTRL, True))
+                api(2, releases, ctypes.sizeof(INPUT))
                 raise OSError("O Windows não permitiu enviar as teclas simuladas (SendInput).")
 
+    # Selecionar preserva o atalho se Ctrl+V for rejeitado pelo destino.
+    # Não há Backspace nem Delete antes da inserção.
+    if any(ctypes.windll.user32.GetAsyncKeyState(vk) & 0x8000
+           for vk in (0x10, 0x11, 0x12, 0x5B, 0x5C)):
+        raise OSError("Solte as teclas modificadoras antes de expandir.")
     deletion = []
     for _ in range(backspaces):
-        deletion.extend((event(VK_BACK), event(VK_BACK, True)))
+        deletion.extend((event(VK_LEFT), event(VK_LEFT, True)))
     if deletion:
-        submit(deletion)
-        sleep(0.085)
+        submit([event(0x10), *deletion, event(0x10, True)])
     submit((event(VK_CTRL), event(VK_V), event(VK_V, True), event(VK_CTRL, True)))
     if left_moves:
         sleep(0.22)
         movements = []
-        for _ in range(min(left_moves, 10000)):
+        for _ in range(left_moves):
             movements.extend((event(VK_LEFT), event(VK_LEFT, True)))
         submit(movements)

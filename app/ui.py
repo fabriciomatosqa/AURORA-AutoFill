@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from PySide6.QtCore import QObject, Qt, QMimeData, QTimer, Signal, QPoint, QRectF
+from PySide6.QtCore import QObject, Qt, QMimeData, QTimer, Signal, QPoint, QRectF, QTextBoundaryFinder
 from PySide6.QtGui import (QAction, QColor, QFont, QFontMetricsF, QIcon, QKeySequence, QPalette,
                            QShortcut, QTextCharFormat, QPainter, QPainterPath, QLinearGradient, QPen, QPixmap)
 from PySide6.QtWidgets import (
@@ -16,6 +16,33 @@ from PySide6.QtWidgets import (
 from .core import Snippet, SnippetStore, application_db_path, render_snippet
 from .hotkeys import GlobalHotkeyListener, type_backspace_and_paste
 from .formatting import has_rich_formatting, render_rich_html
+
+
+def cursor_steps(text: str) -> int:
+    """Conta caracteres visuais, tratando CRLF como uma quebra de linha."""
+    finder = QTextBoundaryFinder(QTextBoundaryFinder.Grapheme, text.replace("\r\n", "\n"))
+    count = 0
+    while finder.toNextBoundary() != -1:
+        count += 1
+    return count
+
+
+def windows_clipboard_sequence():
+    import sys
+    if sys.platform == "win32":
+        import ctypes
+        return ctypes.windll.user32.GetClipboardSequenceNumber()
+    return None
+
+
+def foreground_window():
+    import sys
+    if sys.platform == "win32":
+        import ctypes
+        api = ctypes.windll.user32.GetForegroundWindow
+        api.restype = ctypes.c_void_p
+        return api()
+    return None
 
 
 STYLESHEET = """
@@ -905,6 +932,7 @@ class AutoFillWindow(QMainWindow):
         if self.isActiveWindow() and self.focusWidget() is not self.test_box:
             return
         self._clipboard_pending = True
+        self._expansion_target = foreground_window()
         self.hotkeys.set_enabled(False)
         QTimer.singleShot(75, lambda s=shortcut: self._perform_expansion(s))
 
@@ -913,16 +941,26 @@ class AutoFillWindow(QMainWindow):
         original_mime = None
         restore_later = False
         try:
-            snippet = next((s for s in self.store.snippets() if s.shortcut == shortcut), None)
+            target = getattr(self, "_expansion_target", foreground_window())
+            if target != foreground_window():
+                raise ValueError("A janela de destino mudou; expansão cancelada.")
+            snippet = next((s for s in self.store.snippets() if s.shortcut == shortcut.rstrip(" ")), None)
             if not snippet:
                 return
             current_text = clipboard.text()
             rendered = render_snippet(snippet.content, current_text)
             if not rendered.text:
                 return
+            # NUL não pode ser transportado integralmente por CF_UNICODETEXT.
+            if "\x00" in rendered.text:
+                raise ValueError("O texto contém um caractere NUL e não pode ser colado.")
+            rendered.text.encode("utf-16-le")  # Rejeita pares substitutos inválidos antes de editar.
             original_mime = self._clone_clipboard_mime()
             payload = QMimeData()
             payload.setText(rendered.text)
+            from uuid import uuid4
+            self._clipboard_token = uuid4().hex.encode("ascii")
+            payload.setData("application/x-aurora-expansion", self._clipboard_token)
             # O Notepad lê CF_UNICODETEXT. HTML é opcional e só aparece quando
             # o modelo foi realmente formatado (Word/Outlook podem aproveitar).
             rich = bool(snippet.rich_content and has_rich_formatting(snippet.rich_content)
@@ -931,8 +969,14 @@ class AutoFillWindow(QMainWindow):
                 payload.setHtml(render_rich_html(snippet.rich_content, current_text))
             self._clipboard_written = rendered.text
             clipboard.setMimeData(payload)
+            self._clipboard_sequence = windows_clipboard_sequence()
             restore_later = True
-            type_backspace_and_paste(len(shortcut), rendered.left_moves)
+            if clipboard.text() != rendered.text:
+                raise ValueError("Não foi possível preparar a área de transferência.")
+            if target != foreground_window():
+                raise ValueError("A janela de destino mudou; expansão cancelada.")
+            suffix = rendered.text[-rendered.left_moves:] if rendered.left_moves else ""
+            type_backspace_and_paste(cursor_steps(shortcut), cursor_steps(suffix))
             self.statusBar().showMessage(f"Expandido: {shortcut}", 3000)
             self._play_confirmation()
         except Exception as exc:
@@ -945,9 +989,14 @@ class AutoFillWindow(QMainWindow):
                 self.hotkeys.set_enabled(self._hotkeys_enabled)
 
     def _restore_clipboard(self, original: QMimeData):
+        if self._quitting:
+            return
         clipboard = QApplication.clipboard()
-        if clipboard.text() == self._clipboard_written:
-            clipboard.setMimeData(original)
+        mime = clipboard.mimeData()
+        if (mime and mime.text() == self._clipboard_written
+                and bytes(mime.data("application/x-aurora-expansion")) == self._clipboard_token):
+            if windows_clipboard_sequence() == self._clipboard_sequence:
+                clipboard.setMimeData(original)
         self._clipboard_pending = False
         self.hotkeys.set_enabled(self._hotkeys_enabled)
 

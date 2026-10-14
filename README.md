@@ -43,6 +43,16 @@ python main.py
 
 ## Testes
 
+### Desenvolvimento: confiabilidade da expansão no Windows
+
+- O atalho é selecionado antes de Ctrl+V, sem apagamento prévio. Se a colagem for rejeitada, o texto original pode permanecer selecionado.
+- Quando um atalho é prefixo de outro (por exemplo, `/oi` e `/oie`), confirme o mais curto com **Espaço**. Esse espaço é substituído junto com o atalho; o mais longo continua expandindo ao soltar sua última tecla.
+- A expansão aguarda a liberação de Shift e cancela combinações com Ctrl/Alt/Windows. Mudança de janela durante a preparação cancela a expansão.
+- A restauração do clipboard verifica um identificador da expansão e, no Windows, a sequência de alterações da área de transferência, preservando novas cópias mesmo com texto idêntico.
+- O posicionamento de `{{cursor}}` conta caracteres visuais, incluindo emojis compostos e CRLF. Validar no editor de destino: a colagem e o movimento do cursor ainda dependem do processamento desse aplicativo e não têm confirmação de conclusão.
+
+Execute a suíte completa com:
+
 ```bash
 python -m unittest discover -s tests -v
 QT_QPA_PLATFORM=offscreen AURORA_AUTOFILL_SMOKE_TEST=1 python main.py

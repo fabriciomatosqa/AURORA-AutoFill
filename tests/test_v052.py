@@ -47,21 +47,20 @@ class ReleaseSynchronisationTests(unittest.TestCase):
 
 
 class ClipboardPasteTests(unittest.TestCase):
-    def test_windows_paste_uses_backspace_and_ctrl_v_not_unicode_scancodes(self):
+    def test_windows_paste_selects_shortcut_before_ctrl_v(self):
         sent = []
         class Stub:
             def __call__(self, count, records, size):
                 sent.extend((records[i].u.ki.wVk, records[i].u.ki.dwFlags)
                             for i in range(count))
                 return count
-        api = SimpleNamespace(SendInput=Stub())
+        api = SimpleNamespace(SendInput=Stub(), GetAsyncKeyState=lambda vk: 0)
         with patch.object(ctypes, 'windll', SimpleNamespace(user32=api), create=True), \
              patch('time.sleep', return_value=None):
             _send_windows_paste(3, 2)
-        self.assertEqual([x for x in sent[:6]],
-                         [(8, 0), (8, 2)] * 3)
-        self.assertEqual(sent[6:10], [(0x11, 0), (0x56, 0), (0x56, 2), (0x11, 2)])
-        self.assertEqual(sent[10:], [(0x25, 0), (0x25, 2)] * 2)
+        self.assertEqual(sent[:8], [(0x10, 0)] + [(0x25, 0), (0x25, 2)] * 3 + [(0x10, 2)])
+        self.assertEqual(sent[8:12], [(0x11, 0), (0x56, 0), (0x56, 2), (0x11, 2)])
+        self.assertEqual(sent[12:], [(0x25, 0), (0x25, 2)] * 2)
         # Não emite evento Unicode 0x0004 usado pela estratégia antiga.
         self.assertFalse(any(flag & 0x0004 for _, flag in sent))
 
