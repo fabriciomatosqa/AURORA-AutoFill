@@ -1,0 +1,18 @@
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+dist/
+build/
+*.spec
+installer-win/
+*.deb
+*.whl
+*.egg-info/
+.idea/
+.vscode/
+.pytest_cache/
+
+# Arquivos locais de instaladores
+*.zip
+*.tar.gz

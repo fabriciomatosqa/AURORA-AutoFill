@@ -1,0 +1,1 @@
+"""AURORA AutoFill — expansor desktop de atalhos de texto."""
