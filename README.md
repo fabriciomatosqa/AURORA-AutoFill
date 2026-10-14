@@ -1,67 +1,60 @@
-# AURORA AutoFill v0.5.1
+# AURORA AutoFill v0.5.2
 
-**Expansão inteligente de textos · Mais tempo para você**  
-**Desenvolvido por Fabricio Matos**
+**Expansão inteligente de textos • Mais tempo para você**  
+**Desenvolvido por Fabricio Matos • 2026**  
+[Repositório do projeto](https://github.com/fabriciomatosqa/AURORA-AutoFill)
 
-Aplicativo desktop nativo em Python/PySide6 para criar atalhos de expansão de texto e reutilizá-los em outros programas. A interface utiliza uma identidade visual de aurora boreal, com marcadores dinâmicos, pastas e editor de texto rico.
+Expansor de texto desktop para Windows e Linux, em Python/PySide6. Cadastra atalhos, organiza por pastas, mantém os dados localmente e substitui atalhos em outros aplicativos.
 
-## Novidades da v0.5.1
+## O que mudou na v0.5.2
 
-- Nova assinatura visual **AURORA AutoFill** com letras de espaçamento controlado e leve degradê, sem depender de fontes baixadas ou embarcadas.
-- Menus de pastas desenhados como menus escuros consistentes (evitam aquela borda cinza e fundo branco do seletor do sistema).
-- Destaques e indicadores em verde-água na seleção.
-- Crédito fixo no canto direito do rodapé: **Desenvolvido por Fabricio Matos • 2026**.
-- Banner com a aurora, as montanhas e o lago visíveis, preservado da v0.5.
-- Mantidos atalhos globais, pastas, comandos dinâmicos, importação/exportação, formatação e bandeja do sistema.
+- **Banner panorâmico corrigido:** a paisagem em alta resolução agora é desenhada num componente com recorte proporcional, sem a deformação de `border-image stretch`.
+- **Marca tipográfica revisada:** desenho vetorial com tipografia mais forte, refinamento no gradiente e um filete inspirado na aurora boreal. O resultado pode variar ligeiramente conforme as fontes disponíveis no sistema.
+- **Compatibilidade com Bloco de Notas (Windows 10/11):** a expansão é iniciada após liberar a última tecla e esperar um curto intervalo. O conteúdo é enviado pelo clipboard usando Unicode e Ctrl+V em vez de eventos individuais para cada letra; modelos realmente formatados continuam incluindo HTML para Word/Outlook.
+- **Área de transferência:** o conteúdo anterior é recuperado após a expansão se o usuário não tiver copiado outro item enquanto isso.
+- **Som de confirmação:** clique `.wav` original, sintetizado especificamente para este projeto, reproduzido de maneira assíncrona após enviar o comando. Sem samples de terceiros e sem QtMultimedia.
+- **Linux:** teste aprimorado no GitHub Actions, incluindo bibliotecas X11, execução offscreen e validação sob Xvfb, além de conferir que o banner e o arquivo de som foram incluídos no executável.
+- **Rodapé:** crédito permanente: *Desenvolvido por Fabricio Matos • 2026*.
 
-## Instalação — Windows
+## Instalar no Windows
 
-Baixe nos **Artifacts** do [GitHub Actions](https://github.com/fabriciomatosqa/AURORA-AutoFill/actions) o instalador
-`AURORA-AutoFill-v0.5.1-Windows-Setup.exe` e execute-o. Ele instala o aplicativo, cria atalhos no menu Iniciar e oferece atalho na área de trabalho. **Não é necessário instalar Python**.
+Acesse [Actions](https://github.com/fabriciomatosqa/AURORA-AutoFill/actions), abra a execução de **Compilar instaladores AURORA AutoFill**, baixe o artefato `AURORA-AutoFill-v0.5.2-Windows-Setup` e extraia o instalador `.exe`.
 
-A compilação Windows é feita num runner **Windows** com PyInstaller e Inno Setup. Ela não pode ser gerada corretamente num host Linux sem uma ferramenta de compilação cruzada preparada.
+A configuração usa GitHub Actions + PyInstaller + Inno Setup no Windows. O usuário final não precisa instalar Python. Para gerar localmente no Windows, execute `gerar_instalador_windows.bat` com Python e Inno Setup instalados.
 
-## Instalação — Linux Ubuntu/Debian
+## Instalar no Linux (Ubuntu/Debian, amd64)
 
-Baixe `AURORA-AutoFill-v0.5.1-Linux-amd64.deb` no GitHub Actions. Instale com:
+No mesmo Actions, baixe `AURORA-AutoFill-v0.5.2-Linux`, extraia o `.deb` e instale com:
 
 ```bash
-sudo apt install ./AURORA-AutoFill-v0.5.1-Linux-amd64.deb
+sudo apt install ./AURORA-AutoFill-v0.5.2-Linux-amd64.deb
 ```
 
-Abra o programa pelo menu de aplicativos como **AURORA AutoFill** ou execute `aurora-autofill`. **A função de atalhos globais exige uma sessão X11/Xorg**. Em Wayland, a interface funciona, mas a captura de atalhos globais fica restrita.
+Execute pelo menu de aplicativos ou digitando `aurora-autofill` no terminal. Há ainda uma versão `.tar.gz` portátil. Os atalhos globais dependem de X11/Xorg; o Wayland restringe a captura de teclas por outros aplicativos. O feedback sonoro no Linux usa `paplay`, `pw-play` ou `aplay` se disponíveis, com beep do Qt como alternativa.
 
-O pacote `.deb` gerado pelo GitHub Actions embute o executável empacotado pelo PyInstaller e **não requer Python**.
+## Executar pelo código-fonte
 
-Também existe uma edição `.deb` **Bootstrap / Offline** (compilada neste ambiente) que contém rodas locais do PySide6 para instalação no primeiro uso, precisa de `python3-venv` e Python 3.10+ e foi feita como alternativa para testes enquanto o GitHub Actions compila as edições finais. Ela é específica de Linux amd64/glibc ≥ 2.34.
-
-## Executar a partir do código-fonte
-
-Python 3.11+ (3.13 recomendado):
+Python 3.11+:
 
 ```bash
 python -m pip install -r requirements.txt
 python main.py
 ```
 
-Para Windows, também existe `iniciar_windows.bat`; para Linux X11, `iniciar_linux.sh`.
-
-## Compilação automatizada dos instaladores
-
-O arquivo `.github/workflows/build-installers.yml` executa testes, compila o aplicativo com PyInstaller e gera um **instalador EXE Windows** com Inno Setup e um **DEB Linux**. Em GitHub → **Actions** → **Compilar instaladores AURORA AutoFill** → **Run workflow**. Ao terminar, os instaladores aparecem em **Artifacts**.
-
-## Dados, atualização e privacidade
-
-- Os dados existentes permanecem no SQLite em `%APPDATA%\AutoFillStudio\snippets.sqlite3` (Windows) ou `~/.local/share/AutoFillStudio/snippets.sqlite3` (Linux).
-- O programa não sincroniza nem envia conteúdos para um servidor. O monitor de teclado mantém somente um buffer pequeno **em memória**, para reconhecer atalhos.
-- Faça backup em **Exportar** antes de mudar de versão.
-- O botão **X** oculta na bandeja do sistema, quando suportada. Use o menu **Encerrar** no ícone para sair de verdade.
-
 ## Testes
 
 ```bash
 python -m unittest discover -s tests -v
-QT_QPA_PLATFORM=offscreen AURORA_AUTOFILL_SMOKE_TEST=1 python main.py  # Linux
+QT_QPA_PLATFORM=offscreen AURORA_AUTOFILL_SMOKE_TEST=1 python main.py
 ```
 
-Teste de criação/edição, captura de atalhos em apps externos e bandeja requerem validação real em Windows e/ou Linux X11, pois ambientes offscreen não expõem uma área de trabalho completa.
+**Limites importantes:** o fluxo de colagem foi criado para aumentar a compatibilidade com Notepad, navegadores, Word e editores comuns, mas nenhum injetor de teclas consegue garantir funcionamento em *todos* os programas, especialmente aplicativos elevados/protegidos, campos de senha, jogos e sessões remotas. A correção do Notepad foi verificada em testes de eventos Win32 simulados; deve ser validada em um Windows real antes de considerá-la definitiva.
+
+## Dados e privacidade
+
+- Windows: `%APPDATA%\AutoFillStudio\snippets.sqlite3`.
+- Linux: `~/.local/share/AutoFillStudio/snippets.sqlite3`.
+- O aplicativo funciona localmente, sem enviar textos para servidores.
+- Seus atalhos e pastas continuam preservados após atualizações.
+- Use **Exportar** para fazer backup antes de instalar uma nova versão.
+- Ao clicar no **X**, a janela fica na bandeja do sistema, onde suportado; selecione **Encerrar** no ícone para fechar de fato.

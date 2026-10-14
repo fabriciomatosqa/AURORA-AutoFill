@@ -22,7 +22,11 @@ def main() -> int:
     # Smoke test used by build jobs; never active for normal users.
     if os.environ.get("AURORA_AUTOFILL_SMOKE_TEST") == "1":
         from PySide6.QtCore import QTimer
-        QTimer.singleShot(900, app.quit)
+        def exit_smoke():
+            window._quitting = True
+            window.close()
+            app.quit()
+        QTimer.singleShot(900, exit_smoke)
     return app.exec()
 
 

@@ -52,12 +52,16 @@ class GlobalHotkeyListener:
         self._listener = None
         self._enabled = True
         self._keyboard = None
+        self._pending = None
+        self._pending_key = None
 
     def update_shortcuts(self, shortcuts: list[str]) -> None:
         self._matcher.configure(shortcuts)
 
     def set_enabled(self, enabled: bool) -> None:
         self._enabled = enabled
+        self._pending = None
+        self._pending_key = None
         self._matcher.clear()
 
     def start(self) -> tuple[bool, str]:
@@ -68,23 +72,43 @@ class GlobalHotkeyListener:
         try:
             from pynput import keyboard
             self._keyboard = keyboard
-            self._listener = keyboard.Listener(on_press=self._on_press)
+            self._listener = keyboard.Listener(on_press=self._on_press, on_release=self._on_release)
             self._listener.start()
             return True, "Atalhos globais ativados"
         except Exception as exc:
             return False, f"Atalhos globais indisponíveis: {exc}"
 
     def _on_press(self, key: object) -> None:
-        if not self._enabled:
+        if not self._enabled or self._pending is not None:
             return
         try:
             character = getattr(key, "char", None)
             name = getattr(key, "name", "")
             matched = self._matcher.feed(character, name)
             if matched:
-                self._on_trigger(matched)
+                self._pending = matched
+                self._pending_key = key
         except Exception:
             # Um erro no callback não deve encerrar o aplicativo.
+            self._matcher.clear()
+
+    def _on_release(self, key: object) -> None:
+        if not self._enabled or self._pending is None:
+            return
+        # A liberação da tecla é a fronteira mais segura para colar no
+        # Bloco de Notas moderno: o caractere final já foi processado.
+        same = key == self._pending_key
+        if not same:
+            same = (getattr(key, 'vk', None) is not None and
+                    getattr(key, 'vk', None) == getattr(self._pending_key, 'vk', None))
+        if not same:
+            return
+        matched = self._pending
+        self._pending = None
+        self._pending_key = None
+        try:
+            self._on_trigger(matched)
+        except Exception:
             self._matcher.clear()
 
     def stop(self) -> None:
@@ -93,7 +117,15 @@ class GlobalHotkeyListener:
 
 
 def type_backspace_and_paste(backspaces: int, cursor_left_moves: int = 0) -> None:
-    """Usado no thread da UI, depois que o clipboard recebe o texto resolvido."""
+    """Apaga o atalho e cola texto Unicode via clipboard, sem digitar letra a letra.
+
+    Em Windows, usa SendInput para apagar e enviar Ctrl+V; o clipboard deve
+    ter sido preenchido pela GUI antes desta chamada. Em Linux/X11, pynput.
+    """
+    import sys
+    if sys.platform == "win32":
+        _send_windows_paste(backspaces, cursor_left_moves)
+        return
     from pynput.keyboard import Controller, Key
     from time import sleep
     kb = Controller()
@@ -101,13 +133,12 @@ def type_backspace_and_paste(backspaces: int, cursor_left_moves: int = 0) -> Non
         kb.press(Key.backspace)
         kb.release(Key.backspace)
         sleep(0.008)
-    sleep(0.035)
+    sleep(0.075)
     with kb.pressed(Key.ctrl):
         kb.press("v")
         kb.release("v")
     if cursor_left_moves:
-        # Espera o texto ser aplicado pelo aplicativo de destino.
-        sleep(0.15)
+        sleep(0.22)
         for _ in range(min(cursor_left_moves, 10000)):
             kb.press(Key.left)
             kb.release(Key.left)
@@ -201,3 +232,61 @@ def _send_windows_unicode(backspaces: int, text: str, left_moves: int) -> None:
         sent = user32.SendInput(len(chunk), packed, ctypes.sizeof(INPUT))
         if sent != len(chunk):
             raise OSError("O Windows não permitiu enviar todas as teclas simuladas.")
+
+
+def _send_windows_paste(backspaces: int, left_moves: int = 0) -> None:
+    """Usa VK_BACK e Ctrl+V Win32, inclusive no Bloco de Notas do Windows 11.
+
+    O intervalo entre excluir e colar evita que o alvo processe os eventos fora
+    de ordem. O Windows sempre cola como Unicode se CF_UNICODETEXT está no clipboard.
+    """
+    import ctypes
+    from ctypes import wintypes
+    from time import sleep
+
+    ptr = ctypes.c_ulonglong if ctypes.sizeof(ctypes.c_void_p) == 8 else ctypes.c_ulong
+    class KEYBDINPUT(ctypes.Structure):
+        _fields_ = [("wVk", wintypes.WORD), ("wScan", wintypes.WORD),
+                    ("dwFlags", wintypes.DWORD), ("time", wintypes.DWORD),
+                    ("dwExtraInfo", ptr)]
+    class MOUSEINPUT(ctypes.Structure):
+        _fields_ = [("dx", wintypes.LONG), ("dy", wintypes.LONG),
+                    ("mouseData", wintypes.DWORD), ("dwFlags", wintypes.DWORD),
+                    ("time", wintypes.DWORD), ("dwExtraInfo", ptr)]
+    class HARDWAREINPUT(ctypes.Structure):
+        _fields_ = [("uMsg", wintypes.DWORD), ("wParamL", wintypes.WORD),
+                    ("wParamH", wintypes.WORD)]
+    class INPUTUNION(ctypes.Union):
+        _fields_ = [("mi", MOUSEINPUT), ("ki", KEYBDINPUT), ("hi", HARDWAREINPUT)]
+    class INPUT(ctypes.Structure):
+        _fields_ = [("type", wintypes.DWORD), ("u", INPUTUNION)]
+    KEYUP = 2
+    VK_BACK, VK_CTRL, VK_V, VK_LEFT = 0x08, 0x11, 0x56, 0x25
+    api = ctypes.windll.user32.SendInput
+    api.argtypes = [wintypes.UINT, ctypes.POINTER(INPUT), ctypes.c_int]
+    api.restype = wintypes.UINT
+
+    def event(vk: int, up: bool = False):
+        return INPUT(1, INPUTUNION(ki=KEYBDINPUT(vk, 0, KEYUP if up else 0, 0, 0)))
+
+    def submit(events):
+        for start in range(0, len(events), 128):
+            chunk = events[start:start + 128]
+            packed = (INPUT * len(chunk))(*chunk)
+            count = api(len(chunk), packed, ctypes.sizeof(INPUT))
+            if count != len(chunk):
+                raise OSError("O Windows não permitiu enviar as teclas simuladas (SendInput).")
+
+    deletion = []
+    for _ in range(backspaces):
+        deletion.extend((event(VK_BACK), event(VK_BACK, True)))
+    if deletion:
+        submit(deletion)
+        sleep(0.085)
+    submit((event(VK_CTRL), event(VK_V), event(VK_V, True), event(VK_CTRL, True)))
+    if left_moves:
+        sleep(0.22)
+        movements = []
+        for _ in range(min(left_moves, 10000)):
+            movements.extend((event(VK_LEFT), event(VK_LEFT, True)))
+        submit(movements)

@@ -1,7 +1,7 @@
 @echo off
 setlocal
 cd /d "%~dp0"
-title AURORA AutoFill - Gerar instalador Windows 0.5.1
+title AURORA AutoFill - Gerar instalador Windows 0.5.2
 where py >nul 2>&1
 if errorlevel 1 (
  echo Python Launcher [py] nao encontrado. Instale Python 3.11 ou mais novo e tente novamente.
@@ -30,7 +30,7 @@ if not exist "%ISCC%" (
 "%ISCC%" "packaging\windows\AURORA-AutoFill.iss"
 if errorlevel 1 goto error
 echo.
-echo SUCESSO: installer-win\AURORA-AutoFill-v0.5.1-Windows-Setup.exe
+echo SUCESSO: installer-win\AURORA-AutoFill-v0.5.2-Windows-Setup.exe
 pause
 exit /b 0
 :error

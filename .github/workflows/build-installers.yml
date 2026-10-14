@@ -11,8 +11,9 @@ permissions:
 
 jobs:
   windows:
-    name: Instalador Windows EXE
+    name: Windows - EXE (PyInstaller + Inno Setup)
     runs-on: windows-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -22,18 +23,29 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           python -m pip install -r requirements.txt pyinstaller==6.16.0
-      - name: Testes
+      - name: Testes automatizados de regressão
+        env:
+          QT_QPA_PLATFORM: offscreen
         run: python -m unittest discover -s tests -v
-      - name: Compilar aplicativo
+      - name: Compilar aplicativo Windows
         shell: pwsh
         run: |
           python -m PyInstaller --noconfirm --clean --windowed --onedir --name "AURORA AutoFill" --icon "assets/aurora_icon.ico" --add-data "assets;assets" --collect-submodules pynput main.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Verificar recursos compilados
+        shell: pwsh
+        run: |
+          $root = 'dist/AURORA AutoFill'
+          if (!(Test-Path "$root/AURORA AutoFill.exe")) { throw 'EXE ausente' }
+          if (!(Test-Path "$root/_internal/assets/aurora_banner.jpg")) { throw 'Banner ausente' }
+          if (!(Test-Path "$root/_internal/assets/command_click.wav")) { throw 'Som ausente' }
       - name: Preparar Inno Setup
         shell: pwsh
         run: |
           $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
           if (!(Test-Path $iscc)) { choco install innosetup -y --no-progress }
-      - name: Criar instalador
+          if (!(Test-Path $iscc)) { throw 'Inno Setup não localizado' }
+      - name: Criar instalador Windows
         shell: pwsh
         run: |
           $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
@@ -41,44 +53,64 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - uses: actions/upload-artifact@v4
         with:
-          name: AURORA-AutoFill-v0.5.1-Windows-Setup
+          name: AURORA-AutoFill-v0.5.2-Windows-Setup
           path: installer-win/*.exe
           if-no-files-found: error
 
   linux:
-    name: Instalador Linux DEB e portátil
+    name: Linux - DEB + portátil (PyInstaller)
     runs-on: ubuntu-24.04
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: '3.13'
-      - name: Bibliotecas Linux Qt
-        run: sudo apt-get update && sudo apt-get install -y libxcb-cursor0 libxkbcommon-x11-0
-      - name: Dependências Python
+      - name: Bibliotecas Qt/X11 do sistema
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libxcb-cursor0 libxkbcommon-x11-0 libxcb-xinerama0 libxcb-shape0 \
+            libxcb-keysyms1 libxcb-image0 libxcb-render-util0 \
+            libxcb-icccm4 libx11-xcb1 libegl1 libopengl0 xvfb xauth
+      - name: Instalar dependências Python
         run: |
           python -m pip install --upgrade pip
           python -m pip install -r requirements.txt pyinstaller==6.16.0
-      - name: Testes
+      - name: Testes (Qt offscreen)
         env:
           QT_QPA_PLATFORM: offscreen
         run: python -m unittest discover -s tests -v
-      - name: Compilar aplicativo
+      - name: Compilar aplicativo Linux
         run: |
-          python -m PyInstaller --noconfirm --clean --windowed --onedir --name "AURORA AutoFill" --add-data "assets:assets" --collect-submodules pynput main.py
-      - name: Verificar aplicativo compilado
+          # pynput consulta DISPLAY ao ser importado; Xvfb garante que o
+          # PyInstaller descubra os submódulos Linux durante a análise.
+          xvfb-run -a -s '-screen 0 1366x768x24' python -m PyInstaller \
+            --noconfirm --clean --windowed --onedir \
+            --name "AURORA AutoFill" --add-data "assets:assets" \
+            --collect-submodules pynput main.py
+      - name: Verificar recursos empacotados
+        run: |
+          test -x 'dist/AURORA AutoFill/AURORA AutoFill'
+          test -f 'dist/AURORA AutoFill/_internal/assets/aurora_banner.jpg'
+          test -f 'dist/AURORA AutoFill/_internal/assets/command_click.wav'
+      - name: Testar EXE Linux sem monitor físico
         env:
           QT_QPA_PLATFORM: offscreen
           AURORA_AUTOFILL_SMOKE_TEST: '1'
-        run: "dist/AURORA AutoFill/AURORA AutoFill"
-      - name: Criar DEB
-        run: python packaging/linux/build_deb_frozen.py --out AURORA-AutoFill-v0.5.1-Linux-amd64.deb
-      - name: Criar versão portátil
-        run: tar -czf AURORA-AutoFill-v0.5.1-Linux-portable-amd64.tar.gz -C dist "AURORA AutoFill"
+        run: timeout 25s 'dist/AURORA AutoFill/AURORA AutoFill'
+      - name: Testar interface Linux sob X11 virtual
+        env:
+          AURORA_AUTOFILL_SMOKE_TEST: '1'
+        run: xvfb-run -a -s '-screen 0 1366x768x24' timeout 25s 'dist/AURORA AutoFill/AURORA AutoFill'
+      - name: Criar instalador Linux DEB
+        run: python packaging/linux/build_deb_frozen.py --out AURORA-AutoFill-v0.5.2-Linux-amd64.deb
+      - name: Criar pacote Linux portátil
+        run: tar -czf AURORA-AutoFill-v0.5.2-Linux-portable-amd64.tar.gz -C dist 'AURORA AutoFill'
       - uses: actions/upload-artifact@v4
         with:
-          name: AURORA-AutoFill-v0.5.1-Linux
+          name: AURORA-AutoFill-v0.5.2-Linux
           path: |
-            AURORA-AutoFill-v0.5.1-Linux-amd64.deb
-            AURORA-AutoFill-v0.5.1-Linux-portable-amd64.tar.gz
+            AURORA-AutoFill-v0.5.2-Linux-amd64.deb
+            AURORA-AutoFill-v0.5.2-Linux-portable-amd64.tar.gz
           if-no-files-found: error

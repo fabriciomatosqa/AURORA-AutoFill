@@ -1,11 +1,11 @@
-"""Interface do AURORA AutoFill v0.5.1 (PySide6)."""
+"""Interface do AURORA AutoFill v0.5.2 (PySide6)."""
 from __future__ import annotations
 
 from pathlib import Path
 
 from PySide6.QtCore import QObject, Qt, QMimeData, QTimer, Signal, QPoint, QRectF
 from PySide6.QtGui import (QAction, QColor, QFont, QFontMetricsF, QIcon, QKeySequence, QPalette,
-                           QShortcut, QTextCharFormat, QPainter, QPainterPath, QLinearGradient, QPen)
+                           QShortcut, QTextCharFormat, QPainter, QPainterPath, QLinearGradient, QPen, QPixmap)
 from PySide6.QtWidgets import (
     QApplication, QComboBox, QFileDialog, QFrame, QHBoxLayout, QInputDialog,
     QLabel, QLineEdit, QListView, QListWidget, QListWidgetItem, QMainWindow, QMenu, QMessageBox,
@@ -14,12 +14,12 @@ from PySide6.QtWidgets import (
 )
 
 from .core import Snippet, SnippetStore, application_db_path, render_snippet
-from .hotkeys import GlobalHotkeyListener, type_backspace_and_paste, type_backspace_and_text
+from .hotkeys import GlobalHotkeyListener, type_backspace_and_paste
 from .formatting import has_rich_formatting, render_rich_html
 
 
 STYLESHEET = """
-/* AURORA 0.5 — acabamento visual da identidade Aurora */
+/* AURORA 0.5.2 — acabamento visual da identidade Aurora */
 QWidget { font-family: "Segoe UI", "Inter", "Noto Sans", sans-serif; }
 QMainWindow, QWidget#body, QWidget#rightPane, QWidget#editorPage, QWidget#welcomePage {
   background-color: #091426; color: #eaf4ff; }
@@ -96,49 +96,113 @@ class HotkeySignals(QObject):
     triggered = Signal(str)
 
 
+class AuroraBanner(QWidget):
+    """Desenha o panorama no topo sem deformar sua proporção original.
+
+    Usa a região central do cenário para destacar aurora, picos e reflexos.
+    O recorte se adapta ao tamanho da janela mantendo pixels proporcionais.
+    """
+
+    def __init__(self, picture: Path, parent=None):
+        super().__init__(parent)
+        self._image = QPixmap(str(picture))
+        self.setObjectName("topbar")
+
+    @staticmethod
+    def source_crop(source_width: int, source_height: int, view_width: int, view_height: int):
+        if not source_width or not source_height or not view_width or not view_height:
+            return QRectF()
+        src_ratio = source_width / source_height
+        dst_ratio = view_width / view_height
+        if src_ratio < dst_ratio:
+            # Para cobrir uma janela longa, recorta o centro vertical da arte.
+            crop_height = source_width / dst_ratio
+            y = max(0, min(source_height - crop_height, source_height * 0.56 - crop_height * .5))
+            return QRectF(0, y, source_width, crop_height)
+        crop_width = source_height * dst_ratio
+        return QRectF((source_width - crop_width) / 2, 0, crop_width, source_height)
+
+    def paintEvent(self, event):
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.SmoothPixmapTransform, True)
+        if not self._image.isNull():
+            rect = self.source_crop(self._image.width(), self._image.height(), self.width(), self.height())
+            painter.drawPixmap(QRectF(self.rect()), self._image, rect)
+        else:
+            painter.fillRect(self.rect(), QColor("#06152b"))
+        # Gradiente sob a marca e sob o botão; não modifica os pixels da arte.
+        left = QLinearGradient(0, 0, self.width() * .56, 0)
+        left.setColorAt(0, QColor(2, 11, 29, 220))
+        left.setColorAt(.57, QColor(3, 17, 38, 120))
+        left.setColorAt(1, QColor(4, 18, 36, 0))
+        painter.fillRect(self.rect(), left)
+        shade = QLinearGradient(0, 0, 0, self.height())
+        shade.setColorAt(0, QColor(2, 8, 28, 90))
+        shade.setColorAt(.65, QColor(3, 11, 29, 0))
+        shade.setColorAt(1, QColor(2, 9, 25, 95))
+        painter.fillRect(self.rect(), shade)
+        painter.end()
+
+
 class AuroraWordmark(QWidget):
-    """Marca vetorial com tracking real, sem fontes embutidas nem texto rasterizado."""
+    """Assinatura tipográfica geométrica, com letras vetoriais, sem PNG borrado.
+
+    Bahnschrift é uma família moderna presente no Windows 10/11; há fontes
+    alternativas para Linux, mantendo os efeitos vetoriais da marca.
+    """
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setMinimumSize(430, 54)
-        self.setMaximumHeight(54)
+        self.setMinimumSize(470, 60)
+        self.setMaximumHeight(60)
         self.setAttribute(Qt.WA_TranslucentBackground)
 
     def paintEvent(self, event):
         super().paintEvent(event)
+        from PySide6.QtGui import QFontDatabase
         painter = QPainter(self)
         painter.setRenderHint(QPainter.Antialiasing, True)
         painter.setRenderHint(QPainter.TextAntialiasing, True)
-        painter.setRenderHint(QPainter.SmoothPixmapTransform, True)
-        families = ["Segoe UI Variable Display", "Segoe UI", "Inter", "Noto Sans", "DejaVu Sans"]
-        from PySide6.QtGui import QFontDatabase
         installed = set(QFontDatabase.families())
-        family = next((x for x in families if x in installed), "Sans Serif")
-        font = QFont(family)
-        font.setPixelSize(32)
-        font.setWeight(QFont.DemiBold)
-        font.setLetterSpacing(QFont.AbsoluteSpacing, 3.8)
+        family = next((name for name in (
+            "Bahnschrift", "Bahnschrift SemiCondensed", "Segoe UI Variable Display",
+            "Montserrat", "DejaVu Sans") if name in installed), "Sans Serif")
+
+        base = QFont(family)
+        base.setPixelSize(35)
+        base.setWeight(QFont.Bold)
+        base.setLetterSpacing(QFont.AbsoluteSpacing, 4.1)
+        base.setKerning(True)
         baseline = 40
         brand = QPainterPath()
-        brand.addText(0, baseline, font, "AURORA")
-        white = QLinearGradient(0, 5, 330, 40)
+        brand.addText(0, baseline, base, "AURORA")
+        # Halo sutil, sem perder a definição das formas.
+        painter.setPen(QPen(QColor(63, 246, 220, 35), 2.2))
+        painter.drawPath(brand)
+        white = QLinearGradient(0, 5, 0, 43)
         white.setColorAt(0, QColor("#ffffff"))
-        white.setColorAt(0.75, QColor("#e6f2ff"))
-        white.setColorAt(1, QColor("#b9d3ec"))
+        white.setColorAt(1, QColor("#d7e8ff"))
         painter.fillPath(brand, white)
-        next_x = QFontMetricsF(font).horizontalAdvance("AURORA") + 21
+
+        spacing = QFontMetricsF(base).horizontalAdvance("AURORA") + 18
         accent = QFont(family)
         accent.setPixelSize(31)
-        accent.setWeight(QFont.Medium)
-        accent.setLetterSpacing(QFont.AbsoluteSpacing, 0.7)
+        accent.setWeight(QFont.DemiBold)
+        accent.setLetterSpacing(QFont.AbsoluteSpacing, 1.35)
         accent_path = QPainterPath()
-        accent_path.addText(next_x, baseline, accent, "AutoFill")
-        aurora_gradient = QLinearGradient(next_x, 0, next_x + 170, 0)
-        aurora_gradient.setColorAt(0, QColor("#9ee9ef"))
-        aurora_gradient.setColorAt(0.55, QColor("#61e1d9"))
-        aurora_gradient.setColorAt(1, QColor("#2ac4d3"))
-        painter.fillPath(accent_path, aurora_gradient)
+        accent_path.addText(spacing, baseline, accent, "AutoFill")
+        color = QLinearGradient(spacing, 0, spacing + 155, 0)
+        color.setColorAt(0, QColor("#8bfbeb"))
+        color.setColorAt(.55, QColor("#55e0e0"))
+        color.setColorAt(1, QColor("#99acff"))
+        painter.fillPath(accent_path, color)
+
+        # Traço de marca, inspirado na linha de luz da aurora.
+        bar = QLinearGradient(0, 0, 410, 0)
+        bar.setColorAt(0, QColor("#39cfcb"))
+        bar.setColorAt(.50, QColor("#80edd4"))
+        bar.setColorAt(1, QColor(102, 160, 255, 0))
+        painter.fillRect(QRectF(1, 49, min(self.width() - 8, 398), 2), bar)
         painter.end()
 
 
@@ -220,7 +284,7 @@ class AutoFillWindow(QMainWindow):
         self._hotkeys_enabled = True
         self._clipboard_clone: QMimeData | None = None
         self._clipboard_written = ""
-        self.setWindowTitle("AURORA AutoFill v0.5.1 — Expansor de textos")
+        self.setWindowTitle("AURORA AutoFill v0.5.2 — Expansor de textos")
         self.setWindowIcon(QIcon(str(Path(__file__).resolve().parent.parent / "assets" / "aurora_icon.png")))
         # Impede a compactação horizontal desordenada dos campos; em telas de
         # pouca altura o editor usa rolagem própria, sem sobrepor controles.
@@ -253,6 +317,35 @@ class AutoFillWindow(QMainWindow):
         self._refresh_all()
         self._show_welcome()
 
+    def _play_confirmation(self):
+        """Reproduz o clique original de forma assíncrona, sem bloquear a GUI.
+
+        Não utiliza QtMultimedia: ambientes Linux sem PipeWire podem travar
+        ao inicializar o módulo de áudio; Windows usa winsound nativo.
+        """
+        import sys
+        import shutil
+        import subprocess
+        path = str(Path(__file__).resolve().parent.parent / "assets" / "command_click.wav")
+        try:
+            if sys.platform == "win32":
+                import winsound
+                winsound.PlaySound(path, winsound.SND_FILENAME | winsound.SND_ASYNC | winsound.SND_NODEFAULT)
+                return
+            for player in ("paplay", "pw-play", "aplay"):
+                binary = shutil.which(player)
+                if binary:
+                    subprocess.Popen([binary, path], stdin=subprocess.DEVNULL,
+                                     stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                                     start_new_session=True)
+                    return
+            QApplication.beep()
+        except Exception:
+            try:
+                QApplication.beep()
+            except Exception:
+                pass
+
     def _build_ui(self):
         outer = QWidget()
         outer.setObjectName("body")
@@ -263,12 +356,9 @@ class AutoFillWindow(QMainWindow):
 
         # O cenário é uma versão tratada da arte Aurora Utils aprovada.
         # A composição evita reproduzir a interface ou o texto "Utils".
-        top = QWidget()
-        top.setObjectName("topbar")
-        top.setFixedHeight(168)
         assets = Path(__file__).resolve().parent.parent / "assets"
-        banner = (assets / "aurora_banner.png").as_posix()
-        top.setStyleSheet(f'QWidget#topbar {{ border-image: url("{banner}") 0 0 0 0 stretch stretch; }}')
+        top = AuroraBanner(assets / "aurora_banner.jpg")
+        top.setFixedHeight(168)
         h = QHBoxLayout(top)
         h.setContentsMargins(28, 16, 26, 16)
         h.setSpacing(14)
@@ -280,7 +370,7 @@ class AutoFillWindow(QMainWindow):
         brand_box.setSpacing(2)
         brand_box.setContentsMargins(0, 0, 0, 0)
         wordmark = AuroraWordmark()
-        wordmark.setFixedWidth(448)
+        wordmark.setFixedWidth(485)
         brand_box.addWidget(wordmark)
         caption = QLabel("EXPANSÃO INTELIGENTE DE TEXTOS  ·  MAIS TEMPO PARA VOCÊ")
         caption.setObjectName("topCaption")
@@ -808,43 +898,48 @@ class AutoFillWindow(QMainWindow):
         return clone
 
     def _expand_global(self, shortcut: str):
-        # Não modifica campos dentro do próprio editor.
+        # O hook reconhece a soltura da última tecla; aguarda o widget de destino
+        # terminar o processamento do evento antes de apagar/colar.
         if not self._hotkeys_enabled or self._clipboard_pending:
             return
-        # Permite experimentar os atalhos na caixa de testes, mas nunca interfere no editor.
         if self.isActiveWindow() and self.focusWidget() is not self.test_box:
-            return
-        snippet = next((s for s in self.store.snippets() if s.shortcut == shortcut), None)
-        if not snippet:
-            return
-        clipboard = QApplication.clipboard()
-        original_text = clipboard.text()
-        rendered = render_snippet(snippet.content, original_text)
-        if not rendered.text:
             return
         self._clipboard_pending = True
         self.hotkeys.set_enabled(False)
-        # HTML apenas se houver real formatação e não houver marcador cursor.
-        # O marcador usa teclado sequencial, eliminando a antiga corrida de Ctrl+V.
-        rich = bool(snippet.rich_content and has_rich_formatting(snippet.rich_content)
-                    and "{{cursor}}" not in snippet.content)
-        previous_mime = self._clone_clipboard_mime() if rich else None
-        self._clipboard_written = rendered.text
+        QTimer.singleShot(75, lambda s=shortcut: self._perform_expansion(s))
+
+    def _perform_expansion(self, shortcut: str):
+        clipboard = QApplication.clipboard()
+        original_mime = None
+        restore_later = False
         try:
+            snippet = next((s for s in self.store.snippets() if s.shortcut == shortcut), None)
+            if not snippet:
+                return
+            current_text = clipboard.text()
+            rendered = render_snippet(snippet.content, current_text)
+            if not rendered.text:
+                return
+            original_mime = self._clone_clipboard_mime()
+            payload = QMimeData()
+            payload.setText(rendered.text)
+            # O Notepad lê CF_UNICODETEXT. HTML é opcional e só aparece quando
+            # o modelo foi realmente formatado (Word/Outlook podem aproveitar).
+            rich = bool(snippet.rich_content and has_rich_formatting(snippet.rich_content)
+                        and "{{cursor}}" not in snippet.content)
             if rich:
-                mime = QMimeData()
-                mime.setText(rendered.text)
-                mime.setHtml(render_rich_html(snippet.rich_content, original_text))
-                clipboard.setMimeData(mime)
-                type_backspace_and_paste(len(shortcut))
-            else:
-                type_backspace_and_text(len(shortcut), rendered.text, rendered.left_moves)
+                payload.setHtml(render_rich_html(snippet.rich_content, current_text))
+            self._clipboard_written = rendered.text
+            clipboard.setMimeData(payload)
+            restore_later = True
+            type_backspace_and_paste(len(shortcut), rendered.left_moves)
             self.statusBar().showMessage(f"Expandido: {shortcut}", 3000)
+            self._play_confirmation()
         except Exception as exc:
             self.statusBar().showMessage(f"Não foi possível expandir: {exc}", 8000)
         finally:
-            if previous_mime is not None:
-                QTimer.singleShot(1800, lambda mime=previous_mime: self._restore_clipboard(mime))
+            if restore_later and original_mime is not None:
+                QTimer.singleShot(1450, lambda mime=original_mime: self._restore_clipboard(mime))
             else:
                 self._clipboard_pending = False
                 self.hotkeys.set_enabled(self._hotkeys_enabled)
