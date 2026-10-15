@@ -1,14 +1,20 @@
 """Package gate tests: temporary fixture trees, no local executable builds."""
 import importlib.util
+from contextlib import closing, contextmanager
 from pathlib import Path
 import shutil
+import sqlite3
 import tempfile
 import unittest
+from unittest.mock import Mock, patch
 
 ROOT = Path(__file__).resolve().parents[1]
 spec = importlib.util.spec_from_file_location('aurora_verify_bundle', ROOT / 'packaging/verify_bundle.py')
 bundle = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(bundle)
+smoke_spec = importlib.util.spec_from_file_location('aurora_smoke_frozen', ROOT / 'packaging/smoke_frozen.py')
+smoke = importlib.util.module_from_spec(smoke_spec)
+smoke_spec.loader.exec_module(smoke)
 
 
 class PackagingTests(unittest.TestCase):
@@ -69,3 +75,79 @@ class PackagingTests(unittest.TestCase):
                 path.write_bytes(contents)
                 with self.assertRaises(ValueError):
                     bundle.verify_bundle(dist, 'linux')
+
+
+class FrozenSmokeTests(unittest.TestCase):
+    def run_smoke(self, corrupt=False):
+        connect = sqlite3.connect
+        temporary_directory = tempfile.TemporaryDirectory
+        connections = []
+        cleaned = []
+        launches = []
+
+        class TrackedConnection(sqlite3.Connection):
+            closed = False
+            def close(self):
+                self.closed = True
+                return super().close()
+
+        def tracked_connect(path):
+            connection = connect(path, factory=TrackedConnection)
+            connections.append(connection)
+            return connection
+
+        @contextmanager
+        def profile(**kwargs):
+            with temporary_directory(**kwargs) as path:
+                try:
+                    yield path
+                finally:
+                    all_closed = all(connection.closed for connection in connections)
+                    # Release fixture handles even when exercising a broken implementation.
+                    for connection in connections:
+                        if not connection.closed:
+                            connection.close()
+                    self.assertTrue(all_closed, 'SQLite must close before profile cleanup')
+            cleaned.append(True)
+
+        def launch(_args, **kwargs):
+            self.assertTrue(all(connection.closed for connection in connections))
+            database = Path(kwargs['env']['APPDATA']) / 'AutoFillStudio/snippets.sqlite3'
+            database.parent.mkdir(parents=True, exist_ok=True)
+            with closing(connect(database)) as connection, connection:
+                if not launches:
+                    connection.executescript('CREATE TABLE folders(id INTEGER PRIMARY KEY, name TEXT);'
+                                             'CREATE TABLE snippets(folder_id INTEGER, title TEXT, '
+                                             'shortcut TEXT, content TEXT, rich_content TEXT);')
+                elif corrupt:
+                    connection.execute('DELETE FROM snippets')
+            launches.append(True)
+            return Mock(returncode=0)
+
+        with temporary_directory() as path:
+            executable = Path(path) / 'synthetic.exe'
+            executable.write_bytes(b'not executed')
+            with patch.object(smoke.sqlite3, 'connect', side_effect=tracked_connect), \
+                 patch.object(smoke.tempfile, 'TemporaryDirectory', side_effect=profile), \
+                 patch.object(smoke.subprocess, 'run', side_effect=launch), \
+                 patch.object(smoke.sys, 'argv', ['smoke', '--exe', str(executable)]), \
+                 patch('builtins.print') as printed:
+                if corrupt:
+                    with self.assertRaises(SystemExit):
+                        smoke.main()
+                    printed.assert_not_called()
+                else:
+                    def success(*_args):
+                        self.assertEqual(cleaned, [True], 'Success must follow profile cleanup')
+                    printed.side_effect = success
+                    smoke.main()
+                    printed.assert_called_once()
+        self.assertEqual(len(launches), 2)
+        self.assertEqual(len(connections), 2)
+        self.assertTrue(all(connection.closed for connection in connections))
+
+    def test_connections_close_before_relaunch_and_cleanup(self):
+        self.run_smoke()
+
+    def test_preservation_failure_still_closes_connections_without_false_success(self):
+        self.run_smoke(corrupt=True)

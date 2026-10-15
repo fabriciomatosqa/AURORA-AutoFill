@@ -1,5 +1,6 @@
 """Start a frozen app twice with synthetic data in an isolated user profile."""
 import argparse
+from contextlib import closing
 import os
 from pathlib import Path
 import sqlite3
@@ -33,18 +34,18 @@ def main():
         database = profile / 'AutoFillStudio' / 'snippets.sqlite3'
         if not database.is_file():
             raise SystemExit('Banco nao foi criado no perfil temporario esperado.')
-        with sqlite3.connect(database) as connection:
+        with closing(sqlite3.connect(database)) as connection, connection:
             folder = connection.execute("INSERT INTO folders(name) VALUES ('CI preservation')").lastrowid
             connection.execute('INSERT INTO snippets(folder_id,title,shortcut,content,rich_content) '
                                'VALUES (?,?,?,?,?)', (folder, 'CI preservation', '/cipreserve',
                                                      'Synthetic preserved data', ''))
         launch()
-        with sqlite3.connect(database) as connection:
+        with closing(sqlite3.connect(database)) as connection, connection:
             value = connection.execute('SELECT content FROM snippets WHERE shortcut=?',
                                        ('/cipreserve',)).fetchone()
             if value != ('Synthetic preserved data',):
                 raise SystemExit('Dados sinteticos nao foram preservados na segunda inicializacao.')
-        print('Frozen smoke passed: two starts; isolated profile; existing synthetic data preserved.')
+    print('Frozen smoke passed: two starts; isolated profile; existing synthetic data preserved.')
 
 
 if __name__ == '__main__':
