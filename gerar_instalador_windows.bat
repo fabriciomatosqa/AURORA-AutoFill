@@ -14,7 +14,9 @@ py -3 -m pip install -r requirements.txt pyinstaller==6.16.0
 if errorlevel 1 goto error
 echo.
 echo [2/3] Compilando o aplicativo...
-py -3 -m PyInstaller --noconfirm --clean --windowed --onedir --name "AURORA AutoFill" --icon "assets\aurora_icon.ico" --add-data "assets;assets" --collect-submodules pynput main.py
+py -3 -m PyInstaller --noconfirm --clean --windowed --onedir --name "AURORA AutoFill" --icon "assets\aurora_icon.ico" --add-data "assets;assets" --add-data "app\accessibility_worker.ps1;app" --collect-submodules pynput main.py
+if errorlevel 1 goto error
+py -3 packaging\verify_bundle.py --platform windows
 if errorlevel 1 goto error
 echo.
 echo [3/3] Criando o instalador com Inno Setup...

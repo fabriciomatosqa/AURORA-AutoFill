@@ -184,6 +184,8 @@ class EngineFixture:
 
     def __enter__(self):
         self.stack = ExitStack()
+        # This fixture simulates Win32 input; never call a real host's X11 driver.
+        self.stack.enter_context(patch('sys.platform', 'win32'))
         def dispatch(*args):
             return self.send(*args)
         api = SimpleNamespace(SendInput=dispatch, GetAsyncKeyState=lambda _: 0x8000 if self.held_modifier else 0)

@@ -47,7 +47,8 @@ class WindowsContextTests(unittest.TestCase):
             return 27
         api = SimpleNamespace(GetClassNameW=name)
         expected = EditSnapshot(context, '/ola', 4, 4, ('7', 'field', 'doc'))
-        with patch('app.windows_context._api', return_value=api), \
+        with patch('app.windows_context.sys.platform', 'win32'), \
+             patch('app.windows_context._api', return_value=api), \
              patch('app.windows_context.capture_accessible', return_value=expected) as accessible, \
              patch('app.windows_context.capture_focus', return_value=context):
             self.assertIsNone(capture_edit(context))

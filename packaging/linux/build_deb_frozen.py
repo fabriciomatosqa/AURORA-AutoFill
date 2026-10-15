@@ -2,10 +2,13 @@
 """Empacota o diretório PyInstaller/Linux como pacote .deb instalável."""
 from pathlib import Path
 import argparse
-import os
 import shutil
 import subprocess
+import sys
 import tempfile
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from verify_bundle import verify_bundle
 
 
 def main():
@@ -17,6 +20,7 @@ def main():
     executable = args.dist / 'AURORA AutoFill'
     if not executable.is_file():
         raise SystemExit(f'Não encontrei o aplicativo PyInstaller: {executable}')
+    verify_bundle(args.dist, 'linux')
     with tempfile.TemporaryDirectory(prefix='aurora-deb-') as temp:
         stage = Path(temp) / 'package'
         for folder in ['DEBIAN', 'opt/aurora-autofill', 'usr/bin',
@@ -31,7 +35,7 @@ Priority: optional
 Architecture: amd64
 Maintainer: Fabricio Matos
 Homepage: https://github.com/fabriciomatosqa/AURORA-AutoFill
-Depends: libxcb-cursor0, libxkbcommon-x11-0
+Depends: libc6 (>= 2.39), libxcb-cursor0, libxkbcommon-x11-0, libxcb-xinerama0, libxcb-shape0, libxcb-keysyms1, libxcb-image0, libxcb-render-util0, libxcb-icccm4, libx11-xcb1, libegl1, libopengl0, fonts-dejavu-core
 Description: Expansor de texto AURORA AutoFill
  Aplicativo desktop com atalhos de texto e pastas, desenvolvido por Fabricio Matos.
 ''', encoding='utf-8')

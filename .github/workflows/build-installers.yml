@@ -1,4 +1,5 @@
 name: Compilar instaladores AURORA AutoFill
+run-name: Instaladores - ${{ github.ref_name }} - ${{ github.sha }}
 
 on:
   workflow_dispatch:
@@ -8,6 +9,9 @@ on:
 
 permissions:
   contents: read
+
+env:
+  PYTHONDONTWRITEBYTECODE: '1'
 
 jobs:
   windows:
@@ -30,15 +34,21 @@ jobs:
       - name: Compilar aplicativo Windows
         shell: pwsh
         run: |
-          python -m PyInstaller --noconfirm --clean --windowed --onedir --name "AURORA AutoFill" --icon "assets/aurora_icon.ico" --add-data "assets;assets" --collect-submodules pynput main.py
+          python -m PyInstaller --noconfirm --clean --windowed --onedir --name "AURORA AutoFill" --icon "assets/aurora_icon.ico" --add-data "assets;assets" --add-data "app/accessibility_worker.ps1;app" --collect-submodules pynput main.py
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Verificar recursos compilados
         shell: pwsh
         run: |
-          $root = 'dist/AURORA AutoFill'
-          if (!(Test-Path "$root/AURORA AutoFill.exe")) { throw 'EXE ausente' }
-          if (!(Test-Path "$root/_internal/assets/aurora_banner.jpg")) { throw 'Banner ausente' }
-          if (!(Test-Path "$root/_internal/assets/command_click.wav")) { throw 'Som ausente' }
+          Set-Content -LiteralPath 'dist/AURORA AutoFill/SOURCE-COMMIT.txt' -Value '${{ github.sha }}' -Encoding utf8NoBOM
+          python packaging/verify_bundle.py --platform windows --report windows-bundle-report.json
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Testar EXE e preservacao de dados em perfil temporario
+        shell: pwsh
+        run: |
+          python packaging/smoke_frozen.py --exe 'dist/AURORA AutoFill/AURORA AutoFill.exe'
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python packaging/verify_bundle.py --platform windows --report windows-bundle-report.json
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Preparar Inno Setup
         shell: pwsh
         run: |
@@ -51,11 +61,24 @@ jobs:
           $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
           & $iscc "packaging/windows/AURORA-AutoFill.iss"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Registrar origem e checksum Windows
+        shell: pwsh
+        run: |
+          Copy-Item -LiteralPath 'dist/AURORA AutoFill/SOURCE-COMMIT.txt' -Destination 'SOURCE-COMMIT.txt'
+          Get-FileHash -Algorithm SHA256 installer-win/*.exe | ForEach-Object {
+            '{0}  {1}' -f $_.Hash.ToLowerInvariant(), (Split-Path $_.Path -Leaf)
+          } | Set-Content -LiteralPath 'SHA256SUMS-Windows.txt' -Encoding ascii
       - uses: actions/upload-artifact@v4
         with:
-          name: AURORA-AutoFill-v0.5.2-Windows-Setup
-          path: installer-win/*.exe
+          name: AURORA-AutoFill-Windows-${{ github.run_number }}
+          path: |
+            installer-win/*.exe
+            windows-bundle-report.json
+            SOURCE-COMMIT.txt
+            SHA256SUMS-Windows.txt
           if-no-files-found: error
+          retention-days: 30
+          compression-level: 0
 
   linux:
     name: Linux - DEB + portátil (PyInstaller)
@@ -72,7 +95,7 @@ jobs:
           sudo apt-get install -y --no-install-recommends \
             libxcb-cursor0 libxkbcommon-x11-0 libxcb-xinerama0 libxcb-shape0 \
             libxcb-keysyms1 libxcb-image0 libxcb-render-util0 \
-            libxcb-icccm4 libx11-xcb1 libegl1 libopengl0 xvfb xauth
+            libxcb-icccm4 libx11-xcb1 libegl1 libopengl0 fonts-dejavu-core xvfb xauth
       - name: Instalar dependências Python
         run: |
           python -m pip install --upgrade pip
@@ -91,26 +114,36 @@ jobs:
             --collect-submodules pynput main.py
       - name: Verificar recursos empacotados
         run: |
-          test -x 'dist/AURORA AutoFill/AURORA AutoFill'
-          test -f 'dist/AURORA AutoFill/_internal/assets/aurora_banner.jpg'
-          test -f 'dist/AURORA AutoFill/_internal/assets/command_click.wav'
+          printf '%s\n' "$GITHUB_SHA" > 'dist/AURORA AutoFill/SOURCE-COMMIT.txt'
+          python packaging/verify_bundle.py --platform linux --report linux-bundle-report.json
       - name: Testar EXE Linux sem monitor físico
-        env:
-          QT_QPA_PLATFORM: offscreen
-          AURORA_AUTOFILL_SMOKE_TEST: '1'
-        run: timeout 25s 'dist/AURORA AutoFill/AURORA AutoFill'
+        run: python packaging/smoke_frozen.py --exe 'dist/AURORA AutoFill/AURORA AutoFill'
       - name: Testar interface Linux sob X11 virtual
-        env:
-          AURORA_AUTOFILL_SMOKE_TEST: '1'
-        run: xvfb-run -a -s '-screen 0 1366x768x24' timeout 25s 'dist/AURORA AutoFill/AURORA AutoFill'
+        run: xvfb-run -a -s '-screen 0 1366x768x24' python packaging/smoke_frozen.py --exe 'dist/AURORA AutoFill/AURORA AutoFill' --qt-platform xcb
       - name: Criar instalador Linux DEB
         run: python packaging/linux/build_deb_frozen.py --out AURORA-AutoFill-v0.5.2-Linux-amd64.deb
       - name: Criar pacote Linux portátil
         run: tar -czf AURORA-AutoFill-v0.5.2-Linux-portable-amd64.tar.gz -C dist 'AURORA AutoFill'
+      - name: Verificar conteudo do DEB e registrar checksums
+        run: |
+          stage="$RUNNER_TEMP/aurora-deb-check"
+          dpkg-deb --info AURORA-AutoFill-v0.5.2-Linux-amd64.deb
+          dpkg-deb --extract AURORA-AutoFill-v0.5.2-Linux-amd64.deb "$stage"
+          python packaging/verify_bundle.py --platform linux --dist "$stage/opt/aurora-autofill"
+          test -x "$stage/usr/bin/aurora-autofill"
+          test -f "$stage/usr/share/applications/aurora-autofill.desktop"
+          test -f "$stage/usr/share/icons/hicolor/256x256/apps/aurora-autofill.png"
+          cp 'dist/AURORA AutoFill/SOURCE-COMMIT.txt' SOURCE-COMMIT.txt
+          sha256sum AURORA-AutoFill-v0.5.2-Linux-amd64.deb AURORA-AutoFill-v0.5.2-Linux-portable-amd64.tar.gz > SHA256SUMS-Linux.txt
       - uses: actions/upload-artifact@v4
         with:
-          name: AURORA-AutoFill-v0.5.2-Linux
+          name: AURORA-AutoFill-Linux-${{ github.run_number }}
           path: |
             AURORA-AutoFill-v0.5.2-Linux-amd64.deb
             AURORA-AutoFill-v0.5.2-Linux-portable-amd64.tar.gz
+            linux-bundle-report.json
+            SOURCE-COMMIT.txt
+            SHA256SUMS-Linux.txt
           if-no-files-found: error
+          retention-days: 30
+          compression-level: 0
