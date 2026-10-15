@@ -16,3 +16,48 @@ installer-win/
 # Arquivos locais de instaladores
 *.zip
 *.tar.gz
+
+# Evidencias e instrumentos locais de QA (nao publicar)
+/qa/
+*.log
+*.jsonl
+
+# Ambientes e caches locais
+.venv*/
+venv*/
+env/
+ENV/
+.mypy_cache/
+.ruff_cache/
+.tox/
+.nox/
+.cache/
+.coverage
+.coverage.*
+htmlcov/
+
+# Bancos de dados pessoais e arquivos auxiliares
+*.sqlite*
+*.db
+*.db-wal
+*.db-shm
+*.db-journal
+
+# Credenciais locais (preservar modelos sem segredos)
+.env
+.env.*
+!.env.example
+!.env.template
+*.pem
+*.key
+*.pfx
+*.p12
+.git-credentials
+.netrc
+_netrc
+id_rsa
+id_ed25519
+credentials.json
+service-account*.json
+/.aws/
+/.ssh/

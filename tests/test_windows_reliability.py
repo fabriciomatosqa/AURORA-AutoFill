@@ -7,6 +7,7 @@ from types import SimpleNamespace
 from unittest.mock import patch
 
 from app.hotkeys import GlobalHotkeyListener, ShortcutMatcher, _send_windows_paste
+from engine_fixture import EngineTestCase
 
 
 def key(char=None, name=""):
@@ -33,7 +34,7 @@ class RecognitionTests(unittest.TestCase):
         listener._on_press(space)
         self.assertEqual(received, [])
         listener._on_release(space)
-        self.assertEqual(received, ['/oi '])
+        self.assertEqual([c.shortcut for c in received], ['/oi '])
 
     def test_waits_for_shift_release(self):
         received = []
@@ -46,7 +47,7 @@ class RecognitionTests(unittest.TestCase):
             listener._on_release(key(c))
         self.assertEqual(received, [])
         listener._on_release(shift)
-        self.assertEqual(received, ['/OI'])
+        self.assertEqual([c.shortcut for c in received], ['/OI'])
 
     def test_ctrl_combination_does_not_match(self):
         received = []
@@ -85,64 +86,7 @@ class InjectionTests(unittest.TestCase):
         send.assert_not_called()
 
 
-class ClipboardAndUnicodeTests(unittest.TestCase):
-    @classmethod
-    def setUpClass(cls):
-        try:
-            from PySide6.QtWidgets import QApplication
-            from app.ui import AutoFillWindow
-        except ImportError:
-            raise unittest.SkipTest('PySide6 indisponível')
-        cls.app = QApplication.instance() or QApplication([])
-
-    def setUp(self):
-        from app.ui import AutoFillWindow
-        from PySide6.QtCore import QMimeData
-        # Isola o clipboard dos testes de cópias feitas no desktop durante a suíte.
-        class Clipboard:
-            def __init__(self):
-                self.mime = QMimeData()
-            def mimeData(self):
-                return self.mime
-            def text(self):
-                return self.mime.text()
-            def setMimeData(self, mime):
-                self.mime = mime
-            def setText(self, text):
-                self.mime = QMimeData()
-                self.mime.setText(text)
-            def clear(self):
-                self.mime = QMimeData()
-        self.clipboard = Clipboard()
-        clipboard_patch = patch('app.ui.QApplication.clipboard', return_value=self.clipboard)
-        sequence_patch = patch('app.ui.windows_clipboard_sequence', return_value=1)
-        clipboard_patch.start()
-        sequence_patch.start()
-        self.addCleanup(clipboard_patch.stop)
-        self.addCleanup(sequence_patch.stop)
-        self.temp = tempfile.TemporaryDirectory()
-        with patch('app.ui.application_db_path', return_value=Path(self.temp.name) / 'test.db'), \
-             patch('app.ui.GlobalHotkeyListener.start', return_value=(False, 'Teste')):
-            self.win = AutoFillWindow()
-        self.clipboard.setText('original')
-
-    def tearDown(self):
-        self.win._quitting = True
-        self.win.close()
-        self.clipboard.clear()
-        self.app.processEvents()
-        self.temp.cleanup()
-
-    def expand(self, shortcut='/ola', replacement=None):
-        with patch('app.ui.type_backspace_and_paste') as paste, \
-             patch('app.ui.QTimer.singleShot') as timer, \
-             patch.object(self.win, '_play_confirmation'):
-            self.win._perform_expansion(shortcut)
-            if replacement:
-                replacement()
-            if timer.called:
-                timer.call_args.args[1]()
-            return paste
+class ClipboardAndUnicodeTests(EngineTestCase):
 
     def test_new_copy_with_same_text_is_preserved(self):
         from PySide6.QtCore import QMimeData
@@ -160,22 +104,21 @@ class ClipboardAndUnicodeTests(unittest.TestCase):
 
     def test_changed_windows_sequence_prevents_restoration(self):
         # Mesmo texto e token não bastam se o Windows registrou outra cópia.
-        with patch('app.ui.windows_clipboard_sequence', side_effect=[10, 11]):
-            self.expand()
+        self.engine.type('/ola')
+        self.engine.until(75)
+        self.clipboard.sequence += 1
+        self.engine.drain()
         self.assertTrue(self.clipboard.text().startswith('Olá!'))
         self.assertFalse(self.win._clipboard_pending)
 
     def test_failed_injection_restores_clipboard(self):
-        with patch('app.ui.type_backspace_and_paste', side_effect=OSError('falha')), \
-             patch('app.ui.QTimer.singleShot') as timer:
-            self.win._perform_expansion('/ola')
-            timer.call_args.args[1]()
+        with patch('app.ui.replace_shortcut', side_effect=OSError('falha')):
+            self.expand()
         self.assertEqual(self.clipboard.text(), 'original')
         self.assertFalse(self.win._clipboard_pending)
 
     def test_nul_is_rejected_before_injection(self):
-        folder = self.win.store.folders()[0][0]
-        self.win.store.save(folder, 'Inválido', '/nul', 'a\x00b')
+        self.engine.save('/nul', 'a\x00b')
         self.expand('/nul').assert_not_called()
         self.assertEqual(self.clipboard.text(), 'original')
 
@@ -189,28 +132,28 @@ class ClipboardAndUnicodeTests(unittest.TestCase):
         text = 'Ação 😀\r\nsegunda linha\n👨‍👩‍👧‍👦'
         folder = self.win.store.folders()[0][0]
         self.win.store.save(folder, 'Texto', '/texto', text)
-        with patch('app.ui.type_backspace_and_paste') as paste, \
-             patch('app.ui.QTimer.singleShot') as timer, \
-             patch.object(self.win, '_play_confirmation'):
-            paste.side_effect = lambda *args: self.assertEqual(self.clipboard.text().replace('\r\n', '\n'), text.replace('\r\n', '\n'))
-            self.win._perform_expansion('/texto')
-            paste.assert_called_once()
-            timer.call_args.args[1]()
+        self.engine.listener.update_shortcuts(['/texto'])
+        self.expand('/texto').assert_called_once()
+        self.assertEqual(self.engine.field.text.replace('\r\n', '\n'), text.replace('\r\n', '\n'))
 
     def test_unicode_cursor_counts_visual_characters(self):
         from app.ui import cursor_steps
         self.assertEqual(cursor_steps('é😀e\u0301👨‍👩‍👧‍👦\r\n'), 5)
         folder = self.win.store.folders()[0][0]
         self.win.store.save(folder, 'Unicode', '/unicode', 'Olá {{cursor}}😀e\u0301\r\nfim')
-        self.expand('/unicode').assert_called_once_with(8, 6)
+        self.engine.listener.update_shortcuts(['/unicode'])
+        self.expand('/unicode').assert_called_once_with(8)
+        self.engine.move.assert_called_once_with(6)
 
     def test_confirming_space_is_selected_with_shortcut(self):
-        self.expand('/ola ').assert_called_once_with(5, 0)
+        self.engine.save('/olax', 'Outro')
+        self.expand('/ola ').assert_called_once_with(5)
 
     def test_changed_foreground_aborts_before_clipboard_write(self):
-        self.win._expansion_target = 123
-        with patch('app.ui.foreground_window', return_value=456):
-            self.expand().assert_not_called()
+        self.engine.type('/ola')
+        self.engine.window_id = 456
+        self.engine.drain()
+        self.engine.replace.assert_not_called()
         self.assertEqual(self.clipboard.text(), 'original')
 
 

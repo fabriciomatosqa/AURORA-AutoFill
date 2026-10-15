@@ -32,9 +32,9 @@ class ReleaseSynchronisationTests(unittest.TestCase):
         listener._on_release(keys[0])
         self.assertEqual(received, [])
         listener._on_release(keys[-1])
-        self.assertEqual(received, ['/oi'])
+        self.assertEqual([c.shortcut for c in received], ['/oi'])
         listener._on_release(keys[-1])
-        self.assertEqual(received, ['/oi'])
+        self.assertEqual([c.shortcut for c in received], ['/oi'])
 
     def test_disabled_cancels_pending_shortcut(self):
         listener = GlobalHotkeyListener(lambda _: self.fail('não pode expandir'))
@@ -58,50 +58,27 @@ class ClipboardPasteTests(unittest.TestCase):
         with patch.object(ctypes, 'windll', SimpleNamespace(user32=api), create=True), \
              patch('time.sleep', return_value=None):
             _send_windows_paste(3, 2)
-        self.assertEqual(sent[:8], [(0x10, 0)] + [(0x25, 0), (0x25, 2)] * 3 + [(0x10, 2)])
+        self.assertEqual(sent[:8], [(0x10, 0)] + [(0x25, 1), (0x25, 3)] * 3 + [(0x10, 2)])
         self.assertEqual(sent[8:12], [(0x11, 0), (0x56, 0), (0x56, 2), (0x11, 2)])
-        self.assertEqual(sent[12:], [(0x25, 0), (0x25, 2)] * 2)
+        self.assertEqual(sent[12:], [(0x25, 1), (0x25, 3)] * 2)
         # Não emite evento Unicode 0x0004 usado pela estratégia antiga.
         self.assertFalse(any(flag & 0x0004 for _, flag in sent))
 
     def test_plain_text_uses_clipboard_and_preserves_previous_content(self):
-        os.environ.setdefault('QT_QPA_PLATFORM', 'offscreen')
-        try:
-            from PySide6.QtWidgets import QApplication
-            from app.ui import AutoFillWindow
-        except ImportError:
-            self.skipTest('PySide6 indisponível')
-        app = qt_app()
-        with tempfile.TemporaryDirectory() as tmp, \
-             patch('app.ui.application_db_path', return_value=Path(tmp) / 'test.db'), \
-             patch('app.ui.GlobalHotkeyListener.start', return_value=(False, 'Teste')):
-            win = AutoFillWindow()
-            try:
-                win._hotkeys_enabled = True
-                win.hotkeys.set_enabled(True)
-                QApplication.clipboard().setText('Minha cópia original')
-                original = win._clone_clipboard_mime()
-                win._clipboard_pending = True
-                with patch('app.ui.type_backspace_and_paste') as paste, \
-                     patch('app.ui.QTimer.singleShot') as timer, \
-                     patch.object(win, '_play_confirmation') as play:
-                    win._perform_expansion('/ola')
-                    paste.assert_called_once_with(len('/ola'), 0)
-                    play.assert_called_once()
-                    mime = QApplication.clipboard().mimeData()
-                    self.assertTrue(mime.text().startswith('Olá!'))
-                    self.assertFalse(mime.hasHtml())
-                    self.assertTrue(win._clipboard_pending)
-                    self.assertEqual(timer.call_count, 1)
-                    # Executa a restauração agora, sem timers pendentes no shutdown.
-                    timer.call_args.args[1]()
-                    self.assertEqual(QApplication.clipboard().text(), 'Minha cópia original')
-                    self.assertFalse(win._clipboard_pending)
-            finally:
-                win._quitting = True
-                win.close()
-                QApplication.clipboard().clear()
-        app.processEvents()
+        from engine_fixture import EngineFixture
+        with EngineFixture() as engine:
+            engine.clipboard.setText('Minha cópia original')
+            engine.type('/ola')
+            engine.until(75)
+            mime = engine.clipboard.mimeData()
+            self.assertTrue(mime.text().startswith('Olá!'))
+            self.assertFalse(mime.hasHtml())
+            self.assertTrue(engine.host._clipboard_pending)
+            engine.drain()
+            engine.replace.assert_called_once_with(len('/ola'))
+            engine.host._play_confirmation.assert_called_once()
+            self.assertEqual(engine.clipboard.text(), 'Minha cópia original')
+            self.assertFalse(engine.host._clipboard_pending)
 
 
 class BannerTests(unittest.TestCase):

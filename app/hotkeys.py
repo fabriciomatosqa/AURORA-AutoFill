@@ -7,6 +7,14 @@ from __future__ import annotations
 
 from threading import RLock
 from typing import Callable
+import os
+from time import monotonic
+
+from .expansion import ExpansionCandidate
+from .windows_context import capture_focus
+
+# Only our events are ignored; injected events from other tools are still input.
+INJECTION_TAG = 0xA6700000 | (os.getpid() & 0xFFFF)
 
 
 class ShortcutMatcher:
@@ -53,24 +61,58 @@ class ShortcutMatcher:
 
 
 class GlobalHotkeyListener:
-    def __init__(self, on_trigger: Callable[[str], None]):
+    def __init__(self, on_trigger: Callable[[ExpansionCandidate], None]):
         self._on_trigger = on_trigger
         self._matcher = ShortcutMatcher()
         self._listener = None
+        self._mouse_listener = None
         self._enabled = True
         self._keyboard = None
         self._pending = None
         self._pending_key = None
         self._modifiers: set[str] = set()
+        self._state_lock = RLock()
+        self._revision = 0
+        self._latest_id = 0
+        self._claimed_id = 0
+        self._context = None
 
     def update_shortcuts(self, shortcuts: list[str]) -> None:
-        self._matcher.configure(shortcuts)
+        with self._state_lock:
+            self.invalidate()
+            self._matcher.configure(shortcuts)
+
+    def invalidate(self) -> None:
+        with self._state_lock:
+            self._revision += 1
+            self._pending = self._pending_key = None
+            self._context = None
+            self._matcher.clear()
+
+    def is_current(self, candidate: ExpansionCandidate) -> bool:
+        with self._state_lock:
+            return (self._enabled and candidate.revision == self._revision
+                    and candidate.identifier == self._latest_id
+                    and monotonic() - candidate.created <= 1.5)
+
+    def claim(self, candidate: ExpansionCandidate) -> bool:
+        with self._state_lock:
+            if not self.is_current(candidate) or self._claimed_id == candidate.identifier:
+                return False
+            self._claimed_id = candidate.identifier
+            return True
 
     def set_enabled(self, enabled: bool) -> None:
-        self._enabled = enabled
-        self._pending = None
-        self._pending_key = None
-        self._matcher.clear()
+        with self._state_lock:
+            self._enabled = enabled
+            self.invalidate()
+
+    def _win32_event_filter(self, _message, data):
+        return int(data.dwExtraInfo or 0) != INJECTION_TAG
+
+    def _on_click(self, _x, _y, _button, pressed):
+        if pressed:
+            self.invalidate()
 
     def start(self) -> tuple[bool, str]:
         import os
@@ -78,15 +120,30 @@ class GlobalHotkeyListener:
         if sys.platform.startswith("linux") and os.environ.get("XDG_SESSION_TYPE", "").lower() == "wayland":
             return False, "Wayland restringe atalhos globais. Use uma sessão X11/Xorg para essa função."
         try:
-            from pynput import keyboard
+            from pynput import keyboard, mouse
             self._keyboard = keyboard
-            self._listener = keyboard.Listener(on_press=self._on_press, on_release=self._on_release)
+            self._listener = keyboard.Listener(on_press=self._on_press, on_release=self._on_release,
+                                               win32_event_filter=self._win32_event_filter)
             self._listener.start()
+            self._mouse_listener = mouse.Listener(on_click=self._on_click,
+                                                  on_scroll=lambda *_: self.invalidate())
+            self._mouse_listener.start()
             return True, "Atalhos globais ativados"
         except Exception as exc:
+            self.stop()
             return False, f"Atalhos globais indisponíveis: {exc}"
 
     def _on_press(self, key: object) -> None:
+        with self._state_lock:
+            self._revision += 1
+            context = capture_focus()
+            if self._context is not None and self._context != context:
+                self._pending = self._pending_key = None
+                self._matcher.clear()
+            self._context = context
+            self._press(key)
+
+    def _press(self, key: object) -> None:
         name = getattr(key, "name", "")
         if name.startswith(("shift", "ctrl", "alt", "cmd")):
             self._modifiers.add(name)
@@ -116,11 +173,26 @@ class GlobalHotkeyListener:
             self._matcher.clear()
 
     def _on_release(self, key: object) -> None:
+        with self._state_lock:
+            matched = self._release(key)
+            if not matched:
+                return
+            context = capture_focus()
+            if context != self._context:
+                self.invalidate()
+                return
+            self._latest_id += 1
+            candidate = ExpansionCandidate(self._latest_id, matched, self._revision, context, monotonic())
+        try:
+            self._on_trigger(candidate)
+        except Exception:
+            self.invalidate()
+
+    def _release(self, key: object) -> str | None:
         self._modifiers.discard(getattr(key, "name", ""))
         if not self._enabled or self._pending is None:
             return
-        # A liberação da tecla é a fronteira mais segura para colar no
-        # Bloco de Notas moderno: o caractere final já foi processado.
+        # Keyup ends recognition; the destination still needs its own validation.
         same = key == self._pending_key
         if not same:
             same = (getattr(key, 'vk', None) is not None and
@@ -132,14 +204,14 @@ class GlobalHotkeyListener:
         matched = self._pending
         self._pending = None
         self._pending_key = None
-        try:
-            self._on_trigger(matched)
-        except Exception:
-            self._matcher.clear()
+        return matched
 
     def stop(self) -> None:
+        self.set_enabled(False)
         if self._listener is not None:
             self._listener.stop()
+        if self._mouse_listener is not None:
+            self._mouse_listener.stop()
 
 
 def type_backspace_and_paste(backspaces: int, cursor_left_moves: int = 0) -> None:
@@ -225,10 +297,11 @@ def _send_windows_unicode(backspaces: int, text: str, left_moves: int) -> None:
     KEYUP, UNICODE = 0x0002, 0x0004
 
     def ev(vk: int = 0, scan: int = 0, flags: int = 0):
-        return INPUT(1, INPUTUNION(ki=KEYBDINPUT(vk, scan, flags, 0, 0)))
+        return INPUT(1, INPUTUNION(ki=KEYBDINPUT(vk, scan, flags, 0, INJECTION_TAG)))
 
     def vk_pair(vk):
-        return [ev(vk), ev(vk, flags=KEYUP)]
+        extended = 1 if vk == 0x25 else 0
+        return [ev(vk, flags=extended), ev(vk, flags=KEYUP | extended)]
 
     def unicode_pairs(char):
         if char == "\n":
@@ -260,7 +333,7 @@ def _send_windows_unicode(backspaces: int, text: str, left_moves: int) -> None:
             raise OSError("O Windows não permitiu enviar todas as teclas simuladas.")
 
 
-def _send_windows_paste(backspaces: int, left_moves: int = 0) -> None:
+def _send_windows_paste(backspaces: int, left_moves: int = 0, *, phase: str = "all") -> None:
     """Seleciona o atalho e envia Ctrl+V; falha de colagem não o apaga previamente."""
     import ctypes
     from ctypes import wintypes
@@ -289,11 +362,14 @@ def _send_windows_paste(backspaces: int, left_moves: int = 0) -> None:
     api.restype = wintypes.UINT
 
     def event(vk: int, up: bool = False):
-        return INPUT(1, INPUTUNION(ki=KEYBDINPUT(vk, 0, KEYUP if up else 0, 0, 0)))
+        flags = (KEYUP if up else 0) | (1 if vk == VK_LEFT else 0)
+        return INPUT(1, INPUTUNION(ki=KEYBDINPUT(vk, 0, flags, 0, INJECTION_TAG)))
 
-    def submit(events):
-        for start in range(0, len(events), 128):
-            chunk = events[start:start + 128]
+    def submit(events, *, single_batch=False):
+        # Replacement must not expose a selected shortcut between API calls.
+        batch_size = len(events) if single_batch else 128
+        for start in range(0, len(events), batch_size):
+            chunk = events[start:start + batch_size]
             packed = (INPUT * len(chunk))(*chunk)
             count = api(len(chunk), packed, ctypes.sizeof(INPUT))
             if count != len(chunk):
@@ -310,12 +386,66 @@ def _send_windows_paste(backspaces: int, left_moves: int = 0) -> None:
     deletion = []
     for _ in range(backspaces):
         deletion.extend((event(VK_LEFT), event(VK_LEFT, True)))
-    if deletion:
+    if phase == "replace":
+        if not 1 <= backspaces <= 64:
+            raise ValueError("Tamanho de atalho fora do limite de substituição segura.")
+        submit([event(0x10), *deletion, event(0x10, True),
+                event(VK_CTRL), event(VK_V), event(VK_V, True), event(VK_CTRL, True)],
+               single_batch=True)
+        return
+    if deletion and phase in {"all", "select"}:
         submit([event(0x10), *deletion, event(0x10, True)])
-    submit((event(VK_CTRL), event(VK_V), event(VK_V, True), event(VK_CTRL, True)))
-    if left_moves:
-        sleep(0.22)
+    if phase in {"all", "paste"}:
+        submit((event(VK_CTRL), event(VK_V), event(VK_V, True), event(VK_CTRL, True)))
+    if left_moves and phase in {"all", "move"}:
+        if phase == "all":
+            sleep(0.22)  # Legacy helper; the staged UI path waits for confirmation.
         movements = []
         for _ in range(left_moves):
             movements.extend((event(VK_LEFT), event(VK_LEFT, True)))
         submit(movements)
+
+
+def select_previous_characters(count: int) -> None:
+    import sys
+    if sys.platform == "win32":
+        _send_windows_paste(count, phase="select")
+        return
+    from pynput.keyboard import Controller, Key
+    kb = Controller()
+    with kb.pressed(Key.shift):
+        for _ in range(count):
+            kb.tap(Key.left)
+
+
+def replace_shortcut(count: int) -> None:
+    """Select and paste in one Windows input batch, with no intermediate timer."""
+    import sys
+    if sys.platform != "win32":
+        # Preserve X11 compatibility; only Windows has the batch guarantee.
+        select_previous_characters(count)
+        paste_clipboard()
+        return
+    _send_windows_paste(count, phase="replace")
+
+
+def paste_clipboard() -> None:
+    import sys
+    if sys.platform == "win32":
+        _send_windows_paste(0, phase="paste")
+        return
+    from pynput.keyboard import Controller, Key
+    kb = Controller()
+    with kb.pressed(Key.ctrl):
+        kb.tap('v')
+
+
+def move_cursor_left(count: int) -> None:
+    import sys
+    if sys.platform == "win32":
+        _send_windows_paste(0, count, phase="move")
+        return
+    from pynput.keyboard import Controller, Key
+    kb = Controller()
+    for _ in range(count):
+        kb.tap(Key.left)

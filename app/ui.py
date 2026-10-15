@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+import sys
 
 from PySide6.QtCore import QObject, Qt, QMimeData, QTimer, Signal, QPoint, QRectF, QTextBoundaryFinder
 from PySide6.QtGui import (QAction, QColor, QFont, QFontMetricsF, QIcon, QKeySequence, QPalette,
@@ -14,7 +15,10 @@ from PySide6.QtWidgets import (
 )
 
 from .core import Snippet, SnippetStore, application_db_path, render_snippet
-from .hotkeys import GlobalHotkeyListener, type_backspace_and_paste
+from .hotkeys import GlobalHotkeyListener, replace_shortcut, move_cursor_left
+from .expansion import ClipboardLease, EditSnapshot, ExpansionCandidate, ExpansionOperation, utf16_slice
+from .windows_context import ContextUnavailable, FocusMonitor, capture_focus, capture_edit
+from time import monotonic
 from .formatting import has_rich_formatting, render_rich_html
 
 
@@ -120,7 +124,7 @@ QToolTip { background: #17354c; color: #fff; border: 1px solid #4eb9b2; }
 
 
 class HotkeySignals(QObject):
-    triggered = Signal(str)
+    triggered = Signal(object)
 
 
 class AuroraBanner(QWidget):
@@ -311,6 +315,10 @@ class AutoFillWindow(QMainWindow):
         self._hotkeys_enabled = True
         self._clipboard_clone: QMimeData | None = None
         self._clipboard_written = ""
+        self._clipboard_lease = None
+        self._active_candidate = None
+        self._expansion_operation = None
+        self._queued_candidate = None
         self.setWindowTitle("AURORA AutoFill v0.5.2 — Expansor de textos")
         self.setWindowIcon(QIcon(str(Path(__file__).resolve().parent.parent / "assets" / "aurora_icon.png")))
         # Impede a compactação horizontal desordenada dos campos; em telas de
@@ -337,6 +345,7 @@ class AutoFillWindow(QMainWindow):
         self._update_listener_shortcuts()
         started, message = self.hotkeys.start()
         self._hotkeys_enabled = started
+        self._focus_monitor = FocusMonitor(self.hotkeys.invalidate) if started else None
         self.listen_button.setText("● Atalhos ativos" if started else "○ Atalhos indisponíveis")
         self.listen_button.setEnabled(started)
         self.listen_button.setToolTip("Ativar/desativar expansão em outros programas")
@@ -924,81 +933,259 @@ class AutoFillWindow(QMainWindow):
                 clone.setData(fmt, original.data(fmt))
         return clone
 
-    def _expand_global(self, shortcut: str):
-        # O hook reconhece a soltura da última tecla; aguarda o widget de destino
-        # terminar o processamento do evento antes de apagar/colar.
-        if not self._hotkeys_enabled or self._clipboard_pending:
+    def _expand_global(self, candidate: ExpansionCandidate):
+        if not self._hotkeys_enabled or self._quitting or not self.hotkeys.is_current(candidate):
             return
         if self.isActiveWindow() and self.focusWidget() is not self.test_box:
             return
-        self._clipboard_pending = True
-        self._expansion_target = foreground_window()
-        self.hotkeys.set_enabled(False)
-        QTimer.singleShot(75, lambda s=shortcut: self._perform_expansion(s))
+        if sys.platform == "win32" and not (candidate.context.window and candidate.context.control):
+            return
+        operation = self._expansion_operation
+        lease = self._clipboard_lease
+        if (operation and operation.stage in {"selected", "sent", "moving"}
+                or lease and not lease.consumed and self._owns_clipboard(lease)):
+            self._queued_candidate = candidate
+            return
+        if capture_focus() != candidate.context or not self.hotkeys.claim(candidate):
+            return
+        self._active_candidate = candidate
+        # Retained settling delay; correctness comes from revision/context/range checks.
+        QTimer.singleShot(75, lambda c=candidate: self._perform_expansion(c))
 
-    def _perform_expansion(self, shortcut: str):
-        clipboard = QApplication.clipboard()
-        original_mime = None
-        restore_later = False
+    def _candidate_valid(self, candidate):
+        return (self._active_candidate is candidate and self._hotkeys_enabled and not self._quitting
+                and self.hotkeys.is_current(candidate) and capture_focus() == candidate.context)
+
+    def _edit_snapshot(self, *, accessibility=False):
+        context = capture_focus()
+        if self.isActiveWindow() and self.focusWidget() is self.test_box:
+            cursor = self.test_box.textCursor()
+            return EditSnapshot(context, self.test_box.toPlainText(), cursor.selectionStart(), cursor.selectionEnd())
+        return capture_edit(context, accessibility=True) if accessibility else capture_edit(context)
+
+    def _owns_clipboard(self, lease):
+        mime = QApplication.clipboard().mimeData()
+        return bool(mime and mime.text() == lease.text
+                    and bytes(mime.data("application/x-aurora-expansion")) == lease.token
+                    and windows_clipboard_sequence() == lease.sequence)
+
+    def _clipboard_source_text(self):
+        lease = self._clipboard_lease
+        if lease and lease.consumed and self._owns_clipboard(lease):
+            return lease.original.text()
+        return QApplication.clipboard().text()
+
+    def _perform_expansion(self, candidate: ExpansionCandidate):
+        if self._active_candidate is not candidate:
+            return
+        operation = None
         try:
-            target = getattr(self, "_expansion_target", foreground_window())
-            if target != foreground_window():
-                raise ValueError("A janela de destino mudou; expansão cancelada.")
+            if not self._candidate_valid(candidate):
+                raise ValueError("A digitação ou o destino mudou; expansão cancelada.")
+            shortcut = candidate.shortcut
             snippet = next((s for s in self.store.snippets() if s.shortcut == shortcut.rstrip(" ")), None)
             if not snippet:
+                self._finish_expansion(None)
                 return
-            current_text = clipboard.text()
+            try:
+                before = self._edit_snapshot()
+            except ContextUnavailable:
+                if monotonic() - candidate.created < 0.35:
+                    QTimer.singleShot(10, lambda c=candidate: self._perform_expansion(c))
+                    return
+                raise
+            if before is not None and before.shortcut_range(shortcut) is None:
+                if monotonic() - candidate.created < 0.35:
+                    QTimer.singleShot(10, lambda c=candidate: self._perform_expansion(c))
+                    return
+                raise ValueError("O atalho não está no intervalo esperado; expansão cancelada.")
+            current_text = self._clipboard_source_text()
             rendered = render_snippet(snippet.content, current_text)
             if not rendered.text:
+                self._finish_expansion(None)
                 return
             # NUL não pode ser transportado integralmente por CF_UNICODETEXT.
             if "\x00" in rendered.text:
                 raise ValueError("O texto contém um caractere NUL e não pode ser colado.")
             rendered.text.encode("utf-16-le")  # Rejeita pares substitutos inválidos antes de editar.
-            original_mime = self._clone_clipboard_mime()
-            payload = QMimeData()
-            payload.setText(rendered.text)
-            from uuid import uuid4
-            self._clipboard_token = uuid4().hex.encode("ascii")
-            payload.setData("application/x-aurora-expansion", self._clipboard_token)
             # O Notepad lê CF_UNICODETEXT. HTML é opcional e só aparece quando
             # o modelo foi realmente formatado (Word/Outlook podem aproveitar).
             rich = bool(snippet.rich_content and has_rich_formatting(snippet.rich_content)
                         and "{{cursor}}" not in snippet.content)
-            if rich:
-                payload.setHtml(render_rich_html(snippet.rich_content, current_text))
-            self._clipboard_written = rendered.text
-            clipboard.setMimeData(payload)
-            self._clipboard_sequence = windows_clipboard_sequence()
-            restore_later = True
-            if clipboard.text() != rendered.text:
-                raise ValueError("Não foi possível preparar a área de transferência.")
-            if target != foreground_window():
-                raise ValueError("A janela de destino mudou; expansão cancelada.")
             suffix = rendered.text[-rendered.left_moves:] if rendered.left_moves else ""
-            type_backspace_and_paste(cursor_steps(shortcut), cursor_steps(suffix))
-            self.statusBar().showMessage(f"Expandido: {shortcut}", 3000)
-            self._play_confirmation()
+            if rendered.left_moves and before is None:
+                try:
+                    before = self._edit_snapshot(accessibility=True)
+                except ContextUnavailable:
+                    if monotonic() - candidate.created < 0.35:
+                        QTimer.singleShot(10, lambda c=candidate: self._perform_expansion(c))
+                        return
+                    raise
+                if before is None:
+                    raise ValueError("Este campo não permite confirmar o posicionamento do cursor.")
+                if before.shortcut_range(shortcut) is None:
+                    raise ValueError("O atalho não está no intervalo acessível esperado; expansão cancelada.")
+            operation = ExpansionOperation(candidate, before, rendered.text, cursor_steps(suffix),
+                                           rendered.text[:-rendered.left_moves] if rendered.left_moves else rendered.text,
+                                           render_rich_html(snippet.rich_content, current_text) if rich else "")
+            self._expansion_operation = operation
+            if not self._candidate_valid(candidate):
+                raise ValueError("O contexto mudou antes da seleção.")
+            self._submit_expansion(operation)
         except Exception as exc:
-            self.statusBar().showMessage(f"Não foi possível expandir: {exc}", 8000)
-        finally:
-            if restore_later and original_mime is not None:
-                QTimer.singleShot(1450, lambda mime=original_mime: self._restore_clipboard(mime))
-            else:
-                self._clipboard_pending = False
-                self.hotkeys.set_enabled(self._hotkeys_enabled)
+            self._finish_expansion(operation, f"Não foi possível expandir: {exc}")
 
-    def _restore_clipboard(self, original: QMimeData):
-        if self._quitting:
+    def _submit_expansion(self, operation):
+        if self._expansion_operation is not operation:
             return
-        clipboard = QApplication.clipboard()
-        mime = clipboard.mimeData()
-        if (mime and mime.text() == self._clipboard_written
-                and bytes(mime.data("application/x-aurora-expansion")) == self._clipboard_token):
-            if windows_clipboard_sequence() == self._clipboard_sequence:
-                clipboard.setMimeData(original)
+        try:
+            if not self._candidate_valid(operation.candidate):
+                raise ValueError("Atividade ou foco mudou; colagem cancelada.")
+            clipboard = QApplication.clipboard()
+            backup_sequence = windows_clipboard_sequence()
+            previous = self._clipboard_lease
+            original = (previous.original if previous and previous.consumed and self._owns_clipboard(previous)
+                        else self._clone_clipboard_mime())
+            from uuid import uuid4
+            token = uuid4().hex.encode("ascii")
+            payload = QMimeData()
+            payload.setText(operation.text)
+            payload.setData("application/x-aurora-expansion", token)
+            if operation.rich_html:
+                payload.setHtml(operation.rich_html)
+            if windows_clipboard_sequence() != backup_sequence:
+                raise ValueError("O clipboard mudou durante a preparação; colagem cancelada.")
+            clipboard.setMimeData(payload)
+            lease = ClipboardLease(operation.candidate.identifier, original, operation.text, token,
+                                   windows_clipboard_sequence())
+            operation.lease = self._clipboard_lease = lease
+            self._clipboard_pending = True
+            if not self._candidate_valid(operation.candidate) or not self._owns_clipboard(lease):
+                raise ValueError("Contexto ou clipboard mudou antes da colagem.")
+            if operation.before is not None:
+                snapshot = self._edit_snapshot(accessibility=bool(operation.before.identity))
+                if (snapshot is None or snapshot.context != operation.candidate.context
+                        or snapshot.identity != operation.before.identity
+                        or snapshot.text != operation.before.text
+                        or (snapshot.start, snapshot.end) != (operation.before.start, operation.before.end)
+                        or snapshot.shortcut_range(operation.candidate.shortcut) is None):
+                    raise ValueError("O intervalo mudou antes da colagem.")
+            # Recheck after clipboard and native queries, immediately before dispatch.
+            if not self._candidate_valid(operation.candidate) or not self._owns_clipboard(lease):
+                raise ValueError("Contexto ou clipboard mudou antes do envio.")
+            operation.stage = "sent"
+            replace_shortcut(cursor_steps(operation.candidate.shortcut))
+            operation.deadline = monotonic() + 0.75
+            QTimer.singleShot(10, lambda op=operation: self._confirm_expansion(op))
+        except Exception as exc:
+            self._finish_expansion(operation, f"Não foi possível expandir: {exc}")
+
+    @staticmethod
+    def _normal_text(text):
+        return text.replace("\r\n", "\n").replace("\r", "\n")
+
+    def _confirm_expansion(self, operation):
+        if self._expansion_operation is not operation:
+            return
+        try:
+            if not self._candidate_valid(operation.candidate):
+                raise ValueError("Contexto alterado após envio; resultado não confirmado.")
+            before = operation.before
+            if before is None:
+                self._finish_expansion(operation, "Expansão enviada; este campo não permite confirmar o resultado.")
+                return
+            snapshot = self._edit_snapshot(accessibility=bool(before.identity))
+            if snapshot is not None and snapshot.identity != before.identity:
+                raise ValueError("O campo de edição mudou; resultado não confirmado.")
+            begin, end = before.shortcut_range(operation.candidate.shortcut)
+            expected = self._normal_text(before.replace(begin, end, operation.text))
+            prefix = self._normal_text(utf16_slice(before.text, 0, begin) + operation.text)
+            if (snapshot is None or self._normal_text(snapshot.text) != expected or snapshot.start != snapshot.end
+                    or self._normal_text(utf16_slice(snapshot.text, 0, snapshot.start)) != prefix):
+                if monotonic() < operation.deadline:
+                    QTimer.singleShot(10, lambda op=operation: self._confirm_expansion(op))
+                    return
+                raise ValueError("Colagem não confirmada; nenhum reenvio será feito.")
+            operation.lease.consumed = True
+            if operation.left_moves:
+                move_cursor_left(operation.left_moves)
+                operation.stage = "moving"
+                operation.deadline = monotonic() + 0.3
+                QTimer.singleShot(10, lambda op=operation: self._confirm_cursor(op))
+            else:
+                self._expansion_succeeded(operation)
+        except Exception as exc:
+            if (isinstance(exc, ContextUnavailable) and monotonic() < operation.deadline
+                    and self._candidate_valid(operation.candidate)):
+                QTimer.singleShot(10, lambda op=operation: self._confirm_expansion(op))
+            else:
+                self._finish_expansion(operation, f"Não foi possível expandir: {exc}")
+
+    def _confirm_cursor(self, operation):
+        if self._expansion_operation is not operation:
+            return
+        try:
+            self._check_cursor(operation)
+        except Exception as exc:
+            if (isinstance(exc, ContextUnavailable) and monotonic() < operation.deadline
+                    and self._candidate_valid(operation.candidate)):
+                QTimer.singleShot(10, lambda op=operation: self._confirm_cursor(op))
+            else:
+                self._finish_expansion(operation, f"Texto inserido; cursor não confirmado: {exc}")
+
+    def _check_cursor(self, operation):
+        if not self._candidate_valid(operation.candidate):
+            self._finish_expansion(operation, "Texto inserido; contexto mudou antes de confirmar o cursor.")
+            return
+        snapshot = self._edit_snapshot(accessibility=bool(operation.before.identity))
+        begin, end = operation.before.shortcut_range(operation.candidate.shortcut)
+        prefix = self._normal_text(utf16_slice(operation.before.text, 0, begin) + operation.cursor_prefix)
+        if (snapshot is not None and snapshot.start == snapshot.end
+                and snapshot.identity == operation.before.identity
+                and self._normal_text(snapshot.text) == self._normal_text(operation.before.replace(begin, end, operation.text))
+                and self._normal_text(utf16_slice(snapshot.text, 0, snapshot.start)) == prefix):
+            self._expansion_succeeded(operation)
+        elif monotonic() < operation.deadline:
+            QTimer.singleShot(10, lambda op=operation: self._confirm_cursor(op))
+        else:
+            self._finish_expansion(operation, "Texto inserido; posição do cursor não confirmada.")
+
+    def _expansion_succeeded(self, operation):
+        operation.stage = "confirmed"
+        self.statusBar().showMessage(f"Expandido: {operation.candidate.shortcut}", 3000)
+        self._play_confirmation()
+        self._finish_expansion(operation)
+
+    def _finish_expansion(self, operation, message=""):
+        if operation is not None and self._expansion_operation is not operation:
+            return
+        if message:
+            self.statusBar().showMessage(message, 8000)
+        if operation and operation.lease:
+            lease = operation.lease
+            delay = 0 if lease.consumed or operation.stage not in {"sent", "moving"} else 1450
+            QTimer.singleShot(delay, lambda saved=lease: self._restore_clipboard(saved))
+        self._active_candidate = None
+        self._expansion_operation = None
+        self._resume_queued_expansion()
+
+    def _resume_queued_expansion(self):
+        lease = self._clipboard_lease
+        if lease and not lease.consumed and self._owns_clipboard(lease):
+            return
+        candidate, self._queued_candidate = self._queued_candidate, None
+        if candidate is not None:
+            QTimer.singleShot(0, lambda c=candidate: self._expand_global(c))
+
+    def _restore_clipboard(self, lease: ClipboardLease):
+        if self._clipboard_lease is not lease:
+            return
+        if self._owns_clipboard(lease):
+            QApplication.clipboard().setMimeData(lease.original)
+        self._clipboard_lease = None
         self._clipboard_pending = False
-        self.hotkeys.set_enabled(self._hotkeys_enabled)
+        if not self._quitting:
+            self._resume_queued_expansion()
 
     def closeEvent(self, event):
         if not self._confirm_change():
@@ -1010,6 +1197,10 @@ class AutoFillWindow(QMainWindow):
             self._hide_to_tray()
             return
         self.hotkeys.stop()
+        if self._focus_monitor is not None:
+            self._focus_monitor.stop()
+        if self._clipboard_lease is not None:
+            self._restore_clipboard(self._clipboard_lease)
         if self.tray_icon is not None:
             self.tray_icon.hide()
         self.store.close()
