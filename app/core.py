@@ -104,6 +104,9 @@ class SnippetStore:
         columns = {row[1] for row in self.connection.execute("PRAGMA table_info(snippets)")}
         if "rich_content" not in columns:
             self.connection.execute("ALTER TABLE snippets ADD COLUMN rich_content TEXT NOT NULL DEFAULT ''")
+        # A migração mantém a ordem antiga (id DESC) para posições iguais.
+        if "sort_order" not in columns:
+            self.connection.execute("ALTER TABLE snippets ADD COLUMN sort_order INTEGER NOT NULL DEFAULT 0")
         self.connection.commit()
 
     def folders(self) -> list[tuple[int, str]]:
@@ -118,6 +121,49 @@ class SnippetStore:
             cursor = self.connection.execute("INSERT INTO folders(name) VALUES (?)", (name,))
         return int(cursor.lastrowid)
 
+    def delete_folder(self, folder_id: int) -> tuple[int, str]:
+        """Apaga somente a pasta; preserva seus comandos em outra pasta."""
+        with self.connection:
+            existing = self.connection.execute(
+                "SELECT name FROM folders WHERE id=?", (folder_id,)).fetchone()
+            if existing is None:
+                raise ValueError("Esta pasta não existe mais.")
+            alternatives = self.connection.execute(
+                "SELECT id, name FROM folders WHERE id<>? ORDER BY name COLLATE NOCASE",
+                (folder_id,)).fetchall()
+            if alternatives:
+                target = next((row for row in alternatives if row["name"].casefold() == "meus atalhos"),
+                              alternatives[0])
+                target_id, target_name = int(target["id"]), str(target["name"])
+            else:
+                target_name = "Sem pasta" if existing["name"].casefold() == "meus atalhos" else "Meus atalhos"
+                target_id = int(self.connection.execute(
+                    "INSERT INTO folders(name) VALUES (?)", (target_name,)).lastrowid)
+            count = int(self.connection.execute(
+                "SELECT COUNT(*) FROM snippets WHERE folder_id=?", (folder_id,)).fetchone()[0])
+            self.connection.execute("UPDATE snippets SET folder_id=? WHERE folder_id=?",
+                                    (target_id, folder_id))
+            self.connection.execute("DELETE FROM folders WHERE id=?", (folder_id,))
+        return count, target_name
+
+    def reorder_snippets(self, folder_id: int | None, ordered_ids: list[int]) -> None:
+        """Persiste drag-and-drop sem mover comandos entre pastas."""
+        with self.connection:
+            rows = self.connection.execute(
+                "SELECT id, folder_id FROM snippets ORDER BY sort_order ASC, id DESC").fetchall()
+            all_ids = [int(row["id"]) for row in rows]
+            positions = [index for index, row in enumerate(rows)
+                         if folder_id is None or row["folder_id"] == folder_id]
+            allowed = {all_ids[index] for index in positions}
+            if (len(ordered_ids) != len(positions) or len(set(ordered_ids)) != len(ordered_ids)
+                    or set(ordered_ids) != allowed):
+                raise ValueError("A lista de comandos mudou. Atualize antes de reorganizar.")
+            for index, snippet_id in zip(positions, ordered_ids):
+                all_ids[index] = snippet_id
+            self.connection.executemany(
+                "UPDATE snippets SET sort_order=? WHERE id=?",
+                ((index, snippet_id) for index, snippet_id in enumerate(all_ids)))
+
     def snippets(self, folder_id: int | None = None, query: str = "") -> list[Snippet]:
         sql = "SELECT id, folder_id, title, shortcut, content, rich_content FROM snippets WHERE 1=1"
         params: list[object] = []
@@ -127,7 +173,7 @@ class SnippetStore:
         if query:
             sql += " AND (title LIKE ? OR shortcut LIKE ? OR content LIKE ?)"
             params.extend([f"%{query}%"] * 3)
-        sql += " ORDER BY id DESC"
+        sql += " ORDER BY sort_order ASC, id DESC"
         return [Snippet(**dict(row)) for row in self.connection.execute(sql, params)]
 
     def save(self, folder_id: int, title: str, shortcut: str, content: str,
@@ -142,9 +188,11 @@ class SnippetStore:
         try:
             with self.connection:
                 if snippet_id is None:
+                    position = self.connection.execute(
+                        "SELECT COALESCE(MIN(sort_order), 0) - 1 FROM snippets").fetchone()[0]
                     cur = self.connection.execute(
-                        "INSERT INTO snippets(folder_id, title, shortcut, content, rich_content) VALUES (?,?,?,?,?)",
-                        (folder_id, title, shortcut, content, rich_content))
+                        "INSERT INTO snippets(folder_id, title, shortcut, content, rich_content, sort_order) VALUES (?,?,?,?,?,?)",
+                        (folder_id, title, shortcut, content, rich_content, position))
                     return int(cur.lastrowid)
                 self.connection.execute(
                     "UPDATE snippets SET folder_id=?, title=?, shortcut=?, content=?, rich_content=?, updated_at=CURRENT_TIMESTAMP WHERE id=?",

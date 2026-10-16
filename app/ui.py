@@ -8,7 +8,7 @@ from PySide6.QtCore import QObject, Qt, QMimeData, QTimer, Signal, QPoint, QRect
 from PySide6.QtGui import (QAction, QColor, QFont, QFontMetricsF, QIcon, QKeySequence, QPalette,
                            QShortcut, QTextCharFormat, QPainter, QPainterPath, QLinearGradient, QPen, QPixmap)
 from PySide6.QtWidgets import (
-    QApplication, QComboBox, QFileDialog, QFrame, QHBoxLayout, QInputDialog,
+    QApplication, QAbstractItemView, QComboBox, QFileDialog, QFrame, QHBoxLayout, QInputDialog,
     QLabel, QLineEdit, QListView, QListWidget, QListWidgetItem, QMainWindow, QMenu, QMessageBox,
     QPlainTextEdit, QPushButton, QScrollArea, QSplitter, QStackedWidget, QSystemTrayIcon,
     QTextEdit, QStatusBar, QToolButton, QVBoxLayout, QWidget,
@@ -303,6 +303,19 @@ class AuroraFolderCombo(QComboBox):
         painter.end()
 
 
+class ReorderableSnippetList(QListWidget):
+    """Permite arrastar e soltar comandos e avisa quando a ordem foi alterada."""
+    reordered = Signal()
+
+    def dropEvent(self, event):
+        if event.source() is not self:
+            event.ignore()
+            return
+        super().dropEvent(event)
+        if event.isAccepted():
+            self.reordered.emit()
+
+
 class AutoFillWindow(QMainWindow):
     def __init__(self):
         super().__init__()
@@ -461,9 +474,17 @@ class AutoFillWindow(QMainWindow):
         add_folder.setToolTip("Criar pasta")
         add_folder.clicked.connect(self._add_folder)
         folder_row.addWidget(add_folder)
+        self.remove_folder_button = QPushButton("−")
+        self.remove_folder_button.setObjectName("danger")
+        self.remove_folder_button.setFixedWidth(36)
+        self.remove_folder_button.setToolTip("Excluir a pasta selecionada (sem apagar comandos)")
+        self.remove_folder_button.clicked.connect(self._delete_folder)
+        folder_row.addWidget(self.remove_folder_button)
         s.addLayout(folder_row)
-        self.snippet_list = QListWidget()
+        self.snippet_list = ReorderableSnippetList()
         self.snippet_list.setSpacing(1)
+        self.snippet_list.setDefaultDropAction(Qt.MoveAction)
+        self.snippet_list.reordered.connect(self._reorder_snippets)
         self.snippet_list.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.snippet_list.setTextElideMode(Qt.ElideRight)
         self.snippet_list.currentItemChanged.connect(self._choose_snippet)
@@ -493,7 +514,7 @@ class AutoFillWindow(QMainWindow):
         splitter.setStretchFactor(1, 1)
         self.setStatusBar(QStatusBar())
         self.statusBar().setSizeGripEnabled(False)
-        author = QLabel("Desenvolvido por Fabricio Matos  •  2026")
+        author = QLabel("Desenvolvido por Fabricio Matos  •  Versão - v0.5.2")
         author.setObjectName("developerCredit")
         self.statusBar().addPermanentWidget(author)
 
@@ -664,6 +685,22 @@ class AutoFillWindow(QMainWindow):
         self.token_button.setPopupMode(QToolButton.InstantPopup)
         self.token_button.setMinimumWidth(238)
         menu = QMenu(self.token_button)
+        menu.setObjectName("dynamicTokenMenu")
+        menu.setAttribute(Qt.WA_TranslucentBackground, True)
+        menu.setWindowFlag(Qt.FramelessWindowHint, True)
+        menu.setStyleSheet("""
+            QMenu#dynamicTokenMenu {
+                background-color: #112f41; color: #ebfaff;
+                border: 1px solid #2f8590; border-radius: 11px; padding: 7px;
+            }
+            QMenu#dynamicTokenMenu::item {
+                color: #e5f7ff; padding: 10px 16px; margin: 2px 3px;
+                border-radius: 7px; background: transparent;
+            }
+            QMenu#dynamicTokenMenu::item:selected {
+                color: #ffffff; background: #287281;
+            }
+        """)
         for label, token in [
             ("Data atual", "{{data}}"), ("Hora atual", "{{hora}}"),
             ("Data e hora", "{{data_hora}}"), ("Área de transferência", "{{clipboard}}"),
@@ -676,17 +713,16 @@ class AutoFillWindow(QMainWindow):
         formatting_row.addWidget(self.token_button)
         v.addLayout(formatting_row)
         self.body_input.currentCharFormatChanged.connect(self._sync_format_buttons)
-        self.body_input.setMinimumHeight(178)
-        v.addWidget(self.body_input, 2)
+        self.body_input.setMinimumHeight(190)
+        v.addWidget(self.body_input, 3)
         preview_label = QLabel("PRÉ-VISUALIZAÇÃO")
         preview_label.setObjectName("sectionTitle")
         v.addWidget(preview_label)
         self.preview = QPlainTextEdit()
         self.preview.setReadOnly(True)
-        self.preview.setMinimumHeight(88)
-        self.preview.setMaximumHeight(125)
+        self.preview.setMinimumHeight(145)
         self.preview.setPlaceholderText("O resultado do modelo aparecerá aqui.")
-        v.addWidget(self.preview, 1)
+        v.addWidget(self.preview, 2)
         tip = QLabel("{{cursor}} posiciona o ponto de digitação. Atalhos: Ctrl+N (novo) e Ctrl+S (salvar).")
         tip.setObjectName("hint")
         tip.setWordWrap(True)
@@ -781,7 +817,29 @@ class AutoFillWindow(QMainWindow):
             if snippet.id == old_selected:
                 self.snippet_list.setCurrentItem(item)
         self.snippet_list.blockSignals(False)
+        can_sort = not self.search.text().strip()
+        self.snippet_list.setDragDropMode(
+            QAbstractItemView.InternalMove if can_sort else QAbstractItemView.NoDragDrop)
+        self.snippet_list.setToolTip(
+            "Arraste comandos para alterar a ordem" if can_sort
+            else "Limpe a busca para ordenar comandos")
+        self.remove_folder_button.setEnabled(folder_id is not None)
         self._update_listener_shortcuts()
+
+    def _reorder_snippets(self):
+        if self.search.text().strip():
+            self._refresh_list()
+            return
+        ordered_ids = [self.snippet_list.item(index).data(Qt.UserRole)
+                       for index in range(self.snippet_list.count())]
+        try:
+            self.store.reorder_snippets(self.filter_folder.currentData(), ordered_ids)
+        except ValueError as exc:
+            QMessageBox.warning(self, "Não foi possível ordenar", str(exc))
+            self._refresh_list()
+            return
+        self._refresh_list()
+        self.statusBar().showMessage("Ordem dos comandos atualizada.", 4000)
 
     def _update_listener_shortcuts(self):
         if hasattr(self, "hotkeys"):
@@ -895,6 +953,39 @@ class AutoFillWindow(QMainWindow):
         idx = self.filter_folder.findData(folder_id)
         self.filter_folder.setCurrentIndex(idx)
         self.editor_folder.setCurrentIndex(self.editor_folder.findData(folder_id))
+
+    def _delete_folder(self):
+        folder_id = self.filter_folder.currentData()
+        if folder_id is None or not self._confirm_change():
+            return
+        folders = dict(self.store.folders())
+        name = folders.get(folder_id)
+        if name is None:
+            self._refresh_all()
+            return
+        count = len(self.store.snippets(folder_id))
+        others = [(fid, label) for fid, label in folders.items() if fid != folder_id]
+        destination = (next((label for _, label in others if label.casefold() == "meus atalhos"),
+                            others[0][1]) if others
+                       else ("Sem pasta" if name.casefold() == "meus atalhos" else "Meus atalhos"))
+        detail = (f"Os {count} comandos serão movidos para a pasta '{destination}'." if count
+                  else "A pasta está vazia.")
+        confirmation = QMessageBox.question(
+            self, "Excluir pasta",
+            f"Excluir a pasta '{name}'?\n\n{detail}\nNenhum comando será apagado.",
+            QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
+        if confirmation != QMessageBox.Yes:
+            return
+        try:
+            moved, target = self.store.delete_folder(folder_id)
+        except Exception as exc:
+            QMessageBox.warning(self, "Não foi possível excluir a pasta", str(exc))
+            return
+        self.dirty = False
+        self._refresh_all()
+        self._show_welcome()
+        self.statusBar().showMessage(
+            f"Pasta excluída. {moved} comando(s) preservado(s) em '{target}'.", 6000)
 
     def _export(self):
         path, _ = QFileDialog.getSaveFileName(self, "Exportar comandos", "autofill-backup.json", "JSON (*.json)")

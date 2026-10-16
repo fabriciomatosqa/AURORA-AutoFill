@@ -1,7 +1,7 @@
 AURORA AutoFill — som de confirmação
 
 Arquivo: command_click.wav
-Som original criado por síntese digital em 2026 para o projeto.
+Som suave de gota d'água, criado por síntese digital para o projeto em 2026.
 Liberado sob CC0 1.0 Universal (domínio público).
 https://creativecommons.org/publicdomain/zero/1.0/
 
