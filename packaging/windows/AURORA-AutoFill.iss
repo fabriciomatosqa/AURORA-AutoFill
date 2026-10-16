@@ -1,5 +1,8 @@
 #define AppName "AURORA AutoFill"
-#define AppVersion "0.5.2"
+#define AppVersion GetEnv("AURORA_VERSION")
+#if AppVersion == ""
+  #error "Defina AURORA_VERSION a partir de app.version antes de compilar"
+#endif
 #define AppPublisher "Fabricio Matos"
 #define AppExeName "AURORA AutoFill.exe"
 
@@ -14,14 +17,14 @@ DefaultDirName={localappdata}\Programs\AURORA AutoFill
 DefaultGroupName={#AppName}
 DisableProgramGroupPage=yes
 OutputDir=installer-win
-OutputBaseFilename=AURORA-AutoFill-v0.5.2-Windows-Setup
+OutputBaseFilename=AURORA-AutoFill-v{#AppVersion}-Windows-Setup
 Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern
 PrivilegesRequired=lowest
 UninstallDisplayIcon={app}\{#AppExeName}
 SetupIconFile=assets\aurora_icon.ico
-VersionInfoVersion=0.5.2.0
+VersionInfoVersion={#AppVersion}.0
 VersionInfoDescription=Instalador do AURORA AutoFill
 
 [Languages]

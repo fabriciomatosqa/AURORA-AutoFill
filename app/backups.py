@@ -5,7 +5,6 @@ from contextlib import closing
 from datetime import datetime
 from pathlib import Path
 from zipfile import ZipFile, ZIP_DEFLATED
-import io
 import json
 import os
 import sqlite3
@@ -58,8 +57,10 @@ def create_backup(store, *, destination: Path | None = None, reason: str = "manu
             }))
         os.replace(tmp_zip, destination)
         tmp_zip = None
-        if destination.parent.resolve() == folder.resolve() and keep >= 1:
-            backups = sorted(folder.glob(f"*{BACKUP_SUFFIX}"),
+        # Keep manual / emergency restoration backups indefinitely; rotate only
+        # automatic pre-update snapshots, leaving the latest five.
+        if reason == "pre-update" and destination.parent.resolve() == folder.resolve() and keep >= 1:
+            backups = sorted(folder.glob(f"aurora-pre-update-*{BACKUP_SUFFIX}"),
                              key=lambda f: f.stat().st_mtime, reverse=True)
             for old in backups[keep:]:
                 old.unlink(missing_ok=True)
@@ -102,7 +103,7 @@ def read_backup(archive_path: Path) -> tuple[Path, dict | None]:
                 with archive.open("snippets.sqlite3") as content:
                     while data := content.read(65536):
                         handle.write(data)
-        with closing(sqlite3.connect(f"file:{db_file.as_posix()}?mode=ro", uri=True)) as source:
+        with closing(sqlite3.connect(db_file)) as source:
             if source.execute("PRAGMA quick_check").fetchone()[0] != "ok":
                 raise ValueError("O banco de backup está danificado.")
             if source.execute("PRAGMA foreign_key_check").fetchone() is not None:

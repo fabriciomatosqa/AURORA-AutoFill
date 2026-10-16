@@ -95,8 +95,11 @@ class AuroraFeaturesMixin:
     def _open_backups(self):
         folder = backups_directory()
         folder.mkdir(parents=True, exist_ok=True)
-        import webbrowser
-        webbrowser.open(folder.as_uri())
+        if sys.platform == "win32":
+            os.startfile(str(folder))
+        else:
+            subprocess.Popen(["xdg-open", str(folder)], stdout=subprocess.DEVNULL,
+                             stderr=subprocess.DEVNULL)
 
     def _restore_user_backup(self):
         selected, _ = QFileDialog.getOpenFileName(
@@ -119,6 +122,14 @@ class AuroraFeaturesMixin:
             self.store.close()
             self.store = SnippetStore(application_db_path())
             self.preferences = load_preferences()
+            for widget, setting in ((self.settings_page.sound, "sound_enabled"),
+                                    (self.settings_page.updates, "check_updates")):
+                widget.blockSignals(True)
+                widget.setChecked(self.preferences[setting])
+                widget.blockSignals(False)
+            self.settings_page.volume.blockSignals(True)
+            self.settings_page.volume.setValue(self.preferences["sound_volume"])
+            self.settings_page.volume.blockSignals(False)
             self._refresh_all()
             self.dirty = False
             self._show_welcome()
@@ -145,6 +156,9 @@ class AuroraFeaturesMixin:
         line.addWidget(self.undo_button)
         self.statusBar().addWidget(bar, 1)
         self.undo_bar = bar
+        self._undo_tick = QTimer(self)
+        self._undo_tick.setInterval(1000)
+        self._undo_tick.timeout.connect(self._render_undo)
         bar.hide()
 
     def _offer_undo(self, kind: str, snapshot: dict, label: str):
@@ -169,8 +183,10 @@ class AuroraFeaturesMixin:
             remaining = max(1, round(last["expires"] - monotonic()))
             self.undo_label.setText(f"{last['label']} · {remaining}s")
             self.undo_bar.show()
-            QTimer.singleShot(1000, self._render_undo)
+            if not self._undo_tick.isActive():
+                self._undo_tick.start()
         else:
+            self._undo_tick.stop()
             self.undo_bar.hide()
 
     def _undo_last(self):

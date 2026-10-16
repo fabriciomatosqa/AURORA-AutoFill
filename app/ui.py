@@ -1,4 +1,4 @@
-"""Interface do AURORA AutoFill v0.5.2 (PySide6)."""
+"""Interface desktop do AURORA AutoFill (PySide6)."""
 from __future__ import annotations
 
 from pathlib import Path
@@ -20,6 +20,8 @@ from .expansion import ClipboardLease, EditSnapshot, ExpansionCandidate, Expansi
 from .windows_context import ContextUnavailable, FocusMonitor, capture_focus, capture_edit
 from time import monotonic
 from .formatting import has_rich_formatting, render_rich_html
+from .features import AuroraFeaturesMixin
+from .version import APP_VERSION
 
 
 def cursor_steps(text: str) -> int:
@@ -50,7 +52,7 @@ def foreground_window():
 
 
 STYLESHEET = """
-/* AURORA 0.5.2 — acabamento visual da identidade Aurora */
+/* AURORA — acabamento visual da identidade Aurora Boreal */
 QWidget { font-family: "Segoe UI", "Inter", "Noto Sans", sans-serif; }
 QMainWindow, QWidget#body, QWidget#rightPane, QWidget#editorPage, QWidget#welcomePage {
   background-color: #091426; color: #eaf4ff; }
@@ -316,11 +318,12 @@ class ReorderableSnippetList(QListWidget):
             self.reordered.emit()
 
 
-class AutoFillWindow(QMainWindow):
+class AutoFillWindow(AuroraFeaturesMixin, QMainWindow):
     def __init__(self):
         super().__init__()
         self.store = SnippetStore(application_db_path())
         self.store.seed_if_empty()
+        self._initialize_features()
         self.current_id: int | None = None
         self.dirty = False
         self._loading = False
@@ -332,7 +335,7 @@ class AutoFillWindow(QMainWindow):
         self._active_candidate = None
         self._expansion_operation = None
         self._queued_candidate = None
-        self.setWindowTitle("AURORA AutoFill v0.5.2 — Expansor de textos")
+        self.setWindowTitle(f"AURORA AutoFill v{APP_VERSION} — Expansor de textos")
         self.setWindowIcon(QIcon(str(Path(__file__).resolve().parent.parent / "assets" / "aurora_icon.png")))
         # Impede a compactação horizontal desordenada dos campos; em telas de
         # pouca altura o editor usa rolagem própria, sem sobrepor controles.
@@ -365,35 +368,11 @@ class AutoFillWindow(QMainWindow):
         self.statusBar().showMessage(message)
         self._refresh_all()
         self._show_welcome()
+        QTimer.singleShot(10000, self._initial_release_check)
 
     def _play_confirmation(self):
-        """Reproduz o clique original de forma assíncrona, sem bloquear a GUI.
-
-        Não utiliza QtMultimedia: ambientes Linux sem PipeWire podem travar
-        ao inicializar o módulo de áudio; Windows usa winsound nativo.
-        """
-        import sys
-        import shutil
-        import subprocess
-        path = str(Path(__file__).resolve().parent.parent / "assets" / "command_click.wav")
-        try:
-            if sys.platform == "win32":
-                import winsound
-                winsound.PlaySound(path, winsound.SND_FILENAME | winsound.SND_ASYNC | winsound.SND_NODEFAULT)
-                return
-            for player in ("paplay", "pw-play", "aplay"):
-                binary = shutil.which(player)
-                if binary:
-                    subprocess.Popen([binary, path], stdin=subprocess.DEVNULL,
-                                     stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-                                     start_new_session=True)
-                    return
-            QApplication.beep()
-        except Exception:
-            try:
-                QApplication.beep()
-            except Exception:
-                pass
+        """Som suave com liga/desliga e volume independente do Windows."""
+        self._play_feedback()
 
     def _build_ui(self):
         outer = QWidget()
@@ -435,6 +414,12 @@ class AutoFillWindow(QMainWindow):
         self.listen_button.setMinimumWidth(162)
         self.listen_button.clicked.connect(self._toggle_listener)
         h.addWidget(self.listen_button)
+        settings_button = QPushButton("⚙")
+        settings_button.setObjectName("headerButton")
+        settings_button.setToolTip("Configurações e atualizações")
+        settings_button.setFixedWidth(42)
+        settings_button.clicked.connect(self._show_settings)
+        h.addWidget(settings_button)
         layout.addWidget(top)
 
         splitter = QSplitter(Qt.Horizontal)
@@ -508,13 +493,15 @@ class AutoFillWindow(QMainWindow):
         self.right_layout.addWidget(self.stack)
         self._build_welcome_page()
         self._build_editor_page()
+        self._build_features_page()
         splitter.addWidget(right)
         splitter.setSizes([302, 990])
         splitter.setStretchFactor(0, 0)
         splitter.setStretchFactor(1, 1)
         self.setStatusBar(QStatusBar())
         self.statusBar().setSizeGripEnabled(False)
-        author = QLabel("Desenvolvido por Fabricio Matos  •  Versão - v0.5.2")
+        self._setup_undo_ui()
+        author = QLabel(f"Desenvolvido por Fabricio Matos  •  Versão - v{APP_VERSION}")
         author.setObjectName("developerCredit")
         self.statusBar().addPermanentWidget(author)
 
@@ -530,6 +517,9 @@ class AutoFillWindow(QMainWindow):
         self.tray_open_action = QAction("Abrir AURORA AutoFill", self)
         self.tray_open_action.triggered.connect(self._restore_from_tray)
         menu.addAction(self.tray_open_action)
+        tray_settings = QAction("Configurações", self)
+        tray_settings.triggered.connect(lambda: (self._restore_from_tray(), self._show_settings()))
+        menu.addAction(tray_settings)
         self.tray_toggle_action = QAction("Pausar atalhos", self)
         self.tray_toggle_action.triggered.connect(self._toggle_listener)
         menu.addAction(self.tray_toggle_action)
@@ -933,12 +923,16 @@ class AutoFillWindow(QMainWindow):
         if QMessageBox.question(self, "Excluir comando", "Deseja realmente excluir este comando?",
                                 QMessageBox.Yes | QMessageBox.No, QMessageBox.No) != QMessageBox.Yes:
             return
-        self.store.delete(self.current_id)
+        try:
+            snapshot = self.store.delete_with_undo(self.current_id)
+        except Exception as exc:
+            QMessageBox.warning(self, "Não foi possível excluir", str(exc))
+            return
         self.dirty = False
         self.current_id = None
         self._refresh_all()
         self._show_welcome()
-        self.statusBar().showMessage("Comando excluído.", 5000)
+        self._offer_undo("snippet", snapshot, "Comando excluído")
 
     def _add_folder(self):
         name, accepted = QInputDialog.getText(self, "Nova pasta", "Nome da pasta:")
@@ -977,7 +971,7 @@ class AutoFillWindow(QMainWindow):
         if confirmation != QMessageBox.Yes:
             return
         try:
-            moved, target = self.store.delete_folder(folder_id)
+            moved, target, snapshot = self.store.delete_folder_with_undo(folder_id)
         except Exception as exc:
             QMessageBox.warning(self, "Não foi possível excluir a pasta", str(exc))
             return
@@ -986,6 +980,7 @@ class AutoFillWindow(QMainWindow):
         self._show_welcome()
         self.statusBar().showMessage(
             f"Pasta excluída. {moved} comando(s) preservado(s) em '{target}'.", 6000)
+        self._offer_undo("folder", snapshot, "Pasta excluída")
 
     def _export(self):
         path, _ = QFileDialog.getSaveFileName(self, "Exportar comandos", "autofill-backup.json", "JSON (*.json)")

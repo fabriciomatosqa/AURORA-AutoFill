@@ -9,12 +9,13 @@ import tempfile
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from verify_bundle import verify_bundle
+from app.version import APP_VERSION
 
 
 def main():
     p = argparse.ArgumentParser()
     p.add_argument('--dist', type=Path, default=Path('dist/AURORA AutoFill'))
-    p.add_argument('--out', type=Path, default=Path('AURORA-AutoFill-v0.5.2-Linux-amd64.deb'))
+    p.add_argument('--out', type=Path, default=Path(f'AURORA-AutoFill-v{APP_VERSION}-Linux-amd64.deb'))
     args = p.parse_args()
     root = Path(__file__).resolve().parents[2]
     executable = args.dist / 'AURORA AutoFill'
@@ -28,8 +29,8 @@ def main():
             (stage / folder).mkdir(parents=True, exist_ok=True)
         shutil.copytree(args.dist, stage / 'opt/aurora-autofill', dirs_exist_ok=True)
         shutil.copy2(root/'assets/aurora_icon_256.png', stage/'usr/share/icons/hicolor/256x256/apps/aurora-autofill.png')
-        (stage/'DEBIAN/control').write_text('''Package: aurora-autofill
-Version: 0.5.2
+        (stage/'DEBIAN/control').write_text(f'''Package: aurora-autofill
+Version: {APP_VERSION}
 Section: utils
 Priority: optional
 Architecture: amd64

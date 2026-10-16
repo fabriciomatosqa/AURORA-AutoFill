@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (QCheckBox, QFrame, QHBoxLayout, QLabel, QPushButton,
-                               QSlider, QVBoxLayout, QWidget)
+                               QScrollArea, QSlider, QVBoxLayout, QWidget)
 
 
 class SettingsPage(QWidget):
@@ -22,9 +22,26 @@ class SettingsPage(QWidget):
                  parent=None):
         super().__init__(parent)
         self.setObjectName("settingsPage")
-        layout = QVBoxLayout(self)
+        self.setStyleSheet("""
+            QWidget#settingsPage { background: #091426; color: #eaf4ff; }
+            QCheckBox { color: #eaf4ff; spacing: 10px; font-size: 13px; }
+            QSlider::groove:horizontal { background: #264459; height: 6px; border-radius: 3px; }
+            QSlider::handle:horizontal {
+                background: #72e6d5; width: 17px; margin: -6px 0; border-radius: 8px;
+            }
+            QScrollArea { border: none; background: #091426; }
+        """)
+        root = QVBoxLayout(self)
+        root.setContentsMargins(0, 0, 0, 0)
+        scroller = QScrollArea()
+        scroller.setWidgetResizable(True)
+        scroller.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        body = QWidget()
+        layout = QVBoxLayout(body)
         layout.setContentsMargins(14, 14, 18, 12)
         layout.setSpacing(14)
+        scroller.setWidget(body)
+        root.addWidget(scroller)
         head = QHBoxLayout()
         heading = QLabel("Configurações")
         heading.setObjectName("heading")

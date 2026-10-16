@@ -1,7 +1,7 @@
 @echo off
 setlocal
 cd /d "%~dp0"
-title AURORA AutoFill - Gerar instalador Windows 0.5.2
+title AURORA AutoFill - Gerar instalador Windows
 where py >nul 2>&1
 if errorlevel 1 (
  echo Python Launcher [py] nao encontrado. Instale Python 3.11 ou mais novo e tente novamente.
@@ -19,6 +19,8 @@ if errorlevel 1 goto error
 py -3 packaging\verify_bundle.py --platform windows
 if errorlevel 1 goto error
 echo.
+for /f "delims=" %%V in ('py -3 -c "from app.version import APP_VERSION; print(APP_VERSION)"') do set "AURORA_VERSION=%%V"
+if not defined AURORA_VERSION goto error
 echo [3/3] Criando o instalador com Inno Setup...
 set "ISCC=%ProgramFiles(x86)%\Inno Setup 6\ISCC.exe"
 if not exist "%ISCC%" set "ISCC=%ProgramFiles%\Inno Setup 6\ISCC.exe"
@@ -32,7 +34,7 @@ if not exist "%ISCC%" (
 "%ISCC%" "packaging\windows\AURORA-AutoFill.iss"
 if errorlevel 1 goto error
 echo.
-echo SUCESSO: installer-win\AURORA-AutoFill-v0.5.2-Windows-Setup.exe
+echo SUCESSO: installer-win\AURORA-AutoFill-v%AURORA_VERSION%-Windows-Setup.exe
 pause
 exit /b 0
 :error
