@@ -333,7 +333,7 @@ class AutoFillWindow(AuroraFeaturesMixin, QMainWindow):
         self._active_candidate = None
         self._expansion_operation = None
         self._queued_candidate = None
-        self.setWindowTitle(f"AURORA AutoFill v{APP_VERSION} — Expansor de textos")
+        self.setWindowTitle(f"AURORA AutoFill V{APP_VERSION} — Expansor de textos")
         self.setWindowIcon(QIcon(str(Path(__file__).resolve().parent.parent / "assets" / "aurora_icon.png")))
         # Impede a compactação horizontal desordenada dos campos; em telas de
         # pouca altura o editor usa rolagem própria, sem sobrepor controles.
@@ -499,7 +499,7 @@ class AutoFillWindow(AuroraFeaturesMixin, QMainWindow):
         self.setStatusBar(QStatusBar())
         self.statusBar().setSizeGripEnabled(False)
         self._setup_undo_ui()
-        author = QLabel(f"Desenvolvido por Fabricio Matos  •  Versão - v{APP_VERSION}")
+        author = QLabel(f"Desenvolvido por Fabricio Matos  •  V{APP_VERSION}")
         author.setObjectName("developerCredit")
         self.statusBar().addPermanentWidget(author)
 

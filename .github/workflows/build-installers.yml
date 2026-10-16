@@ -105,6 +105,11 @@ jobs:
           $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
           & $iscc "packaging/windows/AURORA-AutoFill.iss"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Testar instalação silenciosa e reabertura em perfil descartável
+        shell: pwsh
+        run: |
+          python packaging/smoke_installer.py --installer 'installer-win/AURORA-AutoFill-v${{ needs.version.outputs.version }}-Windows-Setup.exe'
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Registrar origem e checksum Windows
         shell: pwsh
         run: |

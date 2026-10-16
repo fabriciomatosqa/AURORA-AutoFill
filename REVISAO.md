@@ -2,6 +2,15 @@
 
 Revisão de confiabilidade, interface e distribuição iniciada em 16/10/2026.
 
+## Atualização silenciosa — 16/10/2026
+
+- O botão **Atualizar agora** autoriza download, verificação, backup e instalação; o aplicativo novo não solicita uma segunda confirmação de instalação. Cancelar o download, inclusive quando a conclusão já está enfileirada, impede iniciar o instalador.
+- No Windows, a atualização acontece sem o assistente de “Avançar” e o AURORA reabre automaticamente. A primeira instalação manual mantém o assistente; uma instalação silenciosa comum não abre o aplicativo.
+- O novo instalador identifica a chamada feita pela versão `0.6.1-161026` já instalada e encaminha a execução para o modo silencioso. Essa versão antiga ainda pode mostrar sua confirmação de instalação dentro do aplicativo durante a transição.
+- AppId, diretório de instalação, dados e preferências são mantidos. Falhas de backup ou integridade mantêm o programa aberto; edições pendentes ainda podem interromper a atualização para evitar descarte sem aviso.
+- Rodapé simplificado para **V&lt;versão&gt;**, sem a palavra “Versão”; o número completo com data é preservado.
+- 195 testes locais aprovados. O pipeline Windows também instala e atualiza o pacote real em um runner descartável, verificando substituição dos arquivos, reabertura, compatibilidade com a chamada antiga e preservação de dados sintéticos. Esse teste recusa execução no computador do usuário.
+
 ## Teste de atualização com data — 16/10/2026
 
 - Formato público alterado para `0.6.1-161026`, exibindo dia, mês e ano da publicação. Datas seguem o horário de Brasília; atualizações adicionais no mesmo dia recebem `.2`, `.3` etc.

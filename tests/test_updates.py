@@ -215,7 +215,8 @@ class DownloadTests(unittest.TestCase):
              patch("app.updates.subprocess.Popen") as launch, \
              patch("app.updates._get") as network:
             updates.launch_installer(path, self.release)
-            self.assertEqual(launch.call_args.args[0], [str(path.resolve()), "/NORESTART"])
+            self.assertEqual(launch.call_args.args[0], [str(path.resolve()), "/VERYSILENT",
+                             "/SUPPRESSMSGBOXES", "/NORESTART", "/SP-", "/AURORAUPDATE=1"])
             network.assert_not_called()
             path.write_bytes(b"tampered after download")
             launch.reset_mock()

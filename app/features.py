@@ -22,6 +22,17 @@ from .version import APP_VERSION
 from .versioning import display_version
 
 
+def confirm_update(parent, text):
+    dialog = QMessageBox(QMessageBox.Information, "Atualizar o AURORA", text,
+                         QMessageBox.NoButton, parent)
+    update = dialog.addButton("Atualizar agora", QMessageBox.AcceptRole)
+    later = dialog.addButton("Agora não", QMessageBox.RejectRole)
+    dialog.setDefaultButton(later)
+    dialog.setEscapeButton(later)
+    dialog.exec()
+    return dialog.clickedButton() == update
+
+
 class AuroraFeaturesMixin:
     def _initialize_features(self):
         self.preferences = load_preferences()
@@ -29,6 +40,7 @@ class AuroraFeaturesMixin:
         self._next_undo_id = 0
         self._check_thread = None
         self._download_thread = None
+        self._download_cancelled = False
         self._download_progress = None
         self._download_release = None
         self._exit_when_updates_done = False
@@ -304,16 +316,20 @@ class AuroraFeaturesMixin:
                 QMessageBox.information(self, "Atualizações",
                                         "O lançamento ainda não possui instalador compatível e checksum.")
             return
-        text += "Deseja baixar a atualização com verificação de integridade SHA256?"
-        if QMessageBox.question(self, "Atualização disponível", text,
-                                QMessageBox.Yes | QMessageBox.No,
-                                QMessageBox.No) == QMessageBox.Yes:
+        if getattr(release, "installer_kind", "exe") == "deb":
+            text += ("O AURORA fará um backup e abrirá a atualização no gerenciador de pacotes. "
+                     "O Linux poderá solicitar sua confirmação ou senha.")
+        else:
+            text += ("O AURORA fará um backup, instalará a atualização em segundo plano "
+                     "e reabrirá automaticamente. Você pode cancelar durante o download.")
+        if confirm_update(self, text):
             self._download_update(release)
 
     def _download_update(self, release):
         if self._download_thread is not None or self._exit_when_updates_done:
             return
         self._download_release = release
+        self._download_cancelled = False
         self.settings_page.check_button.setEnabled(False)
         thread = InstallerDownloadThread(release, self)
         self._download_thread = thread
@@ -321,7 +337,7 @@ class AuroraFeaturesMixin:
         progress.setWindowTitle("Atualização do AURORA")
         progress.setWindowModality(Qt.NonModal)
         progress.setMinimumDuration(0)
-        progress.canceled.connect(thread.request_cancel)
+        progress.canceled.connect(self._cancel_update_download)
         self._download_progress = progress
         thread.progress_changed.connect(progress.setValue)
         thread.ready.connect(self._installer_ready)
@@ -330,8 +346,14 @@ class AuroraFeaturesMixin:
         progress.show()
         thread.start()
 
+    def _cancel_update_download(self):
+        self._download_cancelled = True
+        if self._download_thread is not None:
+            self._download_thread.request_cancel()
+
     def _download_done(self):
         if self._download_progress is not None:
+            self._download_progress.blockSignals(True)
             self._download_progress.close()
             self._download_progress = None
         old, self._download_thread = self._download_thread, None
@@ -366,22 +388,13 @@ class AuroraFeaturesMixin:
             QTimer.singleShot(0, self._exit_application)
 
     def _installer_ready(self, installer: Path):
-        if self._exit_when_updates_done:
+        if self._exit_when_updates_done or self._download_cancelled:
             return
         release = self._download_release
         if release is None:
             QMessageBox.warning(self, "Atualização", "A origem deste instalador não está disponível. Baixe novamente.")
             return
         if not self._confirm_change():
-            return
-        linux = getattr(release, "installer_kind", "exe") == "deb"
-        action = ("O gerenciador de pacotes do Linux será aberto; confirme a instalação nele.\n"
-                  if linux else "O instalador será aberto e o AURORA será fechado para atualizar.\n")
-        if QMessageBox.question(
-                self, "Instalar atualização",
-                "A atualização foi baixada e validada por SHA256.\n" + action +
-                "Criar backup completo e continuar?",
-                QMessageBox.Yes | QMessageBox.No, QMessageBox.No) != QMessageBox.Yes:
             return
         try:
             archived = create_backup(self.store, reason="pre-update")

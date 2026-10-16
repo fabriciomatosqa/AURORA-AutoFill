@@ -14,6 +14,7 @@ class Harness(AuroraFeaturesMixin):
         self._download_thread = None
         self._download_release = None
         self._download_progress = None
+        self._download_cancelled = False
         self._exit_when_updates_done = False
         self._quitting = True
         self.settings_page = SimpleNamespace(check_button=Mock(), sound=Mock(), updates=Mock(),
@@ -49,12 +50,12 @@ class FeatureActionsTests(unittest.TestCase):
         candidate.version = "0.6.1-update.20261016"
         with patch("app.features.APP_VERSION", "0.6.1-dev.22.1"), \
              patch("app.features.sys.frozen", True, create=True), \
-             patch("app.features.QMessageBox.question", return_value=QMessageBox.No) as question:
+             patch("app.features.confirm_update", return_value=False) as question:
             window._handle_release(candidate, True)
-        self.assertIn("v0.6.1-161026", question.call_args.args[2])
-        self.assertNotIn("update.20261016", question.call_args.args[2])
+        self.assertIn("v0.6.1-161026", question.call_args.args[1])
+        self.assertNotIn("update.20261016", question.call_args.args[1])
         with patch("app.features.APP_VERSION", "0.6.1-161026"), \
-             patch("app.features.QMessageBox.question") as question, \
+             patch("app.features.confirm_update") as question, \
              patch("app.features.QMessageBox.information") as information:
             window._handle_release(candidate, True)
         question.assert_not_called()
@@ -83,12 +84,13 @@ class FeatureActionsTests(unittest.TestCase):
         window._download_update = Mock()
         candidate = release()
         with patch("app.features.sys.frozen", True, create=True), \
-             patch("app.features.QMessageBox.question", return_value=QMessageBox.No) as question:
+             patch("app.features.confirm_update", return_value=False) as question:
             window._handle_release(candidate, True)
-        self.assertIn("de teste", question.call_args.args[2])
+        self.assertIn("de teste", question.call_args.args[1])
+        self.assertIn("reabrirá automaticamente", question.call_args.args[1])
         window._download_update.assert_not_called()
         with patch("app.features.sys.frozen", True, create=True), \
-             patch("app.features.QMessageBox.question", return_value=QMessageBox.Yes):
+             patch("app.features.confirm_update", return_value=True):
             window._handle_release(candidate, True)
         window._download_update.assert_called_once_with(candidate)
 
@@ -106,24 +108,48 @@ class FeatureActionsTests(unittest.TestCase):
                 def launch(*args):
                     self.assertEqual(args, (Path("installer.exe"), candidate))
                     calls.append("launch")
-                with patch("app.features.QMessageBox.question", return_value=QMessageBox.Yes), \
+                with patch("app.features.QMessageBox.question") as question, \
                      patch("app.features.QMessageBox.warning"), \
                      patch("app.features.create_backup", side_effect=backup), \
                      patch("app.features.launch_installer", side_effect=launch):
                     window._installer_ready(Path("installer.exe"))
                 self.assertEqual(calls, ["backup"] if failure else ["backup", "launch"])
+                question.assert_not_called()
                 self.assertEqual(window._exit_application.call_count, 0 if failure else 1)
 
-    def test_declining_install_keeps_app_open_without_creating_backup(self):
+    def test_unsaved_editor_cancellation_keeps_app_open_without_creating_backup(self):
         window = Harness()
         window._download_release = release()
-        with patch("app.features.QMessageBox.question", return_value=QMessageBox.No), \
+        window._confirm_change.return_value = False
+        with patch("app.features.QMessageBox.question") as question, \
              patch("app.features.create_backup") as backup, \
              patch("app.features.launch_installer") as launch:
             window._installer_ready(Path("installer.exe"))
         backup.assert_not_called()
         launch.assert_not_called()
         window._exit_application.assert_not_called()
+        question.assert_not_called()
+
+    def test_cancel_after_ready_signal_was_queued_never_installs(self):
+        window = Harness()
+        window._download_release = release()
+        window._download_thread = Mock()
+        window._cancel_update_download()
+        window._download_thread.request_cancel.assert_called_once()
+        with patch("app.features.create_backup") as backup, \
+             patch("app.features.launch_installer") as launch:
+            window._installer_ready(Path("installer.exe"))
+        backup.assert_not_called()
+        launch.assert_not_called()
+        window._exit_application.assert_not_called()
+
+    def test_worker_finished_closes_progress_without_cancelling_completed_download(self):
+        window = Harness()
+        progress = window._download_progress = Mock()
+        window._download_done()
+        progress.blockSignals.assert_called_once_with(True)
+        progress.close.assert_called_once()
+        self.assertFalse(window._download_cancelled)
 
     def test_quit_cancels_download_and_retains_threads_until_finished(self):
         window = Harness()

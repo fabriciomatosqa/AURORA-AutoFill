@@ -294,7 +294,7 @@ def download_verified_installer(release: Release, directory: Path | None = None,
 
 
 def launch_installer(path: Path, release: Release) -> None:
-    """Rehash a download receipt before execution. UI confirms and backs up first."""
+    """Rehash a receipt and install silently after the user chose Update."""
     filename = _installer_filename(release)
     path = Path(path)
     if path.name != filename or path.is_symlink() or not path.is_file():
@@ -312,7 +312,8 @@ def launch_installer(path: Path, release: Release) -> None:
         _verified_downloads.pop(path.resolve(), None)
         raise ValueError("O instalador foi modificado depois do download. Baixe novamente.")
     if release.installer_kind == "exe" and sys.platform == "win32":
-        subprocess.Popen([str(path.resolve()), "/NORESTART"], close_fds=True)
+        subprocess.Popen([str(path.resolve()), "/VERYSILENT", "/SUPPRESSMSGBOXES",
+                          "/NORESTART", "/SP-", "/AURORAUPDATE=1"], close_fds=True)
     elif release.installer_kind == "deb" and sys.platform.startswith("linux"):
         opener = shutil.which("xdg-open")
         if opener is None:

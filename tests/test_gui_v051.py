@@ -37,6 +37,9 @@ class InterfaceSmokeTests(unittest.TestCase):
                         credit = win.statusBar().findChildren(type(win.edit_heading), 'developerCredit')
                         self.assertEqual(len(credit), 1)
                         self.assertIn('Fabricio Matos', credit[0].text())
+                        from app.version import APP_VERSION
+                        self.assertTrue(credit[0].text().endswith(f'•  V{APP_VERSION}'))
+                        self.assertNotIn('Versão', credit[0].text())
                         self.assertGreaterEqual(win.filter_folder.count(), 2)
                         self.assertFalse(win.windowIcon().isNull())
                         win.filter_folder.showPopup()

@@ -20,10 +20,10 @@ Baixe os instaladores na página oficial de [GitHub Releases](https://github.com
 
 1. Ao iniciar, o AURORA consulta os lançamentos oficiais do repositório `fabriciomatosqa/AURORA-AutoFill`, se a opção de avisar estiver habilitada. Também é possível verificar manualmente nas configurações.
 2. Compara a versão instalada com as publicadas, incluindo versões de teste com data como `0.6.1-161026` (16/10/2026). As datas são comparadas pelo calendário, inclusive na virada de mês e ano. Rascunhos e versões antigas não são oferecidos. O instalador precisa ser compatível com o sistema.
-3. Pede confirmação para baixar e mostra o progresso, com opção de cancelar. A consulta e o download ocorrem em segundo plano.
-4. Confere a integridade SHA256 do arquivo baixado e pede confirmação para instalar.
-5. Cria um backup completo **antes** de abrir o instalador. Se o backup ou a verificação falhar, a instalação não é iniciada.
-6. No Windows, abre o assistente do instalador e fecha o AURORA. No Linux, abre o `.deb` no gerenciador de pacotes; a confirmação e eventuais permissões são solicitadas pelo sistema. Se não houver gerenciador associado, a atualização pode ser instalada manualmente pela Release.
+3. Oferece **Atualizar agora**. Esse clique autoriza o download, a verificação, o backup e a instalação. Mostra o progresso com opção de cancelar; a consulta e o download ocorrem em segundo plano.
+4. Confere a integridade SHA256 e cria um backup completo **antes** de iniciar a instalação. Se o backup ou a verificação falhar, a instalação não é iniciada e o aplicativo continua aberto. Se houver edição não salva no editor, o aplicativo permite cancelar para protegê-la.
+5. No Windows, fecha o AURORA, atualiza em segundo plano sem o assistente de “Avançar” e reabre automaticamente. A primeira instalação manual continua com o assistente normal. A cópia anterior ainda pode pedir a confirmação antiga de instalação ao receber esta mudança; as seguintes usam o fluxo de um clique.
+6. No Linux, abre o `.deb` no gerenciador de pacotes; a confirmação e eventuais permissões são solicitadas pelo sistema. Se não houver gerenciador associado, a atualização pode ser instalada manualmente pela Release.
 
 Nenhum comando ou conteúdo pessoal é enviado ao GitHub. A rede é usada para consultar lançamentos e baixar o instalador escolhido. SHA256 verifica a integridade em relação aos arquivos publicados; o instalador ainda não possui assinatura de código.
 
