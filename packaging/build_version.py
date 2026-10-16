@@ -1,7 +1,8 @@
-"""Create identical, immutable version metadata for both installer jobs."""
+"""Generate the same dated version for Windows, Linux and GitHub Releases."""
 from __future__ import annotations
 
 import argparse
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 import re
 import sys
@@ -9,24 +10,46 @@ import sys
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 from app.version import BASE_VERSION
+from app.versioning import canonical_to_bridge, parse_dated_version
 
 
-def build_version(*, tag: str = "", run_number: int = 0, attempt: int = 1) -> str:
+def build_version(*, tag: str = "", build_date: str = "", tags: str = "",
+                  commit: str = "") -> str:
     if tag:
         if tag != f"v{BASE_VERSION}":
             raise ValueError(f"A tag deve corresponder a v{BASE_VERSION}.")
         return BASE_VERSION
-    if not 0 <= run_number <= 65535 or attempt < 1:
-        raise ValueError("Número de compilação ou tentativa inválido.")
-    return f"{BASE_VERSION}-dev.{run_number}.{attempt}"
+    stamp = build_date or datetime.now(timezone(timedelta(hours=-3))).strftime("%d%m%y")
+    if not re.fullmatch(r"[0-9]{6}", stamp):
+        raise ValueError("Data de compilação inválida; use DDMMAA.")
+    version = f"{BASE_VERSION}-{stamp}"
+    parsed = parse_dated_version(version)
+    if parsed is None:
+        raise ValueError("Data de compilação inválida; use DDMMAA.")
+    revisions = []
+    for line in tags.splitlines():
+        parts = line.split()
+        if len(parts) != 2 or not parts[1].startswith("refs/tags/v"):
+            continue
+        candidate = parts[1].removeprefix("refs/tags/v")
+        try:
+            dated = parse_dated_version(candidate)
+        except ValueError:
+            continue
+        if (dated and candidate.startswith(version) and dated[:2] == parsed[:2]
+                and "-update." not in candidate):
+            if commit and parts[0] == commit:
+                return candidate
+            revisions.append(dated[2])
+    revision = max(revisions, default=0) + 1
+    return version if revision == 1 else f"{version}.{revision}"
 
 
 def write_metadata(destination: Path, version: str, commit: str = "") -> None:
-    escaped = re.escape(BASE_VERSION)
-    if not re.fullmatch(escaped + r"(?:-dev\.\d+\.\d+)?", version):
+    dated = parse_dated_version(version)
+    if version != BASE_VERSION and (not dated or "-update." in version
+                                   or dated[0] != tuple(map(int, BASE_VERSION.split(".")))):
         raise ValueError("Versão da compilação inválida.")
-    if "-dev." in version and int(version.split("-dev.")[1].split(".")[0]) > 65535:
-        raise ValueError("Número de compilação excede o formato do instalador Windows.")
     if commit and not re.fullmatch(r"[a-f0-9]{40}", commit):
         raise ValueError("Commit de origem inválido.")
     destination.parent.mkdir(parents=True, exist_ok=True)
@@ -40,17 +63,19 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--version")
     parser.add_argument("--tag", default="")
-    parser.add_argument("--run-number", type=int, default=0)
-    parser.add_argument("--attempt", type=int, default=1)
+    parser.add_argument("--date", default="")
+    parser.add_argument("--tags-file", type=Path)
     parser.add_argument("--commit", default="")
+    parser.add_argument("--bridge", action="store_true")
     parser.add_argument("--output", type=Path, default=ROOT / "app/_build.py")
     parser.add_argument("--print-only", action="store_true")
     args = parser.parse_args()
-    version = args.version or build_version(tag=args.tag, run_number=args.run_number,
-                                           attempt=args.attempt)
+    version = args.version or build_version(
+        tag=args.tag, build_date=args.date, commit=args.commit,
+        tags=args.tags_file.read_text(encoding="utf-8") if args.tags_file else "")
     if not args.print_only:
         write_metadata(args.output, version, args.commit)
-    print(version)
+    print(canonical_to_bridge(version) if args.bridge else version)
 
 
 if __name__ == "__main__":

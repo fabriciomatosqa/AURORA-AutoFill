@@ -42,6 +42,24 @@ def release():
 
 
 class FeatureActionsTests(unittest.TestCase):
+    def test_bridge_is_displayed_as_date_and_is_not_offered_again_after_install(self):
+        window = Harness()
+        window._download_update = Mock()
+        candidate = release()
+        candidate.version = "0.6.1-update.20261016"
+        with patch("app.features.APP_VERSION", "0.6.1-dev.22.1"), \
+             patch("app.features.sys.frozen", True, create=True), \
+             patch("app.features.QMessageBox.question", return_value=QMessageBox.No) as question:
+            window._handle_release(candidate, True)
+        self.assertIn("v0.6.1-161026", question.call_args.args[2])
+        self.assertNotIn("update.20261016", question.call_args.args[2])
+        with patch("app.features.APP_VERSION", "0.6.1-161026"), \
+             patch("app.features.QMessageBox.question") as question, \
+             patch("app.features.QMessageBox.information") as information:
+            window._handle_release(candidate, True)
+        question.assert_not_called()
+        self.assertIn("já está atualizado", information.call_args.args[2])
+
     def test_selected_release_channel_reaches_background_worker(self):
         window = Harness()
         window.preferences["include_prereleases"] = False

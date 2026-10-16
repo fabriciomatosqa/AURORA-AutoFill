@@ -13,14 +13,14 @@ VERSION = "0.6.1-dev.20.1"
 
 
 class ReleaseAssetsTests(unittest.TestCase):
-    def fixture(self, root):
+    def fixture(self, root, version=VERSION):
         windows = root / "windows"
         linux = root / "linux"
         (windows / "installer-win").mkdir(parents=True)
         linux.mkdir()
-        exe = windows / "installer-win" / f"AURORA-AutoFill-v{VERSION}-Windows-Setup.exe"
-        deb = linux / f"AURORA-AutoFill-v{VERSION}-Linux-amd64.deb"
-        tar = linux / f"AURORA-AutoFill-v{VERSION}-Linux-portable-amd64.tar.gz"
+        exe = windows / "installer-win" / f"AURORA-AutoFill-v{version}-Windows-Setup.exe"
+        deb = linux / f"AURORA-AutoFill-v{version}-Linux-amd64.deb"
+        tar = linux / f"AURORA-AutoFill-v{version}-Linux-portable-amd64.tar.gz"
         for path in (exe, deb, tar):
             path.write_bytes(path.name.encode())
         (windows / "SHA256SUMS-Windows.txt").write_text(
@@ -59,3 +59,53 @@ class ReleaseAssetsTests(unittest.TestCase):
             exe.unlink()
             with self.assertRaisesRegex(ValueError, "exatamente um"):
                 assets.prepare_assets(root, destination, VERSION)
+
+    def test_date_version_including_zero_padded_day_is_publishable(self):
+        for version in ("0.6.1-161026", "0.6.1-010126"):
+            with self.subTest(version=version), tempfile.TemporaryDirectory() as folder:
+                root, destination = Path(folder) / "input", Path(folder) / "output"
+                self.fixture(root, version)
+                result = assets.prepare_assets(root, destination, version)
+                self.assertEqual(len(result), 5)
+                self.assertTrue((destination / f"AURORA-AutoFill-v{version}-Windows-Setup.exe").is_file())
+
+    def test_bridge_keeps_all_payload_bytes_and_rewrites_both_manifests(self):
+        for version, bridge in (("0.6.1-161026", "0.6.1-update.20261016"),
+                                ("0.6.1-161026.2", "0.6.1-update.20261016.2")):
+            with self.subTest(version=version), tempfile.TemporaryDirectory() as folder:
+                root, destination = Path(folder) / "input", Path(folder) / "bridge"
+                originals = self.fixture(root, version)
+                result = assets.prepare_bridge_assets(root, destination, version)
+                self.assertEqual(len(result), 5)
+                self.assertEqual(len(list(destination.iterdir())), 5)
+                for source in originals:
+                    target = destination / source.name.replace(f"v{version}-", f"v{bridge}-")
+                    self.assertEqual(target.read_bytes(), source.read_bytes())
+                windows_manifest = (destination / "SHA256SUMS-Windows.txt").read_text(encoding="ascii")
+                linux_manifest = (destination / "SHA256SUMS-Linux.txt").read_text(encoding="ascii")
+                for index, source in enumerate(originals):
+                    alias = source.name.replace(f"v{version}-", f"v{bridge}-")
+                    expected = f"{sha256(source.read_bytes()).hexdigest()}  {alias}\n"
+                    self.assertIn(expected, windows_manifest if index == 0 else linux_manifest)
+                self.assertNotIn(f"v{version}-", windows_manifest + linux_manifest)
+                # Running the normal validator over the alias confirms names and hashes.
+                validated = assets.prepare_assets(destination, Path(folder) / "validated", bridge)
+                self.assertEqual(len(validated), 5)
+
+    def test_bridge_does_not_stage_any_asset_when_any_canonical_payload_is_corrupt(self):
+        for damaged in (0, 1, 2):
+            with self.subTest(damaged=damaged), tempfile.TemporaryDirectory() as folder:
+                root, destination = Path(folder) / "input", Path(folder) / "bridge"
+                paths = self.fixture(root, "0.6.1-161026")
+                paths[damaged].write_bytes(b"changed after checksum")
+                with self.assertRaisesRegex(ValueError, "SHA256"):
+                    assets.prepare_bridge_assets(root, destination, "0.6.1-161026")
+                self.assertFalse(destination.exists())
+
+    def test_bridge_requires_a_valid_canonical_date_before_writing(self):
+        with tempfile.TemporaryDirectory() as folder:
+            destination = Path(folder) / "bridge"
+            for version in (VERSION, "0.6.1-300226", "0.6.1-161026/evil"):
+                with self.subTest(version=version), self.assertRaises(ValueError):
+                    assets.prepare_bridge_assets(Path(folder), destination, version)
+            self.assertFalse(destination.exists())

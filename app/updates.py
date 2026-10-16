@@ -17,11 +17,9 @@ import sys
 import tempfile
 
 from .version import APP_VERSION, GITHUB_REPOSITORY, GITHUB_RELEASES_API
+from .versioning import (VERSION_PATTERN, parse_version as _parse_version,
+                         version_key as _version_key)
 
-VERSION_PATTERN = re.compile(
-    r"^v?(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)"
-    r"(?:-([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?"
-    r"(?:\+([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?$")
 MAX_INSTALLER_BYTES = 500 * 1024 * 1024
 MAX_RELEASE_PAGES = 3
 _DOWNLOAD_HOSTS = {"github.com", "api.github.com", "release-assets.githubusercontent.com",
@@ -30,31 +28,10 @@ _DOWNLOAD_HOSTS = {"github.com", "api.github.com", "release-assets.githubusercon
 _verified_downloads: dict[Path, tuple[str, str]] = {}
 
 
-def _parse_version(version):
-    if not isinstance(version, str) or len(version) > 160:
-        raise ValueError("Número de versão desconhecido.")
-    match = VERSION_PATTERN.fullmatch(version)
-    if not match:
-        raise ValueError("Número de versão desconhecido.")
-    identifiers = match.group(4)
-    if identifiers and any(part.isdigit() and len(part) > 1 and part[0] == "0"
-                           for part in identifiers.split(".")):
-        raise ValueError("Número de versão de teste inválido.")
-    return match
-
-
 def version_parts(version: str) -> tuple[int, int, int]:
     """Core version; is_newer also compares prerelease identifiers."""
     match = _parse_version(version)
     return tuple(int(match.group(index)) for index in (1, 2, 3))
-
-
-def _version_key(version):
-    match = _parse_version(version)
-    identifiers = match.group(4)
-    pre = tuple((0, int(part)) if part.isdigit() else (1, part)
-                for part in identifiers.split(".")) if identifiers else ()
-    return (*version_parts(version), 0 if identifiers else 1, pre)
 
 
 def is_newer(release_version: str, local_version: str = APP_VERSION) -> bool:
@@ -185,7 +162,7 @@ def _release_from_payload(payload, *, include_prereleases, platform_name, machin
 
 def latest_release(*, include_prereleases: bool = True, platform_name: str | None = None,
                    machine: str | None = None) -> Release | None:
-    """Highest official SemVer, including tests; /latest omits prereleases."""
+    """Highest official version, comparing dated releases chronologically."""
     candidates = []
     for page in range(1, MAX_RELEASE_PAGES + 1):
         try:

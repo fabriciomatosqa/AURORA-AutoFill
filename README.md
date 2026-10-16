@@ -19,7 +19,7 @@ Baixe os instaladores na página oficial de [GitHub Releases](https://github.com
 ### Como funciona a atualização pelo aplicativo
 
 1. Ao iniciar, o AURORA consulta os lançamentos oficiais do repositório `fabriciomatosqa/AURORA-AutoFill`, se a opção de avisar estiver habilitada. Também é possível verificar manualmente nas configurações.
-2. Compara a versão completa instalada com as publicadas, incluindo versões de teste como `0.6.1-dev.8.1`. Rascunhos e versões antigas não são oferecidos. O instalador precisa ser compatível com o sistema.
+2. Compara a versão instalada com as publicadas, incluindo versões de teste com data como `0.6.1-161026` (16/10/2026). As datas são comparadas pelo calendário, inclusive na virada de mês e ano. Rascunhos e versões antigas não são oferecidos. O instalador precisa ser compatível com o sistema.
 3. Pede confirmação para baixar e mostra o progresso, com opção de cancelar. A consulta e o download ocorrem em segundo plano.
 4. Confere a integridade SHA256 do arquivo baixado e pede confirmação para instalar.
 5. Cria um backup completo **antes** de abrir o instalador. Se o backup ou a verificação falhar, a instalação não é iniciada.
@@ -59,11 +59,13 @@ Backups manuais não são apagados automaticamente. Backups automáticos pré-at
 
 ## Compilações e histórico de versões
 
-Cada push em `dev/correcao-expansao-windows` ou `main` executa [os testes e a compilação Windows/Linux](https://github.com/fabriciomatosqa/AURORA-AutoFill/actions/workflows/build-installers.yml). Somente depois de ambos os sistemas passarem, os instaladores e os checksums são publicados juntos em uma **Pre-release**. A versão completa identifica a compilação e a tentativa: `BASE-dev.<compilação>.<tentativa>`.
+Cada push em `dev/correcao-expansao-windows` ou `main` executa [os testes e a compilação Windows/Linux](https://github.com/fabriciomatosqa/AURORA-AutoFill/actions/workflows/build-installers.yml). Somente depois de ambos os sistemas passarem, os instaladores e os checksums são publicados juntos em uma **Pre-release**. A versão usa `BASE-DDMMAA`, por exemplo `0.6.1-161026`, com a data no horário de Brasília. Uma segunda atualização no mesmo dia recebe `.2`, a terceira `.3`, preservando as publicações anteriores. Repetir uma compilação do mesmo commit reutiliza sua versão.
+
+**Transição da v0.6.1-dev.22.1:** o atualizador já instalado usa SemVer e considera um sufixo numérico anterior a `dev`. Para permitir o teste remoto, cada lançamento com data também publica uma referência de compatibilidade `BASE-update.AAAAMMDD` (e a mesma revisão, quando houver). Ela contém cópias dos mesmos instaladores, com nomes e manifestos SHA256 esperados pelo cliente antigo. Por isso, a primeira confirmação no aplicativo antigo poderá mencionar `0.6.1-update.20261016`; após instalar, a janela, o rodapé e o instalador mostram `0.6.1-161026`. O novo atualizador reconhece ambos como a mesma versão e não propõe reinstalação. Ambos os lançamentos continuam sendo de teste.
 
 Os artifacts de diagnóstico do Actions expiram em 30 dias. Os instaladores publicados em Releases permanecem disponíveis para recuperação; o workflow não apaga Releases estáveis nem de teste.
 
-A base da próxima versão fica apenas em `app/version.py`. `packaging/build_version.py` grava os metadados da compilação antes dos testes e do empacotamento; aplicativo, nome dos instaladores e tag usam a mesma versão. O Windows recebe também a versão numérica exigida pelo instalador; o DEB usa `~dev` para que a versão estável posterior tenha precedência correta no gerenciador de pacotes.
+A base da próxima versão fica apenas em `app/version.py`. `packaging/build_version.py` grava os metadados da compilação antes dos testes e do empacotamento; aplicativo, nome dos instaladores e tag principal usam a mesma versão com data. O Windows recebe também uma versão numérica; o DEB usa `~update.AAAAMMDD` para manter a ordem cronológica, superar os pacotes `~dev` e ficar abaixo da futura versão estável. Os metadados de versão não alteram a pasta de dados nem o identificador do aplicativo.
 
 Uma versão estável exige uma tag intencional `vX.Y.Z`, correspondente à base em `app/version.py`, e ambos os builds aprovados. Depois de publicar uma estável, aumente a base para a próxima versão antes de continuar os testes. Preserve pelo menos as últimas três Releases estáveis.
 
@@ -79,7 +81,7 @@ python main.py
 
 Para executar os testes de interface sem monitor, defina `QT_QPA_PLATFORM=offscreen`. Os testes usam perfis temporários e simulações de teclado, sem enviar comandos a outros aplicativos.
 
-O GitHub Actions também verifica os recursos empacotados, inicia os executáveis compilados em perfis temporários e confirma a preservação dos dados antes de publicar os instaladores. Depois da publicação, o próprio atualizador consulta e baixa os instaladores Windows/Linux e verifica o SHA256, sem executá-los. O efeito sonoro pode ser reproduzido com `python tools/generate_feedback.py`.
+O GitHub Actions também verifica os recursos empacotados, inicia os executáveis compilados em perfis temporários e confirma a preservação dos dados antes de publicar os instaladores. Depois da publicação, o atualizador novo e o código exato do atualizador da `0.6.1-dev.22.1` consultam e baixam os instaladores Windows/Linux, verificando o SHA256 sem executá-los. O efeito sonoro pode ser reproduzido com `python tools/generate_feedback.py`.
 
 ## Limitações e validação manual
 

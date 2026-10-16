@@ -2,6 +2,14 @@
 
 Revisão de confiabilidade, interface e distribuição iniciada em 16/10/2026.
 
+## Teste de atualização com data — 16/10/2026
+
+- Formato público alterado para `0.6.1-161026`, exibindo dia, mês e ano da publicação. Datas seguem o horário de Brasília; atualizações adicionais no mesmo dia recebem `.2`, `.3` etc.
+- A versão instalada `0.6.1-dev.22.1` não considera um sufixo numérico mais recente que `dev`. Uma publicação de transição `0.6.1-update.20261016` oferece os mesmos bytes dos instaladores com nomes e checksums compatíveis. Depois de instalar, o programa exibe a versão com data solicitada.
+- O atualizador novo considera data e referência de transição a mesma versão, evitando oferecer a mesma instalação novamente. Compara as datas pelo calendário, incluindo viradas de mês/ano e dias com zero à esquerda.
+- 193 testes locais aprovados, incluindo calendário, revisões, arquivos de transição, consentimento e ausência de oferta repetida. O pipeline também executa o código exato do atualizador antigo, obtido do commit `583ff467efc40c2b6ebfe1fcfa2b7ce216c60730`, para descobrir, baixar e conferir o SHA256 dos dois instaladores sem executá-los.
+- A instalação pelo assistente e a reabertura no computador do usuário continuam sendo a parte manual deste teste remoto. Os testes automatizados não instalam sobre o perfil pessoal.
+
 ## Problemas encontrados e corrigidos
 
 | Área | Problema | Correção |

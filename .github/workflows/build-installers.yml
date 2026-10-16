@@ -15,6 +15,10 @@ permissions:
 env:
   PYTHONDONTWRITEBYTECODE: '1'
 
+concurrency:
+  group: aurora-installers-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   version:
     name: Identificar versão da compilação
@@ -23,6 +27,7 @@ jobs:
       version: ${{ steps.version.outputs.version }}
       tag: ${{ steps.version.outputs.tag }}
       prerelease: ${{ steps.version.outputs.prerelease }}
+      bridge: ${{ steps.version.outputs.bridge }}
     steps:
       - uses: actions/checkout@v4
       - name: Gerar versão única ou conferir tag estável
@@ -35,7 +40,10 @@ jobs:
             version="$(python packaging/build_version.py --tag "$REF_NAME" --print-only)"
             echo "prerelease=false" >> "$GITHUB_OUTPUT"
           else
-            version="$(python packaging/build_version.py --run-number "$GITHUB_RUN_NUMBER" --attempt "$GITHUB_RUN_ATTEMPT" --print-only)"
+            git ls-remote --tags origin > "$RUNNER_TEMP/aurora-tags.txt"
+            version="$(python packaging/build_version.py --tags-file "$RUNNER_TEMP/aurora-tags.txt" --commit "$GITHUB_SHA" --print-only)"
+            bridge="$(python packaging/build_version.py --version "$version" --bridge --print-only)"
+            echo "bridge=$bridge" >> "$GITHUB_OUTPUT"
             echo "prerelease=true" >> "$GITHUB_OUTPUT"
           fi
           echo "version=$version" >> "$GITHUB_OUTPUT"
@@ -48,6 +56,8 @@ jobs:
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-python@v5
         with:
           python-version: '3.13'
@@ -121,6 +131,8 @@ jobs:
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-python@v5
         with:
           python-version: '3.13'
@@ -197,6 +209,8 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/download-artifact@v4
         with:
           name: AURORA-AutoFill-Windows-${{ github.run_number }}
@@ -208,19 +222,27 @@ jobs:
       - name: Organizar instaladores e conferir checksums dos artifacts
         env:
           RELEASE_VERSION: ${{ needs.version.outputs.version }}
-        run: python packaging/prepare_release_assets.py --version "$RELEASE_VERSION"
+        run: |
+          python packaging/prepare_release_assets.py --version "$RELEASE_VERSION"
+          if [ '${{ needs.version.outputs.prerelease }}' = true ]; then
+            python packaging/prepare_release_assets.py --version "$RELEASE_VERSION" --bridge
+          fi
       - name: Publicar instaladores e checksums no GitHub Releases
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           RELEASE_TAG: ${{ needs.version.outputs.tag }}
           RELEASE_VERSION: ${{ needs.version.outputs.version }}
           IS_PRERELEASE: ${{ needs.version.outputs.prerelease }}
+          BRIDGE_VERSION: ${{ needs.version.outputs.bridge }}
         run: |
           printf 'Compilação %s do AURORA AutoFill.\n\nCommit: %s\n\nWindows e Linux passaram nos testes automatizados e na verificação dos aplicativos empacotados.\n\n' "$RELEASE_VERSION" "$GITHUB_SHA" > RELEASE-NOTES.md
           if [ "$IS_PRERELEASE" = true ]; then
-            printf 'Versão de teste: inclui o atualizador para versões de desenvolvimento. Na primeira migração da v0.6.0, baixe e instale o EXE manualmente; depois use Configurações > Verificar atualizações.\n\n' >> RELEASE-NOTES.md
-            git tag "$RELEASE_TAG" "$GITHUB_SHA"
-            git push origin "refs/tags/$RELEASE_TAG"
+            printf 'Versão de teste no formato BASE-DDMMAA: a data indica o dia da atualização no horário de Brasília. No AURORA, use Configurações > Verificar atualizações, com Receber versões de teste ativado.\n\n' >> RELEASE-NOTES.md
+            printf 'A v0.6.1-dev.22.1 encontra o mesmo instalador pela publicação de transição v%s. Depois de instalar, a janela e o instalador mostram v%s. O atualizador novo reconhece os dois nomes como a mesma atualização.\n\n' "$BRIDGE_VERSION" "$RELEASE_VERSION" >> RELEASE-NOTES.md
+            if ! git rev-parse "$RELEASE_TAG" > /dev/null 2>&1; then
+              git tag "$RELEASE_TAG" "$GITHUB_SHA"
+              git push origin "refs/tags/$RELEASE_TAG"
+            fi
             flags=(--verify-tag --prerelease --latest=false)
           else
             flags=(--verify-tag)
@@ -238,7 +260,28 @@ jobs:
           else
             gh release edit "$RELEASE_TAG" --draft=false --latest
           fi
+          if [ "$IS_PRERELEASE" = true ]; then
+            bridge_tag="v$BRIDGE_VERSION"
+            if ! git rev-parse "$bridge_tag" > /dev/null 2>&1; then
+              git tag "$bridge_tag" "$GITHUB_SHA"
+              git push origin "refs/tags/$bridge_tag"
+            fi
+            printf 'Publicação de transição para o atualizador da v0.6.1-dev.22.1.\n\nInstala o AURORA AutoFill v%s. Os arquivos são idênticos aos da [publicação com data](https://github.com/fabriciomatosqa/AURORA-AutoFill/releases/tag/v%s); somente os nomes dos downloads e os manifestos mudam para compatibilidade.\n\nO programa novo reconhece as duas publicações como a mesma versão e não oferece uma reinstalação.\n' "$RELEASE_VERSION" "$RELEASE_VERSION" > BRIDGE-NOTES.md
+            if ! gh release view "$bridge_tag" --json id > /dev/null 2>&1; then
+              gh release create "$bridge_tag" release-bridge/* --draft --verify-tag \
+                --prerelease --latest=false --title "Transição para AURORA AutoFill v$RELEASE_VERSION" \
+                --notes-file BRIDGE-NOTES.md
+            fi
+            test "$(gh release view "$bridge_tag" --json assets --jq '.assets | length')" -eq 5
+            gh release edit "$bridge_tag" --draft=false --latest=false
+          fi
       - name: Verificar descoberta e download pelo atualizador público
         env:
           RELEASE_VERSION: ${{ needs.version.outputs.version }}
         run: python packaging/check_published_update.py --version "$RELEASE_VERSION"
+      - name: Verificar atualização com o código da versão instalada dev.22.1
+        if: needs.version.outputs.prerelease == 'true'
+        env:
+          RELEASE_VERSION: ${{ needs.version.outputs.version }}
+          BRIDGE_VERSION: ${{ needs.version.outputs.bridge }}
+        run: python packaging/check_legacy_update.py --version "$BRIDGE_VERSION" --display-version "$RELEASE_VERSION"

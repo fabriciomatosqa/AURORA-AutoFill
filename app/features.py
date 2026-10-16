@@ -19,6 +19,7 @@ from .settings_panel import SettingsPage
 from .update_threads import ReleaseCheckThread, InstallerDownloadThread
 from .updates import is_newer, launch_installer
 from .version import APP_VERSION
+from .versioning import display_version
 
 
 class AuroraFeaturesMixin:
@@ -289,7 +290,7 @@ class AuroraFeaturesMixin:
                                         f"O AURORA v{APP_VERSION} já está atualizado.")
             return
         channel = " de teste" if getattr(release, "prerelease", False) else ""
-        text = (f"Nova versão{channel} disponível: v{release.version}\n"
+        text = (f"Nova versão{channel} disponível: v{display_version(release.version)}\n"
                 f"Versão instalada: v{APP_VERSION}\n\n")
         if not getattr(sys, "frozen", False):
             text += "Deseja abrir a página oficial para baixar a atualização?"
