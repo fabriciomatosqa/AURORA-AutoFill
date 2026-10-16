@@ -669,7 +669,7 @@ class AutoFillWindow(AuroraFeaturesMixin, QMainWindow):
         formatting_row.addWidget(guide)
         formatting_row.addStretch()
         self.token_button = QToolButton()
-        self.token_button.setText("+ Inserir comando dinâmico ▾")
+        self.token_button.setText("+ Inserir comando dinâmico")
         self.token_button.setPopupMode(QToolButton.InstantPopup)
         self.token_button.setMinimumWidth(238)
         menu = AuroraMenu(self.token_button)

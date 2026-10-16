@@ -119,10 +119,10 @@ class DiscoveryTests(unittest.TestCase):
         first = [payload("0.6.0", prerelease=False)] * 100
         with patch("app.updates._get", side_effect=[json.dumps(first).encode(),
                    json.dumps([payload()]).encode()]) as get:
-            self.assertEqual(updates.latest_release().version, VERSION)
+            self.assertEqual(updates.latest_release(platform_name="win32").version, VERSION)
         self.assertEqual(get.call_count, 2)
         with patch("app.updates._get", return_value=json.dumps(first).encode()) as get:
-            updates.latest_release()
+            updates.latest_release(platform_name="win32")
         self.assertEqual(get.call_count, updates.MAX_RELEASE_PAGES)
 
     def test_empty_repo_and_github_rate_limit_have_clear_results(self):
