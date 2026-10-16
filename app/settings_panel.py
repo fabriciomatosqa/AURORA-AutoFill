@@ -1,0 +1,111 @@
+"""Aurora-themed settings page. Signals keep all storage and update actions in ui.py."""
+from __future__ import annotations
+
+from PySide6.QtCore import Qt, Signal
+from PySide6.QtWidgets import (QCheckBox, QFrame, QHBoxLayout, QLabel, QPushButton,
+                               QSlider, QVBoxLayout, QWidget)
+
+
+class SettingsPage(QWidget):
+    sound_toggled = Signal(bool)
+    volume_changed = Signal(int)
+    startup_toggled = Signal(bool)
+    updates_toggled = Signal(bool)
+    play_requested = Signal()
+    backup_requested = Signal()
+    restore_requested = Signal()
+    open_backups_requested = Signal()
+    check_requested = Signal()
+    close_requested = Signal()
+
+    def __init__(self, prefs: dict, *, startup_supported: bool, startup_enabled: bool,
+                 parent=None):
+        super().__init__(parent)
+        self.setObjectName("settingsPage")
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(14, 14, 18, 12)
+        layout.setSpacing(14)
+        head = QHBoxLayout()
+        heading = QLabel("Configurações")
+        heading.setObjectName("heading")
+        head.addWidget(heading)
+        head.addStretch()
+        back = QPushButton("← Voltar")
+        back.clicked.connect(self.close_requested.emit)
+        head.addWidget(back)
+        layout.addLayout(head)
+        self._label(layout, "ÁUDIO")
+        self.sound = QCheckBox("Reproduzir som ao expandir comandos")
+        self.sound.setChecked(prefs["sound_enabled"])
+        self.sound.toggled.connect(self.sound_toggled.emit)
+        layout.addWidget(self.sound)
+        volume_row = QHBoxLayout()
+        volume_row.addWidget(QLabel("Volume"))
+        self.volume = QSlider(Qt.Horizontal)
+        self.volume.setRange(0, 100)
+        self.volume.setValue(prefs["sound_volume"])
+        self.volume.valueChanged.connect(self.volume_changed.emit)
+        volume_row.addWidget(self.volume, 1)
+        self.volume_label = QLabel(str(self.volume.value()) + "%")
+        self.volume_label.setMinimumWidth(44)
+        self.volume.valueChanged.connect(lambda n: self.volume_label.setText(str(n) + "%"))
+        volume_row.addWidget(self.volume_label)
+        layout.addLayout(volume_row)
+        self.sound.toggled.connect(self.volume.setEnabled)
+        self.volume.setEnabled(self.sound.isChecked())
+        sample = QPushButton("♪ Ouvir som de confirmação")
+        sample.clicked.connect(self.play_requested.emit)
+        layout.addWidget(sample)
+        self._divider(layout)
+        self._label(layout, "INICIALIZAÇÃO")
+        self.startup = QCheckBox("Iniciar com o Windows")
+        self.startup.setEnabled(startup_supported)
+        self.startup.setChecked(startup_enabled)
+        self.startup.toggled.connect(self.startup_toggled.emit)
+        self.startup.setToolTip("Disponível no AURORA instalado no Windows")
+        layout.addWidget(self.startup)
+        if not startup_supported:
+            hint = QLabel("A inicialização automática exige o aplicativo instalado no Windows.")
+            hint.setObjectName("hint")
+            layout.addWidget(hint)
+        self._divider(layout)
+        self._label(layout, "SEGURANÇA DOS DADOS")
+        hint = QLabel("O backup inclui todas as pastas, comandos, formatação e ordem.\n"
+                      "Um backup adicional será criado antes de instalar atualizações.")
+        hint.setWordWrap(True)
+        hint.setObjectName("hint")
+        layout.addWidget(hint)
+        backup_buttons = QHBoxLayout()
+        for label, signal in (("Criar backup completo", self.backup_requested),
+                              ("Restaurar backup", self.restore_requested),
+                              ("Abrir backups", self.open_backups_requested)):
+            button = QPushButton(label)
+            button.clicked.connect(signal.emit)
+            backup_buttons.addWidget(button)
+        layout.addLayout(backup_buttons)
+        self._divider(layout)
+        self._label(layout, "ATUALIZAÇÕES")
+        self.updates = QCheckBox("Avisar quando houver uma versão estável nova")
+        self.updates.setChecked(prefs["check_updates"])
+        self.updates.toggled.connect(self.updates_toggled.emit)
+        layout.addWidget(self.updates)
+        updates_text = QLabel("As atualizações vêm de lançamentos oficiais do GitHub.\n"
+                              "O aplicativo solicita sua confirmação antes de baixar e instalar.")
+        updates_text.setWordWrap(True)
+        updates_text.setObjectName("hint")
+        layout.addWidget(updates_text)
+        self.check_button = QPushButton("↻ Verificar atualizações agora")
+        self.check_button.clicked.connect(self.check_requested.emit)
+        layout.addWidget(self.check_button)
+        layout.addStretch(1)
+
+    def _label(self, layout, value):
+        title = QLabel(value)
+        title.setObjectName("sectionTitle")
+        layout.addWidget(title)
+
+    def _divider(self, layout):
+        line = QFrame()
+        line.setFrameShape(QFrame.HLine)
+        line.setStyleSheet("color: #31566a; background-color: #31566a; max-height: 1px;")
+        layout.addWidget(line)
