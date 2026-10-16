@@ -1,0 +1,6 @@
+"""Single source of truth for displayed and packaged AURORA AutoFill versions."""
+APP_NAME = "AURORA AutoFill"
+APP_VERSION = "0.6.0"
+GITHUB_REPOSITORY = "fabriciomatosqa/AURORA-AutoFill"
+GITHUB_RELEASES_URL = f"https://github.com/{GITHUB_REPOSITORY}/releases"
+GITHUB_LATEST_API = f"https://api.github.com/repos/{GITHUB_REPOSITORY}/releases/latest"
