@@ -226,10 +226,12 @@ jobs:
             flags=(--verify-tag)
           fi
           printf 'Faça um backup antes de testar. O aplicativo cria outro backup antes de instalar atualizações. Os checksums SHA256 acompanham os instaladores.\n' >> RELEASE-NOTES.md
-          gh release create "$RELEASE_TAG" \
-            release-publish/* \
-            --draft --title "AURORA AutoFill v$RELEASE_VERSION" \
-            --notes-file RELEASE-NOTES.md "${flags[@]}"
+          if ! gh release view "$RELEASE_TAG" --json id > /dev/null 2>&1; then
+            gh release create "$RELEASE_TAG" \
+              release-publish/* \
+              --draft --title "AURORA AutoFill v$RELEASE_VERSION" \
+              --notes-file RELEASE-NOTES.md "${flags[@]}"
+          fi
           test "$(gh release view "$RELEASE_TAG" --json assets --jq '.assets | length')" -eq 5
           if [ "$IS_PRERELEASE" = true ]; then
             gh release edit "$RELEASE_TAG" --draft=false --latest=false
