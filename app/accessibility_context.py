@@ -78,7 +78,7 @@ class AccessibilityClient:
                     self._process = self._responses = None
                 self._starting = False
 
-    def request(self, process_id, timeout=0.2):
+    def request(self, process_id, timeout=0.5):
         self.warm()
         if not self._call_lock.acquire(blocking=False):
             raise AccessibilityUnavailable('Leitura de acessibilidade ocupada.')

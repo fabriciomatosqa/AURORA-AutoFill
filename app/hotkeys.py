@@ -89,11 +89,14 @@ class GlobalHotkeyListener:
             self._context = None
             self._matcher.clear()
 
-    def is_current(self, candidate: ExpansionCandidate) -> bool:
+    def is_current(self, candidate: ExpansionCandidate, *, require_fresh: bool = True) -> bool:
         with self._state_lock:
+            # Freshness prevents stale shortcuts from starting new edits. Once
+            # paste was sent, confirmation may take longer in web editors;
+            # revision, identity and focus checks must still be enforced.
             return (self._enabled and candidate.revision == self._revision
                     and candidate.identifier == self._latest_id
-                    and monotonic() - candidate.created <= 1.5)
+                    and (not require_fresh or monotonic() - candidate.created <= 1.5))
 
     def claim(self, candidate: ExpansionCandidate) -> bool:
         with self._state_lock:

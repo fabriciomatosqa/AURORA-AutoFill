@@ -261,6 +261,33 @@ class ExpansionTransactionTests(EngineTestCase):
         self.win._play_confirmation.assert_not_called()
         self.engine.replace.assert_called_once()
 
+    def test_sent_cursor_expansion_does_not_expire_during_web_confirmation(self):
+        self.engine.save('/ola', 'A{{cursor}}B')
+        self.engine.type('/ola')
+        self.engine.until(75)
+        operation = self.win._expansion_operation
+        self.assertIsNotNone(operation)
+        self.assertEqual(operation.stage, 'sent')
+        # Simulate a slow web accessibility provider after SendInput.
+        object.__setattr__(operation.candidate, 'created', -2.0)
+        self.assertTrue(self.win._candidate_valid(operation.candidate))
+        self.engine.drain()
+        self.assertEqual(self.engine.field.text, 'AB')
+        self.engine.type('X')
+        self.assertEqual(self.engine.field.text, 'AXB')
+        self.win._play_confirmation.assert_called_once()
+
+    def test_sent_cursor_expansion_still_rejects_real_input_change(self):
+        self.engine.save('/ola', 'A{{cursor}}B')
+        self.engine.type('/ola')
+        self.engine.until(75)
+        operation = self.win._expansion_operation
+        self.assertIsNotNone(operation)
+        self.engine.listener.invalidate()
+        self.assertFalse(self.win._candidate_valid(operation.candidate))
+        self.engine.drain()
+        self.win._play_confirmation.assert_not_called()
+
     def test_cursor_waits_for_delayed_paste_instead_of_collapsing_selection(self):
         self.engine.save('/ola', 'A{{cursor}}B')
         self.engine.paste_delay = 250

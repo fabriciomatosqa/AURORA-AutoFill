@@ -953,8 +953,14 @@ class AutoFillWindow(QMainWindow):
         QTimer.singleShot(75, lambda c=candidate: self._perform_expansion(c))
 
     def _candidate_valid(self, candidate):
+        operation = self._expansion_operation
+        already_sent = (operation is not None and operation.candidate is candidate
+                        and operation.stage in {"sent", "moving"})
+        # Never expire a sent paste mid-confirmation. Still reject a changed
+        # keyboard revision or actual focus change to protect the destination.
         return (self._active_candidate is candidate and self._hotkeys_enabled and not self._quitting
-                and self.hotkeys.is_current(candidate) and capture_focus() == candidate.context)
+                and self.hotkeys.is_current(candidate, require_fresh=not already_sent)
+                and capture_focus() == candidate.context)
 
     def _edit_snapshot(self, *, accessibility=False):
         context = capture_focus()
