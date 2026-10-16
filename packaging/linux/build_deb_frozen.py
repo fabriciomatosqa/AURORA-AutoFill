@@ -8,6 +8,7 @@ import sys
 import tempfile
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from verify_bundle import verify_bundle
 from app.version import APP_VERSION
 
