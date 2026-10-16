@@ -4,7 +4,7 @@ run-name: Instaladores - ${{ github.ref_name }} - ${{ github.sha }}
 on:
   workflow_dispatch:
   push:
-    branches: [main]
+    branches: [main, dev/correcao-expansao-windows]
     tags: ['v*']
 
 permissions:
