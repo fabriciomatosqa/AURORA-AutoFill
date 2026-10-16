@@ -24,6 +24,8 @@ UsePreviousAppDir=yes
 UsePreviousGroup=yes
 UsePreviousTasks=yes
 ShowLanguageDialog=no
+DisableStartupPrompt=yes
+SetupLogging=yes
 OutputDir=installer-win
 OutputBaseFilename=AURORA-AutoFill-v{#AppVersion}-Windows-Setup
 Compression=lzma2
@@ -71,8 +73,15 @@ var
   InstalledDir: String;
   Parameters: String;
   ChildExitCode: Integer;
+  ParameterIndex: Integer;
+  LegacyRequest: Boolean;
+  HasPreviousInstall: Boolean;
+  PreviousExeExists: Boolean;
 begin
   Result := True;
+  Log('AURORA: initializing; params=' + IntToStr(ParamCount));
+  for ParameterIndex := 1 to ParamCount do
+    Log('AURORA: parameter ' + IntToStr(ParameterIndex) + ': ' + ParamStr(ParameterIndex));
   if IsAuroraUpdate then
     Log('AURORA: in-app update; silent=' + IntToStr(Ord(WizardSilent)));
 
@@ -80,10 +89,22 @@ begin
     exact invocation, not a normal double-click or arbitrary deployment flags,
     and hand off before the wizard is created. New updaters pass the explicit
     marker and silent flags directly, so this branch cannot recurse. }
-  if (not WizardSilent) and (not IsAuroraUpdate) and
-     (ParamCount = 1) and (CompareText(ParamStr(1), '/NORESTART') = 0) and
-     RegQueryStringValue(HKCU, AuroraUninstallKey, 'InstallLocation', InstalledDir) and
-     FileExists(AddBackslash(InstalledDir) + '{#AppExeName}') then
+  LegacyRequest := (not WizardSilent) and (not IsAuroraUpdate) and
+    (ParamCount = 1) and (CompareText(ParamStr(1), '/NORESTART') = 0);
+  if not LegacyRequest then
+    Exit;
+  { Keep the registry output assignment in a separate statement. Pascal Script
+    need not evaluate the operands of a boolean expression left-to-right. }
+  InstalledDir := '';
+  HasPreviousInstall := RegQueryStringValue(HKCU, AuroraUninstallKey,
+    'InstallLocation', InstalledDir);
+  Log('AURORA: previous installation registered=' + IntToStr(Ord(HasPreviousInstall)) +
+    '; directory=' + InstalledDir);
+  if not HasPreviousInstall then
+    Exit;
+  PreviousExeExists := FileExists(AddBackslash(InstalledDir) + '{#AppExeName}');
+  Log('AURORA: previous executable exists=' + IntToStr(Ord(PreviousExeExists)));
+  if PreviousExeExists then
   begin
     Log('AURORA: legacy updater detected; handing off without a wizard.');
     Parameters := '/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP- ' +
@@ -91,11 +112,18 @@ begin
       '/DIR=' + AddQuotes(InstalledDir);
     if not Exec(ExpandConstant('{srcexe}'), Parameters, '', SW_HIDE,
        ewWaitUntilTerminated, ChildExitCode) then
+    begin
+      Log('AURORA: failed to launch silent update; error=' + IntToStr(ChildExitCode));
       SuppressibleMsgBox('Não foi possível iniciar a atualização do AURORA AutoFill. ' +
-        'Abra o programa e tente novamente.', mbError, MB_OK, IDOK)
-    else if ChildExitCode <> 0 then
-      SuppressibleMsgBox('A atualização não foi concluída. Abra o AURORA AutoFill ' +
-        'e tente novamente. Código: ' + IntToStr(ChildExitCode), mbError, MB_OK, IDOK);
+        'Abra o programa e tente novamente.', mbError, MB_OK, IDOK);
+    end
+    else
+    begin
+      Log('AURORA: silent update finished; exit=' + IntToStr(ChildExitCode));
+      if ChildExitCode <> 0 then
+        SuppressibleMsgBox('A atualização não foi concluída. Abra o AURORA AutoFill ' +
+          'e tente novamente. Código: ' + IntToStr(ChildExitCode), mbError, MB_OK, IDOK);
+    end;
     Result := False;
   end;
 end;

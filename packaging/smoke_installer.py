@@ -51,23 +51,49 @@ def main():
 
     installer = args.installer.resolve(strict=True)
     with tempfile.TemporaryDirectory(prefix='aurora-installer-',
-                                     dir=os.environ.get('RUNNER_TEMP')) as temporary:
+                                     dir=os.environ.get('RUNNER_TEMP'),
+                                     ignore_cleanup_errors=True) as temporary:
         root = Path(temporary)
         target = root / 'application with spaces'
         profile = root / 'profile'
         profile.mkdir()
+        setup_temporary = root / 'setup-temporary'
+        setup_temporary.mkdir()
         env = dict(os.environ, APPDATA=str(profile), QT_QPA_PLATFORM='offscreen',
-                   AURORA_AUTOFILL_SMOKE_TEST='1')
+                   AURORA_AUTOFILL_SMOKE_TEST='1', TEMP=str(setup_temporary),
+                   TMP=str(setup_temporary))
         database = profile / 'AutoFillStudio' / 'snippets.sqlite3'
 
+        def read_log(log):
+            content = log.read_bytes()
+            encoding = 'utf-16' if content.startswith((b'\xff\xfe', b'\xfe\xff')) else 'utf-8-sig'
+            return content.decode(encoding, errors='replace')
+
+        def dump_logs():
+            for log in [*root.glob('*.log'), *setup_temporary.glob('Setup Log*.txt')]:
+                print(f'Installer diagnostic log: {log.name}', flush=True)
+                print(read_log(log)[-14000:], flush=True)
+
         def run(parameters, expected=(0,)):
-            result = subprocess.run([str(installer), *parameters], env=env,
-                                    cwd=root, stdin=subprocess.DEVNULL,
-                                    timeout=150, creationflags=subprocess.CREATE_NO_WINDOW)
-            if result.returncode not in expected:
-                for log in root.glob('*.log'):
-                    print(log.read_text(encoding='utf-8-sig', errors='replace')[-10000:])
-                raise RuntimeError(f'Instalador terminou com codigo {result.returncode}.')
+            print(f'Installer smoke: starting {parameters}', flush=True)
+            process = subprocess.Popen([str(installer), *parameters], env=env,
+                                       cwd=root, stdin=subprocess.DEVNULL,
+                                       creationflags=subprocess.CREATE_NO_WINDOW)
+            try:
+                returncode = process.wait(timeout=150)
+            except subprocess.TimeoutExpired:
+                dump_logs()
+                # Only the installer process tree launched by this disposable
+                # test is stopped, so it cannot leave a hidden wizard behind.
+                subprocess.run(['taskkill', '/PID', str(process.pid), '/T', '/F'],
+                               check=False, timeout=20,
+                               creationflags=subprocess.CREATE_NO_WINDOW)
+                process.wait(timeout=10)
+                raise
+            print(f'Installer smoke: installer exit={returncode}', flush=True)
+            if returncode not in expected:
+                dump_logs()
+                raise RuntimeError(f'Instalador terminou com codigo {returncode}.')
 
         quiet = ['/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/SP-',
                  '/NORESTARTAPPLICATIONS']
@@ -84,6 +110,7 @@ def main():
                 installed_path = winreg.QueryValueEx(key, 'InstallLocation')[0]
             if Path(installed_path).resolve() != target.resolve():
                 raise RuntimeError('Diretorio registrado difere do destino temporario.')
+            print('Installer smoke: first installation passed; no automatic start.', flush=True)
 
             provenance = target / 'SOURCE-COMMIT.txt'
             expected_provenance = hashlib.sha256(provenance.read_bytes()).digest()
@@ -92,11 +119,12 @@ def main():
             wait_for_profile(database)
             if hashlib.sha256(provenance.read_bytes()).digest() != expected_provenance:
                 raise RuntimeError('Atualizacao nao substituiu os arquivos no diretorio existente.')
-            update_log = (root / 'update.log').read_text(encoding='utf-8-sig', errors='replace')
+            update_log = read_log(root / 'update.log')
             if 'AURORA: in-app update; silent=1' not in update_log:
                 raise RuntimeError('Atualizacao nao confirmou execucao sem assistente.')
             with closing(sqlite3.connect(database)) as connection, connection:
                 connection.execute("INSERT INTO folders(name) VALUES ('CI preserved update')")
+            print('Installer smoke: explicit silent update and automatic reopen passed.', flush=True)
             # Wait for the reopened smoke application to finish before the
             # next installer replaces its executable (no process force-kill).
             time.sleep(2)
@@ -109,12 +137,19 @@ def main():
             # to its silent child and aborts the outer bootstrap with code 1.
             run(['/NORESTART'], expected=(1,))
             wait_for_profile(legacy_profile / 'AutoFillStudio' / 'snippets.sqlite3')
+            legacy_logs = '\n'.join(read_log(log) for log in setup_temporary.glob('Setup Log*.txt'))
+            if ('AURORA: legacy updater detected; handing off without a wizard.' not in legacy_logs
+                    or 'AURORA: silent update finished; exit=0' not in legacy_logs):
+                dump_logs()
+                raise RuntimeError('A transicao legada nao confirmou instalacao silenciosa concluida.')
             if hashlib.sha256(provenance.read_bytes()).digest() != expected_provenance:
                 raise RuntimeError('A transicao do atualizador antigo nao substituiu os arquivos.')
             with closing(sqlite3.connect(database)) as connection:
                 if not connection.execute(
                         "SELECT 1 FROM folders WHERE name='CI preserved update'").fetchone():
                     raise RuntimeError('Atualizacao nao preservou o perfil sintetico.')
+            print('Installer smoke: exact legacy invocation, silent handoff and data preservation passed.',
+                  flush=True)
             time.sleep(2)
         finally:
             if uninstaller.is_file():
