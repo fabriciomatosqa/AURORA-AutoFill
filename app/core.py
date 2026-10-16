@@ -205,6 +205,57 @@ class SnippetStore:
         with self.connection:
             self.connection.execute("DELETE FROM snippets WHERE id=?", (snippet_id,))
 
+    def delete_with_undo(self, snippet_id: int) -> dict:
+        """Remove a snippet while preserving all columns for a 10-second undo."""
+        with self.connection:
+            row = self.connection.execute(
+                "SELECT * FROM snippets WHERE id=?", (snippet_id,)).fetchone()
+            if row is None:
+                raise ValueError("Comando não encontrado.")
+            snapshot = dict(row)
+            self.connection.execute("DELETE FROM snippets WHERE id=?", (snippet_id,))
+        return snapshot
+
+    def restore_deleted_snippet(self, snapshot: dict) -> None:
+        columns = ("id", "folder_id", "title", "shortcut", "content", "rich_content",
+                   "sort_order", "created_at", "updated_at")
+        with self.connection:
+            self.connection.execute(
+                f"INSERT INTO snippets({','.join(columns)}) VALUES ({','.join('?' for _ in columns)})",
+                tuple(snapshot[key] for key in columns))
+
+    def delete_folder_with_undo(self, folder_id: int) -> tuple[int, str, dict]:
+        """Keep the original ID and moved-snippet IDs for a safe short-term undo."""
+        folder = self.connection.execute(
+            "SELECT name FROM folders WHERE id=?", (folder_id,)).fetchone()
+        if folder is None:
+            raise ValueError("Pasta não encontrada.")
+        old_folders = {folder_id for folder_id, _ in self.folders()}
+        snippet_ids = [item.id for item in self.snippets(folder_id)]
+        name = str(folder["name"])
+        count, destination = self.delete_folder(folder_id)
+        destination_id = next(fid for fid, label in self.folders() if label == destination)
+        return count, destination, {
+            "id": folder_id, "name": name, "snippet_ids": snippet_ids,
+            "destination_id": destination_id,
+            "created_destination": destination_id not in old_folders,
+        }
+
+    def restore_deleted_folder(self, snapshot: dict) -> None:
+        with self.connection:
+            self.connection.execute(
+                "INSERT INTO folders(id, name) VALUES (?, ?)",
+                (snapshot["id"], snapshot["name"]))
+            for snippet_id in snapshot["snippet_ids"]:
+                self.connection.execute(
+                    "UPDATE snippets SET folder_id=? WHERE id=? AND folder_id=?",
+                    (snapshot["id"], snippet_id, snapshot["destination_id"]))
+            if snapshot["created_destination"]:
+                self.connection.execute(
+                    "DELETE FROM folders WHERE id=? AND NOT EXISTS "
+                    "(SELECT 1 FROM snippets WHERE folder_id=?)",
+                    (snapshot["destination_id"], snapshot["destination_id"]))
+
     def export_json(self, destination: str | Path) -> None:
         folders = self.folders()
         contents = self.snippets()
