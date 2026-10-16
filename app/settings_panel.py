@@ -1,9 +1,12 @@
 """Aurora-themed settings page. Signals keep all storage and update actions in ui.py."""
 from __future__ import annotations
 
+from pathlib import Path
+
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (QCheckBox, QFrame, QHBoxLayout, QLabel, QPushButton,
                                QScrollArea, QSlider, QVBoxLayout, QWidget)
+from .version import IS_PRERELEASE
 
 
 class SettingsPage(QWidget):
@@ -11,6 +14,7 @@ class SettingsPage(QWidget):
     volume_changed = Signal(int)
     startup_toggled = Signal(bool)
     updates_toggled = Signal(bool)
+    prereleases_toggled = Signal(bool)
     play_requested = Signal()
     backup_requested = Signal()
     restore_requested = Signal()
@@ -22,21 +26,46 @@ class SettingsPage(QWidget):
                  parent=None):
         super().__init__(parent)
         self.setObjectName("settingsPage")
+        # A custom QWidget and a scroll viewport do not automatically paint the
+        # parent's stylesheet. Explicit surfaces keep the Windows dark palette
+        # from showing through as an unrelated black rectangle.
+        self.setAttribute(Qt.WA_StyledBackground, True)
+        check_icon = (Path(__file__).resolve().parents[1] / "assets" / "checkmark.svg").as_posix()
         self.setStyleSheet("""
-            QWidget#settingsPage { background: #091426; color: #eaf4ff; }
+            QWidget#settingsPage, QWidget#settingsContent, QWidget#settingsViewport {
+                background: #091426; color: #eaf4ff;
+            }
             QCheckBox { color: #eaf4ff; spacing: 10px; font-size: 13px; }
+            QCheckBox:disabled { color: #7995ab; }
+            QCheckBox::indicator {
+                width: 16px; height: 16px; border: 1px solid #58788f;
+                border-radius: 4px; background: #132d43;
+            }
+            QCheckBox::indicator:hover { border-color: #72e6d5; }
+            QCheckBox::indicator:checked {
+                background: #63dfc9; border-color: #63dfc9; image: url("CHECK_ICON");
+            }
+            QCheckBox::indicator:disabled { background: #1a3042; border-color: #3b5365; }
             QSlider::groove:horizontal { background: #264459; height: 6px; border-radius: 3px; }
+            QSlider::sub-page:horizontal { background: #479f9e; border-radius: 3px; }
             QSlider::handle:horizontal {
                 background: #72e6d5; width: 17px; margin: -6px 0; border-radius: 8px;
             }
-            QScrollArea { border: none; background: #091426; }
-        """)
+            QSlider::handle:horizontal:hover { background: #a0f5e5; }
+            QSlider::handle:horizontal:disabled { background: #4b687b; }
+            QSlider::sub-page:horizontal:disabled { background: #304d60; }
+            QScrollArea#settingsScroll { border: none; background: #091426; }
+        """.replace("CHECK_ICON", check_icon))
         root = QVBoxLayout(self)
         root.setContentsMargins(0, 0, 0, 0)
         scroller = QScrollArea()
+        scroller.setObjectName("settingsScroll")
+        scroller.setFrameShape(QFrame.NoFrame)
+        scroller.viewport().setObjectName("settingsViewport")
         scroller.setWidgetResizable(True)
         scroller.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         body = QWidget()
+        body.setObjectName("settingsContent")
         layout = QVBoxLayout(body)
         layout.setContentsMargins(14, 14, 18, 12)
         layout.setSpacing(14)
@@ -65,14 +94,20 @@ class SettingsPage(QWidget):
         volume_row.addWidget(self.volume, 1)
         self.volume_label = QLabel(str(self.volume.value()) + "%")
         self.volume_label.setMinimumWidth(44)
+        self.volume_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
         self.volume.valueChanged.connect(lambda n: self.volume_label.setText(str(n) + "%"))
         volume_row.addWidget(self.volume_label)
         layout.addLayout(volume_row)
         self.sound.toggled.connect(self.volume.setEnabled)
         self.volume.setEnabled(self.sound.isChecked())
-        sample = QPushButton("♪ Ouvir som de confirmação")
-        sample.clicked.connect(self.play_requested.emit)
-        layout.addWidget(sample)
+        self.sample_button = QPushButton("♪ Ouvir gota de confirmação")
+        self.sample_button.setToolTip("Ouvir o som com o volume escolhido")
+        self.sample_button.setEnabled(self.sound.isChecked())
+        self.sound.toggled.connect(self.sample_button.setEnabled)
+        self.sound.toggled.connect(self.volume_label.setEnabled)
+        self.volume_label.setEnabled(self.sound.isChecked())
+        self.sample_button.clicked.connect(self.play_requested.emit)
+        layout.addWidget(self.sample_button)
         self._divider(layout)
         self._label(layout, "INICIALIZAÇÃO")
         self.startup = QCheckBox("Iniciar com o Windows")
@@ -102,11 +137,15 @@ class SettingsPage(QWidget):
         layout.addLayout(backup_buttons)
         self._divider(layout)
         self._label(layout, "ATUALIZAÇÕES")
-        self.updates = QCheckBox("Avisar quando houver uma versão estável nova")
+        self.updates = QCheckBox("Avisar quando houver uma nova versão")
         self.updates.setChecked(prefs["check_updates"])
         self.updates.toggled.connect(self.updates_toggled.emit)
         layout.addWidget(self.updates)
-        updates_text = QLabel("As atualizações vêm de lançamentos oficiais do GitHub.\n"
+        self.prereleases = QCheckBox("Receber versões de teste")
+        self.prereleases.setChecked(prefs.get("include_prereleases", IS_PRERELEASE))
+        self.prereleases.toggled.connect(self.prereleases_toggled.emit)
+        layout.addWidget(self.prereleases)
+        updates_text = QLabel("Versões de teste ficam disponíveis durante o desenvolvimento.\n"
                               "O aplicativo solicita sua confirmação antes de baixar e instalar.")
         updates_text.setWordWrap(True)
         updates_text.setObjectName("hint")
@@ -114,6 +153,10 @@ class SettingsPage(QWidget):
         self.check_button = QPushButton("↻ Verificar atualizações agora")
         self.check_button.clicked.connect(self.check_requested.emit)
         layout.addWidget(self.check_button)
+        saved_hint = QLabel("As preferências são salvas automaticamente neste computador.")
+        saved_hint.setObjectName("hint")
+        saved_hint.setWordWrap(True)
+        layout.addWidget(saved_hint)
         layout.addStretch(1)
 
     def _label(self, layout, value):
@@ -123,6 +166,6 @@ class SettingsPage(QWidget):
 
     def _divider(self, layout):
         line = QFrame()
-        line.setFrameShape(QFrame.HLine)
-        line.setStyleSheet("color: #31566a; background-color: #31566a; max-height: 1px;")
+        line.setFixedHeight(1)
+        line.setStyleSheet("border: none; background-color: #24445f;")
         layout.addWidget(line)

@@ -8,11 +8,13 @@ import sys
 import tempfile
 
 from .core import application_db_path
+from .version import IS_PRERELEASE
 
 DEFAULTS = {
     "sound_enabled": True,
     "sound_volume": 65,
     "check_updates": True,
+    "include_prereleases": IS_PRERELEASE,
 }
 RUN_NAME = "AURORAAutoFill"
 RUN_KEY = r"Software\Microsoft\Windows\CurrentVersion\Run"
@@ -22,30 +24,32 @@ def preferences_path() -> Path:
     return application_db_path().parent / "settings.json"
 
 
-def load_preferences(path: Path | None = None) -> dict:
+def normalize_preferences(raw: dict) -> dict:
+    """Use the same bounded, typed settings for files, imports and writes."""
     settings = dict(DEFAULTS)
+    if isinstance(raw, dict):
+        for key in ("sound_enabled", "check_updates", "include_prereleases"):
+            if type(raw.get(key)) is bool:
+                settings[key] = raw[key]
+        volume = raw.get("sound_volume")
+        if type(volume) is int:
+            settings["sound_volume"] = max(0, min(100, volume))
+    return settings
+
+
+def load_preferences(path: Path | None = None) -> dict:
     target = Path(path) if path is not None else preferences_path()
     try:
         raw = json.loads(target.read_text(encoding="utf-8"))
-        if isinstance(raw, dict):
-            for key in ("sound_enabled", "check_updates"):
-                if type(raw.get(key)) is bool:
-                    settings[key] = raw[key]
-            volume = raw.get("sound_volume")
-            if type(volume) is int:
-                settings["sound_volume"] = max(0, min(100, volume))
+        return normalize_preferences(raw)
     except (OSError, ValueError, UnicodeError):
-        pass
-    return settings
+        return dict(DEFAULTS)
 
 
 def save_preferences(settings: dict, path: Path | None = None) -> None:
     destination = Path(path) if path is not None else preferences_path()
     destination.parent.mkdir(parents=True, exist_ok=True)
-    safe = dict(DEFAULTS)
-    safe.update({key: bool(settings.get(key, DEFAULTS[key]))
-                 for key in ("sound_enabled", "check_updates")})
-    safe["sound_volume"] = max(0, min(100, int(settings.get("sound_volume", 65))))
+    safe = normalize_preferences(settings)
     temporary = None
     try:
         with tempfile.NamedTemporaryFile("w", encoding="utf-8", dir=destination.parent,
@@ -72,8 +76,9 @@ def windows_startup_enabled() -> bool:
     try:
         with winreg.OpenKey(winreg.HKEY_CURRENT_USER, RUN_KEY, 0, winreg.KEY_READ) as key:
             command, _ = winreg.QueryValueEx(key, RUN_NAME)
-            return command.strip().strip('"').casefold() == str(Path(sys.executable).resolve()).casefold()
-    except FileNotFoundError:
+            return (isinstance(command, str) and command.strip().strip('"').casefold()
+                    == str(Path(sys.executable).resolve()).casefold())
+    except OSError:
         return False
 
 

@@ -5,7 +5,8 @@ import json
 from pathlib import Path
 
 ASSETS = ('aurora_banner.jpg', 'aurora_icon.ico', 'aurora_icon.png',
-          'aurora_icon_256.png', 'command_click.wav', 'AUDIO-LICENSE.txt')
+          'aurora_icon_256.png', 'command_click.wav', 'AUDIO-LICENSE.txt',
+          'checkmark.svg')
 
 
 def verify_bundle(dist, platform, source_root=None):

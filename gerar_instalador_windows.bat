@@ -21,6 +21,8 @@ if errorlevel 1 goto error
 echo.
 for /f "delims=" %%V in ('py -3 -c "from app.version import APP_VERSION; print(APP_VERSION)"') do set "AURORA_VERSION=%%V"
 if not defined AURORA_VERSION goto error
+for /f "delims=" %%V in ('py -3 -c "from app.version import WINDOWS_VERSION; print(WINDOWS_VERSION)"') do set "AURORA_WINDOWS_VERSION=%%V"
+if not defined AURORA_WINDOWS_VERSION goto error
 echo [3/3] Criando o instalador com Inno Setup...
 set "ISCC=%ProgramFiles(x86)%\Inno Setup 6\ISCC.exe"
 if not exist "%ISCC%" set "ISCC=%ProgramFiles%\Inno Setup 6\ISCC.exe"

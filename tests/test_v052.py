@@ -101,8 +101,9 @@ class BannerTests(unittest.TestCase):
         path = Path(__file__).resolve().parents[1] / 'assets' / 'command_click.wav'
         with wave.open(str(path), 'rb') as wav:
             self.assertEqual(wav.getnchannels(), 1)
-            # A gota suave usa 22.050 Hz e cauda curta, sem corte abrupto.
-            self.assertEqual(wav.getframerate(), 22050)
+            # Gota original PCM16, com cauda curta e taxa de áudio padrão.
+            self.assertEqual(wav.getframerate(), 44100)
+            self.assertEqual(wav.getsampwidth(), 2)
             duration = wav.getnframes() / wav.getframerate()
             self.assertGreater(duration, 0.15)
             self.assertLess(duration, 0.50)

@@ -10,11 +10,18 @@ class ReleaseCheckThread(QThread):
     result = Signal(object)
     failed = Signal(str)
 
+    def __init__(self, parent=None, *, include_prereleases=True):
+        super().__init__(parent)
+        self.include_prereleases = include_prereleases
+
     def run(self):
         try:
-            self.result.emit(latest_release())
+            release = latest_release(include_prereleases=self.include_prereleases)
+            if not self.isInterruptionRequested():
+                self.result.emit(release)
         except Exception as error:
-            self.failed.emit(str(error))
+            if not self.isInterruptionRequested():
+                self.failed.emit(str(error))
 
 
 class InstallerDownloadThread(QThread):
@@ -29,17 +36,23 @@ class InstallerDownloadThread(QThread):
 
     def request_cancel(self):
         self._cancel_requested = True
+        self.requestInterruption()
+
+    def _cancelled(self):
+        return self._cancel_requested or self.isInterruptionRequested()
 
     def _progress(self, percentage):
-        if self._cancel_requested:
+        if self._cancelled():
             raise ValueError("Download cancelado.")
         self.progress_changed.emit(percentage)
 
     def run(self):
         try:
-            if self._cancel_requested:
+            if self._cancelled():
                 raise ValueError("Download cancelado.")
-            destination = download_verified_installer(self.release, progress=self._progress)
-            self.ready.emit(destination)
+            destination = download_verified_installer(
+                self.release, progress=self._progress, cancelled=self._cancelled)
+            if not self._cancelled():
+                self.ready.emit(destination)
         except Exception as error:
             self.failed.emit(str(error))

@@ -1,4 +1,6 @@
 __pycache__/
+# Version metadata is generated for each build, never reused from source control.
+/app/_build.py
 *.py[cod]
 .venv/
 venv/

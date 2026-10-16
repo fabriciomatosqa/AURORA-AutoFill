@@ -4,7 +4,6 @@ from __future__ import annotations
 from pathlib import Path
 from time import monotonic
 import os
-import subprocess
 import sys
 import webbrowser
 
@@ -18,8 +17,8 @@ from .preferences import (load_preferences, save_preferences, set_windows_startu
                           windows_startup_enabled, windows_startup_supported)
 from .settings_panel import SettingsPage
 from .update_threads import ReleaseCheckThread, InstallerDownloadThread
-from .updates import is_newer
-from .version import APP_VERSION, GITHUB_RELEASES_URL
+from .updates import is_newer, launch_installer
+from .version import APP_VERSION
 
 
 class AuroraFeaturesMixin:
@@ -30,6 +29,8 @@ class AuroraFeaturesMixin:
         self._check_thread = None
         self._download_thread = None
         self._download_progress = None
+        self._download_release = None
+        self._exit_when_updates_done = False
 
     def _build_features_page(self):
         self.settings_page = SettingsPage(
@@ -41,6 +42,8 @@ class AuroraFeaturesMixin:
             lambda value: self._change_preference("sound_volume", value))
         self.settings_page.updates_toggled.connect(
             lambda checked: self._change_preference("check_updates", checked))
+        self.settings_page.prereleases_toggled.connect(
+            lambda checked: self._change_preference("include_prereleases", checked))
         self.settings_page.startup_toggled.connect(self._change_startup)
         self.settings_page.play_requested.connect(self._play_confirmation)
         self.settings_page.backup_requested.connect(self._create_manual_backup)
@@ -63,7 +66,26 @@ class AuroraFeaturesMixin:
             save_preferences(self.preferences)
         except OSError as exc:
             self.preferences[key] = previous
+            widget = {"sound_enabled": self.settings_page.sound,
+                      "sound_volume": self.settings_page.volume,
+                      "check_updates": self.settings_page.updates,
+                      "include_prereleases": self.settings_page.prereleases}.get(key)
+            if widget is not None:
+                widget.blockSignals(True)
+                if key == "sound_volume":
+                    widget.setValue(previous)
+                else:
+                    widget.setChecked(previous)
+                widget.blockSignals(False)
+            self._sync_audio_controls()
             QMessageBox.warning(self, "Configurações", f"Não foi possível salvar: {exc}")
+
+    def _sync_audio_controls(self):
+        enabled = self.preferences["sound_enabled"]
+        self.settings_page.volume.setEnabled(enabled)
+        self.settings_page.sample_button.setEnabled(enabled)
+        self.settings_page.volume_label.setEnabled(enabled)
+        self.settings_page.volume_label.setText(f"{self.preferences['sound_volume']}%")
 
     def _change_startup(self, enabled):
         try:
@@ -93,15 +115,19 @@ class AuroraFeaturesMixin:
             QMessageBox.warning(self, "Backup", str(exc))
 
     def _open_backups(self):
-        folder = backups_directory()
-        folder.mkdir(parents=True, exist_ok=True)
-        if sys.platform == "win32":
-            os.startfile(str(folder))
-        else:
-            subprocess.Popen(["xdg-open", str(folder)], stdout=subprocess.DEVNULL,
-                             stderr=subprocess.DEVNULL)
+        try:
+            folder = backups_directory()
+            folder.mkdir(parents=True, exist_ok=True)
+            from PySide6.QtCore import QUrl
+            from PySide6.QtGui import QDesktopServices
+            if not QDesktopServices.openUrl(QUrl.fromLocalFile(str(folder))):
+                raise OSError(f"Abra a pasta de backups em: {folder}")
+        except OSError as exc:
+            QMessageBox.warning(self, "Backups", str(exc))
 
     def _restore_user_backup(self):
+        if not self._confirm_change():
+            return
         selected, _ = QFileDialog.getOpenFileName(
             self, "Restaurar backup completo", str(backups_directory()),
             f"Backup AURORA (*{BACKUP_SUFFIX})")
@@ -118,18 +144,21 @@ class AuroraFeaturesMixin:
             if hasattr(self, "hotkeys"):
                 self.hotkeys.invalidate()
             restore_backup(self.store, Path(selected))
-            from .core import SnippetStore, application_db_path
-            self.store.close()
-            self.store = SnippetStore(application_db_path())
+            self._undo_actions.clear()
+            self._render_undo()
+            self.current_id = None
+            self.dirty = False
             self.preferences = load_preferences()
             for widget, setting in ((self.settings_page.sound, "sound_enabled"),
-                                    (self.settings_page.updates, "check_updates")):
+                                    (self.settings_page.updates, "check_updates"),
+                                    (self.settings_page.prereleases, "include_prereleases")):
                 widget.blockSignals(True)
                 widget.setChecked(self.preferences[setting])
                 widget.blockSignals(False)
             self.settings_page.volume.blockSignals(True)
             self.settings_page.volume.setValue(self.preferences["sound_volume"])
             self.settings_page.volume.blockSignals(False)
+            self._sync_audio_controls()
             self._refresh_all()
             self.dirty = False
             self._show_welcome()
@@ -195,12 +224,13 @@ class AuroraFeaturesMixin:
         if not self._undo_actions:
             self._render_undo()
             return
-        entry = self._undo_actions.pop()
+        entry = self._undo_actions[-1]
         try:
             if entry["kind"] == "snippet":
                 self.store.restore_deleted_snippet(entry["snapshot"])
             else:
                 self.store.restore_deleted_folder(entry["snapshot"])
+            self._undo_actions.pop()
             self._refresh_all()
             self.statusBar().showMessage("Exclusão desfeita!", 4000)
         except Exception as exc:
@@ -213,11 +243,15 @@ class AuroraFeaturesMixin:
             self._check_updates(manual=False)
 
     def _check_updates(self, *, manual: bool):
-        if self._check_thread is not None:
+        if (self._check_thread is not None or self._download_thread is not None
+                or self._exit_when_updates_done):
             return
         self.settings_page.check_button.setEnabled(False)
-        self.statusBar().showMessage("Consultando versões estáveis no GitHub...", 4000)
-        thread = ReleaseCheckThread(self)
+        include_tests = self.preferences["include_prereleases"]
+        label = ("Consultando atualizações, incluindo versões de teste..." if include_tests
+                 else "Consultando versões estáveis no GitHub...")
+        self.statusBar().showMessage(label, 4000)
+        thread = ReleaseCheckThread(self, include_prereleases=include_tests)
         self._check_thread = thread
         thread.result.connect(lambda release: self._handle_release(release, manual))
         thread.failed.connect(lambda detail: self._update_error(detail, manual))
@@ -225,12 +259,16 @@ class AuroraFeaturesMixin:
         thread.start()
 
     def _release_check_done(self):
-        self.settings_page.check_button.setEnabled(True)
         old, self._check_thread = self._check_thread, None
+        self.settings_page.check_button.setEnabled(
+            self._download_thread is None and not self._exit_when_updates_done)
         if old is not None:
             old.deleteLater()
+        self._finish_updates_shutdown()
 
     def _update_error(self, detail, manual):
+        if self._exit_when_updates_done:
+            return
         if manual:
             QMessageBox.warning(self, "Atualizações",
                                 f"Não foi possível consultar o GitHub: {detail}")
@@ -238,19 +276,22 @@ class AuroraFeaturesMixin:
             self.statusBar().showMessage("Não foi possível verificar atualizações.", 3000)
 
     def _handle_release(self, release, manual):
+        if self._exit_when_updates_done or self._download_thread is not None:
+            return
         if release is None:
             if manual:
                 QMessageBox.information(self, "Atualizações",
-                                        "Ainda não há lançamentos estáveis publicados no GitHub.")
+                                        "Ainda não há instaladores publicados para este sistema e canal no GitHub.")
             return
         if not is_newer(release.version, APP_VERSION):
             if manual:
                 QMessageBox.information(self, "Atualizações",
                                         f"O AURORA v{APP_VERSION} já está atualizado.")
             return
-        text = (f"Nova versão estável disponível: v{release.version}\n"
+        channel = " de teste" if getattr(release, "prerelease", False) else ""
+        text = (f"Nova versão{channel} disponível: v{release.version}\n"
                 f"Versão instalada: v{APP_VERSION}\n\n")
-        if sys.platform != "win32" or not getattr(sys, "frozen", False):
+        if not getattr(sys, "frozen", False):
             text += "Deseja abrir a página oficial para baixar a atualização?"
             if QMessageBox.question(self, "Nova versão AURORA", text,
                                     QMessageBox.Yes | QMessageBox.No,
@@ -260,17 +301,19 @@ class AuroraFeaturesMixin:
         if not (release.installer_url and release.checksum_url):
             if manual:
                 QMessageBox.information(self, "Atualizações",
-                                        "O lançamento ainda não possui instalador e checksum Windows.")
+                                        "O lançamento ainda não possui instalador compatível e checksum.")
             return
-        text += "Deseja baixar o instalador oficial verificado por SHA256?"
+        text += "Deseja baixar a atualização com verificação de integridade SHA256?"
         if QMessageBox.question(self, "Atualização disponível", text,
                                 QMessageBox.Yes | QMessageBox.No,
                                 QMessageBox.No) == QMessageBox.Yes:
             self._download_update(release)
 
     def _download_update(self, release):
-        if self._download_thread is not None:
+        if self._download_thread is not None or self._exit_when_updates_done:
             return
+        self._download_release = release
+        self.settings_page.check_button.setEnabled(False)
         thread = InstallerDownloadThread(release, self)
         self._download_thread = thread
         progress = QProgressDialog("Baixando atualização oficial...", "Cancelar", 0, 100, self)
@@ -291,28 +334,61 @@ class AuroraFeaturesMixin:
             self._download_progress.close()
             self._download_progress = None
         old, self._download_thread = self._download_thread, None
+        self.settings_page.check_button.setEnabled(
+            self._check_thread is None and not self._exit_when_updates_done)
         if old is not None:
             old.deleteLater()
+        self._download_release = None
+        self._finish_updates_shutdown()
 
     def _installer_failed(self, error):
-        if error != "Download cancelado.":
+        if error != "Download cancelado." and not self._exit_when_updates_done:
             QMessageBox.warning(self, "Atualização", error)
 
+    def _prepare_updates_shutdown(self):
+        """Keep QThreads alive until their bounded network operations finish."""
+        if self._check_thread is None and self._download_thread is None:
+            self._exit_when_updates_done = False
+            return True
+        self._exit_when_updates_done = True
+        self._quitting = False
+        if self._check_thread is not None:
+            self._check_thread.requestInterruption()
+        if self._download_thread is not None:
+            self._download_thread.request_cancel()
+        self.statusBar().showMessage("Finalizando a consulta ou cancelando o download para sair...")
+        return False
+
+    def _finish_updates_shutdown(self):
+        if (self._exit_when_updates_done and self._check_thread is None
+                and self._download_thread is None):
+            QTimer.singleShot(0, self._exit_application)
+
     def _installer_ready(self, installer: Path):
+        if self._exit_when_updates_done:
+            return
+        release = self._download_release
+        if release is None:
+            QMessageBox.warning(self, "Atualização", "A origem deste instalador não está disponível. Baixe novamente.")
+            return
         if not self._confirm_change():
             return
+        linux = getattr(release, "installer_kind", "exe") == "deb"
+        action = ("O gerenciador de pacotes do Linux será aberto; confirme a instalação nele.\n"
+                  if linux else "O instalador será aberto e o AURORA será fechado para atualizar.\n")
         if QMessageBox.question(
                 self, "Instalar atualização",
-                "O instalador foi baixado e validado por SHA256.\n"
-                "O AURORA será fechado para atualizar. Criar backup e continuar?",
+                "A atualização foi baixada e validada por SHA256.\n" + action +
+                "Criar backup completo e continuar?",
                 QMessageBox.Yes | QMessageBox.No, QMessageBox.No) != QMessageBox.Yes:
             return
         try:
             archived = create_backup(self.store, reason="pre-update")
-            subprocess.Popen([str(installer)], close_fds=True)
+            launch_installer(installer, release)
         except Exception as exc:
             QMessageBox.warning(self, "Atualização não iniciada",
                                 f"{exc}\nVerifique seus backups antes de tentar novamente.")
             return
         self.statusBar().showMessage(f"Backup criado em: {archived}", 1500)
+        self.dirty = False
         self._exit_application()

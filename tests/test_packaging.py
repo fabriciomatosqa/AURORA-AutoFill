@@ -40,7 +40,7 @@ class PackagingTests(unittest.TestCase):
             with self.subTest(platform=platform), tempfile.TemporaryDirectory() as temporary:
                 result = bundle.verify_bundle(self.fixture(temporary, platform), platform)
                 self.assertEqual(result['local_data_scan'], 'passed')
-                self.assertEqual(len(result['resources_sha256']), 7 if platform == 'windows' else 6)
+                self.assertEqual(len(result['resources_sha256']), 8 if platform == 'windows' else 7)
 
     def test_windows_requires_worker_at_runtime_path(self):
         with tempfile.TemporaryDirectory() as temporary:

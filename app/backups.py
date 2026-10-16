@@ -10,8 +10,8 @@ import os
 import sqlite3
 import tempfile
 
-from .core import application_db_path
-from .preferences import preferences_path
+from .core import SnippetStore, application_db_path, validate_shortcut
+from .preferences import normalize_preferences, preferences_path
 
 BACKUP_SUFFIX = ".aurora-backup.zip"
 MAX_DATABASE_BYTES = 100 * 1024 * 1024
@@ -82,12 +82,17 @@ def read_backup(archive_path: Path) -> tuple[Path, dict | None]:
     try:
         with ZipFile(source_path) as archive:
             members = {item.filename: item for item in archive.infolist()}
+            if len(members) != len(archive.infolist()):
+                raise ValueError("O backup contém arquivos duplicados.")
             if not {"manifest.json", "snippets.sqlite3"}.issubset(members):
                 raise ValueError("Este arquivo não é um backup completo do AURORA.")
             if members["snippets.sqlite3"].file_size > MAX_DATABASE_BYTES:
                 raise ValueError("O backup ultrapassa o tamanho permitido.")
+            if members["manifest.json"].file_size > 8192:
+                raise ValueError("O manifesto do backup é inválido.")
             manifest = json.loads(archive.read("manifest.json"))
-            if manifest.get("format") != "AURORA-AutoFill-Backup" or manifest.get("version") != 1:
+            if (not isinstance(manifest, dict)
+                    or manifest.get("format") != "AURORA-AutoFill-Backup" or manifest.get("version") != 1):
                 raise ValueError("Formato de backup desconhecido.")
             settings = None
             if "settings.json" in members:
@@ -96,6 +101,8 @@ def read_backup(archive_path: Path) -> tuple[Path, dict | None]:
                 settings = json.loads(archive.read("settings.json"))
                 if not isinstance(settings, dict):
                     raise ValueError("As configurações do backup são inválidas.")
+                settings = normalize_preferences(settings)
+            application_db_path().parent.mkdir(parents=True, exist_ok=True)
             with tempfile.NamedTemporaryFile(dir=application_db_path().parent,
                                              prefix=".aurora-restore-", suffix=".sqlite3",
                                              delete=False) as handle:
@@ -113,8 +120,45 @@ def read_backup(archive_path: Path) -> tuple[Path, dict | None]:
             if not {"folders", "snippets"}.issubset(names):
                 raise ValueError("O banco de backup não contém pastas e comandos.")
             columns = {row[1] for row in source.execute("PRAGMA table_info(snippets)")}
-            if not {"id", "folder_id", "title", "shortcut", "content"}.issubset(columns):
+            folder_columns = {row[1] for row in source.execute("PRAGMA table_info(folders)")}
+            if (not {"id", "name"}.issubset(folder_columns)
+                    or not {"id", "folder_id", "title", "shortcut", "content",
+                            "created_at", "updated_at"}.issubset(columns)):
                 raise ValueError("Estrutura do backup inválida.")
+            for table in ("folders", "snippets"):
+                identity = next((row for row in source.execute(f"PRAGMA table_info({table})")
+                                 if row[1] == "id"), None)
+                if identity is None or identity[2].upper() != "INTEGER" or identity[5] != 1:
+                    raise ValueError("Os identificadores do backup são inválidos.")
+            for name, expected in (("rich_content", "text"), ("sort_order", "integer"),
+                                   ("folder_id", "integer")):
+                if name in columns and source.execute(
+                        f"SELECT 1 FROM snippets WHERE typeof({name})<>? LIMIT 1",
+                        (expected,)).fetchone():
+                    raise ValueError("O backup contém formatação ou ordem inválida.")
+            # Missing foreign-key declarations must not hide orphaned commands.
+            if source.execute("SELECT 1 FROM snippets s LEFT JOIN folders f "
+                              "ON f.id=s.folder_id WHERE f.id IS NULL LIMIT 1").fetchone():
+                raise ValueError("O backup contém comandos sem pasta.")
+            for (name,) in source.execute("SELECT name FROM folders"):
+                if not isinstance(name, str) or not name.strip():
+                    raise ValueError("O backup contém uma pasta inválida.")
+            for title, shortcut, content in source.execute("SELECT title, shortcut, content FROM snippets"):
+                if (not all(isinstance(value, str) for value in (title, shortcut, content))
+                        or not title.strip() or not content.strip()):
+                    raise ValueError("O backup contém um comando inválido.")
+                validate_shortcut(shortcut)
+            for table, column in (("folders", "name"), ("snippets", "shortcut")):
+                if source.execute(f"SELECT 1 FROM {table} GROUP BY {column} COLLATE NOCASE "
+                                  "HAVING COUNT(*) > 1 LIMIT 1").fetchone():
+                    raise ValueError("O backup contém pastas ou atalhos duplicados.")
+        # Upgrade only the temporary copy, before replacing any current data.
+        migrated = SnippetStore(db_file)
+        try:
+            migrated.folders()
+            migrated.snippets()
+        finally:
+            migrated.close()
         return db_file, settings
     except Exception:
         if db_file is not None:
@@ -126,11 +170,20 @@ def restore_backup(store, archive_path: Path) -> None:
     """Restore validated data transactionally; caller refreshes the UI after success."""
     file, settings = read_backup(archive_path)
     try:
-        with closing(sqlite3.connect(file)) as source:
-            source.backup(store.connection)
-        # Settings are optional: importing old backups does not reset preferences.
-        if settings is not None:
-            from .preferences import save_preferences
-            save_preferences(settings)
+        # Retain the current database until both data and preferences are saved.
+        # SQLite backup replaces its destination atomically, but the settings
+        # file is a separate resource and can fail (for example on a full disk).
+        with closing(sqlite3.connect(":memory:")) as previous:
+            store.connection.backup(previous)
+            try:
+                with closing(sqlite3.connect(file)) as source:
+                    source.backup(store.connection)
+                # Settings are optional: old backups do not reset preferences.
+                if settings is not None:
+                    from .preferences import save_preferences
+                    save_preferences(settings)
+            except Exception:
+                previous.backup(store.connection)
+                raise
     finally:
         file.unlink(missing_ok=True)

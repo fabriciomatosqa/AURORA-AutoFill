@@ -10,7 +10,7 @@ import tempfile
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from verify_bundle import verify_bundle
-from app.version import APP_VERSION
+from app.version import APP_VERSION, DEBIAN_VERSION
 
 
 def main():
@@ -31,7 +31,7 @@ def main():
         shutil.copytree(args.dist, stage / 'opt/aurora-autofill', dirs_exist_ok=True)
         shutil.copy2(root/'assets/aurora_icon_256.png', stage/'usr/share/icons/hicolor/256x256/apps/aurora-autofill.png')
         (stage/'DEBIAN/control').write_text(f'''Package: aurora-autofill
-Version: {APP_VERSION}
+Version: {DEBIAN_VERSION}
 Section: utils
 Priority: optional
 Architecture: amd64

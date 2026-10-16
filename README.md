@@ -1,66 +1,75 @@
-# AURORA AutoFill v0.6.0
+# AURORA AutoFill
 
 **Expansão inteligente de textos • Mais tempo para você**  
-**Desenvolvido por Fabricio Matos • Versão v0.6.0**
+Desenvolvido por Fabricio Matos
 
-Expansor de textos desktop para Windows e Linux, criado em Python/PySide6. Seus comandos, pastas e preferências permanecem no computador. O funcionamento principal não exige conta, internet ou assinatura.
+Expansor de textos desktop para Windows e Linux, criado em Python/PySide6. Organize comandos em pastas, escreva um atalho como `/resposta` e insira o texto em outros aplicativos. Os comandos, a formatação e as preferências ficam neste computador; a expansão não exige conta ou conexão com a internet.
 
-## Novidades da v0.6.0
+## Instalar e atualizar
 
-- **Pastas seguras:** permite excluir uma pasta; seus comandos são transferidos para outra pasta. A exclusão pode ser desfeita por **10 segundos**.
-- **Comandos organizados:** arraste comandos para ordená-los. A ordem é salva no banco SQLite, inclusive ao reiniciar.
-- **Exclusão de comando:** botão **Desfazer** disponível por 10 segundos.
-- **Som Aurora:** novo efeito sintetizado de gota de água, estilo *glub*, com liga/desliga e volume ajustável.
-- **Central de configurações:** botão ⚙ no topo ou menu da bandeja do sistema. Inclui som, volume, iniciar com o Windows, backups e atualizações.
-- **Backup completo:** além de **Exportar / Importar JSON** (que já inclui todas as pastas e comandos), agora é possível criar/restaurar um arquivo `.aurora-backup.zip`, incluindo pastas, comandos, textos formatados, ordem e preferências.
-- **Backup automático antes de instalar:** uma cópia de segurança é criada antes da execução de qualquer instalador baixado pelo próprio AURORA.
-- **Atualizações consentidas:** consulta somente **GitHub Releases estáveis** do repositório oficial. Avisa quando há versão mais recente, pergunta antes de baixar, verifica o SHA256 e solicita confirmação para iniciar o instalador Windows. Não executa atualizações silenciosas.
-- **Versão centralizada:** interface, instaladores e arquivos distribuídos utilizam a versão definida em `app/version.py`.
-- **Visual Aurora Boreal:** identidade original preservada, menu de comandos dinâmicos arredondado e editor/prévia ampliados na proporção 60/40.
+Baixe os instaladores na página oficial de [GitHub Releases](https://github.com/fabriciomatosqa/AURORA-AutoFill/releases). **Durante o desenvolvimento, os lançamentos marcados como Pre-release são versões de teste e também aparecem no atualizador do aplicativo.**
 
-Os formulários dinâmicos ainda **não foram implementados**; estão fora do escopo desta versão.
+**Receber versões de teste** vem ativado nas compilações de desenvolvimento. Para acompanhar somente versões estáveis, desmarque essa opção nas configurações; sua escolha fica salva.
 
-## Baixar e instalar
+- **Windows:** baixe `AURORA-AutoFill-v<versão>-Windows-Setup.exe`. Não precisa instalar Python. Instale sobre a versão anterior, sem desinstalar o aplicativo nem apagar seus dados.
+- **Ubuntu 24.04 amd64:** baixe o `.deb` e abra no gerenciador de pacotes, ou use `sudo apt install ./arquivo.deb`. Há também um `.tar.gz` portátil.
 
-### Versões estáveis
+**Primeira migração da v0.6.0:** é necessário baixar e instalar esta nova compilação uma vez. O atualizador antigo procurava exclusivamente lançamentos estáveis e não consegue descobrir versões de teste. Depois dessa migração, use **⚙ Configurações → Verificar atualizações agora**; as próximas compilações poderão ser baixadas pelo programa.
 
-Acesse [GitHub Releases](https://github.com/fabriciomatosqa/AURORA-AutoFill/releases). Apenas versões testadas e aprovadas são publicadas nesse local. As Releases antigas permanecem disponíveis como pontos de recuperação (ao contrário dos artifacts temporários).
+### Como funciona a atualização pelo aplicativo
 
-- **Windows:** baixe `AURORA-AutoFill-vX.Y.Z-Windows-Setup.exe`. Não precisa instalar Python.
-- **Linux Ubuntu 24.04 amd64:** baixe o arquivo `.deb` e instale com `sudo apt install ./arquivo.deb`. Também há `.tar.gz` portátil. Atalhos globais dependem de X11/Xorg; Wayland pode restringir a captura.
+1. Ao iniciar, o AURORA consulta os lançamentos oficiais do repositório `fabriciomatosqa/AURORA-AutoFill`, se a opção de avisar estiver habilitada. Também é possível verificar manualmente nas configurações.
+2. Compara a versão completa instalada com as publicadas, incluindo versões de teste como `0.6.1-dev.8.1`. Rascunhos e versões antigas não são oferecidos. O instalador precisa ser compatível com o sistema.
+3. Pede confirmação para baixar e mostra o progresso, com opção de cancelar. A consulta e o download ocorrem em segundo plano.
+4. Confere a integridade SHA256 do arquivo baixado e pede confirmação para instalar.
+5. Cria um backup completo **antes** de abrir o instalador. Se o backup ou a verificação falhar, a instalação não é iniciada.
+6. No Windows, abre o assistente do instalador e fecha o AURORA. No Linux, abre o `.deb` no gerenciador de pacotes; a confirmação e eventuais permissões são solicitadas pelo sistema. Se não houver gerenciador associado, a atualização pode ser instalada manualmente pela Release.
 
-### Compilações de desenvolvimento
+Nenhum comando ou conteúdo pessoal é enviado ao GitHub. A rede é usada para consultar lançamentos e baixar o instalador escolhido. SHA256 verifica a integridade em relação aos arquivos publicados; o instalador ainda não possui assinatura de código.
 
-Acesse [GitHub Actions](https://github.com/fabriciomatosqa/AURORA-AutoFill/actions/workflows/build-installers.yml) para os instaladores de teste. Cada push no branch `dev/correcao-expansao-windows` inicia a compilação automaticamente. Abra a execução aprovada e baixe o artifact **Windows** ou **Linux**. Os artifacts expiram depois de 30 dias.
+## Recursos
 
-> A versão v0.6.0 permanece em desenvolvimento até a aprovação dos testes manuais. Um artifact de desenvolvimento não é uma Release estável, portanto não dispara atualizações automáticas nos computadores já instalados.
+- **Pastas e ordenação:** arraste comandos para reorganizar; a ordem permanece salva ao reiniciar. Excluir uma pasta transfere seus comandos para outra pasta.
+- **Desfazer por 10 segundos:** ao excluir um comando ou uma pasta, use o aviso no rodapé para recuperar a operação.
+- **Editor e prévia 60/40:** edição com formatação e visualização do texto final.
+- **Variáveis:** data, hora, área de transferência e marcador `{{cursor}}`.
+- **Gota de confirmação:** som original sintetizado, curto e suave, estilo *glube*. Liga/desliga e volume nas configurações.
+- **Central de configurações:** áudio, início com Windows, backups e atualizações, sem acrescentar botões à tela principal.
+- **Visual Aurora:** azul noite e ciano, menus arredondados e configurações integradas ao tema.
+- **Uma instância por perfil:** impede que duas cópias do programa processem o mesmo atalho simultaneamente. Se já estiver aberto, acesse o ícone próximo ao relógio.
 
-## Backup e restauração
+**Formulários dinâmicos não foram implementados** e continuam aguardando avaliação.
 
-O banco do AURORA armazena *todas* as pastas e snippets:
+## Proteger e recuperar os dados
 
-- Windows: `%APPDATA%\AutoFillStudio\snippets.sqlite3`
-- Linux: `~/.local/share/AutoFillStudio/snippets.sqlite3`
-- Preferências: arquivo `settings.json` no mesmo diretório.
-- Backups completos: subpasta `backups`.
+**Exportar JSON** inclui todas as pastas e todos os comandos, com formatação e ordem. **Importar JSON** acrescenta os dados ao banco atual; não apaga comandos existentes e ignora atalhos já cadastrados. Pastas vazias também são preservadas.
 
-**Exportar** já reúne todas as pastas, atalhos e conteúdos, incluindo formatação. **Importar** acrescenta dados sem apagar os existentes (atalhos repetidos podem ser ignorados). Já **Restaurar backup completo** substitui o banco atual pelo snapshot selecionado: requer confirmação e cria uma cópia de segurança antes da operação.
+**Criar backup completo** salva um `.aurora-backup.zip` com o banco SQLite e as preferências. **Restaurar backup** substitui os dados atuais pelos do arquivo selecionado, após confirmação. Uma cópia de segurança é criada antes de restaurar. A estrutura do arquivo é validada antes da substituição.
 
-Backups manuais não são apagados automaticamente. Cópias pré-atualização podem usar retenção limitada para economizar espaço.
+Os arquivos ficam em:
 
-## Atualização online e privacidade
+| Dados | Windows | Linux |
+| --- | --- | --- |
+| Pasta de dados | `%APPDATA%\AutoFillStudio` | `~/.local/share/AutoFillStudio` |
+| Banco | `snippets.sqlite3` | `snippets.sqlite3` |
+| Preferências | `settings.json` | `settings.json` |
+| Backups completos | Subpasta `backups` | Subpasta `backups` |
 
-1. Ao iniciar, se a preferência estiver habilitada, o programa consulta a versão estável mais recente no GitHub.
-2. Se houver versão mais nova, pergunta se você deseja baixar.
-3. No Windows instalado, baixa o EXE da Release oficial e verifica o SHA256 fornecido nos assets da mesma Release.
-4. Pede confirmação novamente, cria backup completo, inicia o instalador e encerra o AURORA. O instalador apresenta seu assistente normal.
-5. No Linux, oferece a página da Release para atualizar manualmente o pacote; não executa comandos administrativos sem intervenção.
+Backups manuais não são apagados automaticamente. Backups automáticos pré-atualização mantêm as últimas cinco cópias. O botão **Abrir backups** abre a pasta de recuperação.
 
-O aplicativo não envia conteúdos dos seus comandos para o GitHub. Apenas a consulta opcional de versão usa a rede.
+## Compilações e histórico de versões
+
+Cada push em `dev/correcao-expansao-windows` ou `main` executa [os testes e a compilação Windows/Linux](https://github.com/fabriciomatosqa/AURORA-AutoFill/actions/workflows/build-installers.yml). Somente depois de ambos os sistemas passarem, os instaladores e os checksums são publicados juntos em uma **Pre-release**. A versão completa identifica a compilação e a tentativa: `BASE-dev.<compilação>.<tentativa>`.
+
+Os artifacts de diagnóstico do Actions expiram em 30 dias. Os instaladores publicados em Releases permanecem disponíveis para recuperação; o workflow não apaga Releases estáveis nem de teste.
+
+A base da próxima versão fica apenas em `app/version.py`. `packaging/build_version.py` grava os metadados da compilação antes dos testes e do empacotamento; aplicativo, nome dos instaladores e tag usam a mesma versão. O Windows recebe também a versão numérica exigida pelo instalador; o DEB usa `~dev` para que a versão estável posterior tenha precedência correta no gerenciador de pacotes.
+
+Uma versão estável exige uma tag intencional `vX.Y.Z`, correspondente à base em `app/version.py`, e ambos os builds aprovados. Depois de publicar uma estável, aumente a base para a próxima versão antes de continuar os testes. Preserve pelo menos as últimas três Releases estáveis.
 
 ## Desenvolvimento e testes
 
-Python 3.11+:
+Python 3.11 ou mais novo:
 
 ```bash
 python -m pip install -r requirements.txt
@@ -68,17 +77,14 @@ python -m unittest discover -s tests -v
 python main.py
 ```
 
-O build GitHub Actions executa testes automatizados e smoke tests de executáveis antes de criar os instaladores.
+Para executar os testes de interface sem monitor, defina `QT_QPA_PLATFORM=offscreen`. Os testes usam perfis temporários e simulações de teclado, sem enviar comandos a outros aplicativos.
 
-### Publicação de uma versão estável
+O GitHub Actions também verifica os recursos empacotados, inicia os executáveis compilados em perfis temporários e confirma a preservação dos dados antes de publicar os instaladores. Depois da publicação, o próprio atualizador consulta e baixa os instaladores Windows/Linux e verifica o SHA256, sem executá-los. O efeito sonoro pode ser reproduzido com `python tools/generate_feedback.py`.
 
-Depois de validar **Windows e Linux** e revisar o commit, crie intencionalmente uma tag anotada `vX.Y.Z`, correspondente à versão em `app/version.py`, e envie a tag ao GitHub. O workflow compila novamente ambos os sistemas; somente se os dois jobs passarem, publica o instalador Windows, os pacotes Linux e os checksums no **GitHub Releases**. Nenhuma tag ou release estável é criada apenas por push no branch de desenvolvimento.
+## Limitações e validação manual
 
-Para preservar pontos de recuperação, **não remova as últimas três Releases estáveis**. Releases não expiram como os artifacts temporários. O histórico Git também continua preservado.
-
-## Limitações conhecidas
-
-- O posicionamento do cursor e a colagem dependem do editor de destino. Teste Word, Bloco de Notas, navegadores e Teams nas versões instaladas.
-- Linux/Wayland restringe atalhos globais; prefira X11/Xorg para essa função.
-- Iniciar com Windows é recurso da versão instalada Windows e usa a chave `Run` do usuário atual, sem exigir privilégios administrativos.
-- Um aplicativo ainda não assinado digitalmente pode exibir alertas do Windows SmartScreen. Antes de distribuir publicamente, avaliar assinatura de código.
+- A colagem e o posicionamento do cursor dependem do aplicativo de destino. Valide com as versões de Word, Bloco de Notas, navegadores e Teams utilizadas no seu computador.
+- Linux exige X11/Xorg para atalhos globais; Wayland pode impedir a captura. O DEB distribuído é voltado a Ubuntu 24.04 amd64.
+- Iniciar com Windows está disponível no aplicativo Windows instalado e usa a chave `Run` do usuário atual.
+- O instalador Windows não está assinado digitalmente; o Windows pode exibir o aviso do SmartScreen.
+- A fonte em desenvolvimento abre a página da Release para instalar o pacote. A substituição da própria cópia está disponível nos aplicativos empacotados.

@@ -1,7 +1,11 @@
 #define AppName "AURORA AutoFill"
 #define AppVersion GetEnv("AURORA_VERSION")
+#define WindowsVersion GetEnv("AURORA_WINDOWS_VERSION")
 #if AppVersion == ""
   #error "Defina AURORA_VERSION a partir de app.version antes de compilar"
+#endif
+#if WindowsVersion == ""
+  #error "Defina AURORA_WINDOWS_VERSION a partir de app.version antes de compilar"
 #endif
 #define AppPublisher "Fabricio Matos"
 #define AppExeName "AURORA AutoFill.exe"
@@ -24,7 +28,10 @@ WizardStyle=modern
 PrivilegesRequired=lowest
 UninstallDisplayIcon={app}\{#AppExeName}
 SetupIconFile=assets\aurora_icon.ico
-VersionInfoVersion={#AppVersion}.0
+VersionInfoVersion={#WindowsVersion}
+VersionInfoTextVersion={#AppVersion}
+CloseApplications=yes
+RestartApplications=no
 VersionInfoDescription=Instalador do AURORA AutoFill
 
 [Languages]

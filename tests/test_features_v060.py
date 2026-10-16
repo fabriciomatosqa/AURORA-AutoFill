@@ -12,7 +12,7 @@ from unittest.mock import patch
 
 from app.core import SnippetStore
 from app import backups, audio, preferences, updates
-from app.version import APP_VERSION
+from app.version import APP_VERSION, BASE_VERSION
 
 
 class DataSafetyTests(unittest.TestCase):
@@ -106,8 +106,8 @@ class PreferencesTests(unittest.TestCase):
             preferences.save_preferences({"sound_enabled": False, "sound_volume": 250,
                                           "check_updates": False}, config)
             restored = preferences.load_preferences(config)
-            self.assertEqual(restored, {"sound_enabled": False, "sound_volume": 100,
-                                        "check_updates": False})
+            self.assertEqual(restored, {**preferences.DEFAULTS, "sound_enabled": False,
+                                        "sound_volume": 100, "check_updates": False})
             config.write_text('{"sound_volume":"evil","sound_enabled":123}', encoding="utf-8")
             self.assertEqual(preferences.load_preferences(config)["sound_volume"], 65)
             self.assertTrue(preferences.load_preferences(config)["sound_enabled"])
@@ -115,9 +115,9 @@ class PreferencesTests(unittest.TestCase):
 
 class UpdateContractTests(unittest.TestCase):
     def test_semantic_comparison(self):
-        self.assertEqual(APP_VERSION, "0.6.0")
-        self.assertTrue(updates.is_newer("0.6.1"))
-        self.assertFalse(updates.is_newer("v0.5.9"))
+        self.assertTrue(APP_VERSION.startswith(BASE_VERSION))
+        self.assertTrue(updates.is_newer("0.6.1", "0.6.0"))
+        self.assertFalse(updates.is_newer("v0.5.9", "0.6.0"))
         with self.assertRaises(ValueError):
             updates.is_newer("latest")
 
@@ -136,19 +136,19 @@ class UpdateContractTests(unittest.TestCase):
             ],
         }
         with patch("app.updates._get", return_value=json.dumps(payload).encode()):
-            release = updates.latest_release()
+            release = updates.latest_release(include_prereleases=False, platform_name="win32")
         self.assertEqual(release.version, "0.6.1")
         self.assertTrue(release.installer_url.endswith(".exe"))
         payload["prerelease"] = True
         with patch("app.updates._get", return_value=json.dumps(payload).encode()):
-            self.assertIsNone(updates.latest_release())
+            self.assertIsNone(updates.latest_release(include_prereleases=False, platform_name="win32"))
 
     def test_checksum_is_mandatory_before_offering_installer(self):
-        filename = "AURORA-AutoFill-v0.6.1-Windows-Setup.exe"
+        filename = "AURORA-AutoFill-v9.0.0-Windows-Setup.exe"
         release = updates.StableRelease(
-            "0.6.1", "v0.6.1", "https://github.com/fabriciomatosqa/AURORA-AutoFill/releases/tag/v0.6.1",
-            "https://github.com/fabriciomatosqa/AURORA-AutoFill/releases/download/v0.6.1/" + filename,
-            "https://github.com/fabriciomatosqa/AURORA-AutoFill/releases/download/v0.6.1/SHA256SUMS-Windows.txt")
+            "9.0.0", "v9.0.0", "https://github.com/fabriciomatosqa/AURORA-AutoFill/releases/tag/v9.0.0",
+            "https://github.com/fabriciomatosqa/AURORA-AutoFill/releases/download/v9.0.0/" + filename,
+            "https://github.com/fabriciomatosqa/AURORA-AutoFill/releases/download/v9.0.0/SHA256SUMS-Windows.txt")
         content = b"MZ_AURORA_UNIT_TEST_ONLY"
         correct = sha256(content).hexdigest() + "  " + filename
         class Response(io.BytesIO):

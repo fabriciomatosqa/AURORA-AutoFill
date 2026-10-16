@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from pathlib import Path
 import sys
+import sqlite3
 
 from PySide6.QtCore import QObject, Qt, QMimeData, QTimer, Signal, QPoint, QRectF, QTextBoundaryFinder
 from PySide6.QtGui import (QAction, QColor, QFont, QFontMetricsF, QIcon, QKeySequence, QPalette,
@@ -54,7 +55,8 @@ def foreground_window():
 STYLESHEET = """
 /* AURORA — acabamento visual da identidade Aurora Boreal */
 QWidget { font-family: "Segoe UI", "Inter", "Noto Sans", sans-serif; }
-QMainWindow, QWidget#body, QWidget#rightPane, QWidget#editorPage, QWidget#welcomePage {
+QMainWindow, QWidget#body, QWidget#rightPane, QWidget#editorPage, QWidget#welcomePage,
+QStackedWidget {
   background-color: #091426; color: #eaf4ff; }
 QWidget#topbar { background-color: #06152b; }
 QLabel { background: transparent; color: #eaf4ff; }
@@ -100,6 +102,10 @@ QPushButton, QToolButton {
   border-radius: 8px; padding: 9px 12px; border: 1px solid #38536b;
   background: #1b3149; color: #f0fbff; font-weight: 620; }
 QPushButton:hover, QToolButton:hover { background: #294a62; border-color: #6adacc; }
+QPushButton:pressed, QToolButton:pressed { background: #255763; border-color: #79ead8; }
+QPushButton:disabled, QToolButton:disabled {
+  color: #7995ab; background: #162a3e; border-color: #2b4358; }
+QPushButton:focus, QToolButton:focus { border-color: #79ead8; }
 QPushButton:checked { background: #255b63; border-color: #68e3d0; color: #fff; }
 QPushButton#primary { background: #49d0ba; color: #09283b; border: 1px solid #49d0ba; font-weight: 760; }
 QPushButton#primary:hover { background: #8af2d9; }
@@ -239,6 +245,24 @@ class AuroraWordmark(QWidget):
         painter.end()
 
 
+class AuroraMenu(QMenu):
+    """Rounded popup with an explicitly transparent window outside its corners."""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setAttribute(Qt.WA_TranslucentBackground, True)
+        self.setWindowFlags(self.windowFlags() | Qt.FramelessWindowHint | Qt.NoDropShadowWindowHint)
+        self.setStyleSheet("""
+            QMenu { background: #112f41; color: #ebfaff; border: 1px solid #2f8590;
+                border-radius: 10px; padding: 6px; font-size: 13px; }
+            QMenu::item { background: transparent; color: #e5f7ff;
+                padding: 10px 16px; margin: 2px 3px; border-radius: 7px; }
+            QMenu::item:selected { background: #287281; color: white; }
+            QMenu::item:checked { color: #7df0d9; }
+            QMenu::separator { background: #355168; height: 1px; margin: 4px 8px; }
+        """)
+
+
 class AuroraFolderCombo(QComboBox):
     """Exibe as pastas usando menu Qt próprio, evitando bordas nativas acinzentadas."""
 
@@ -247,36 +271,10 @@ class AuroraFolderCombo(QComboBox):
         self._folder_menu = None
 
     def showPopup(self):
-        menu = QMenu(self)
+        menu = AuroraMenu(self)
         menu.setObjectName("folderSelectionMenu")
         menu.setMinimumWidth(max(self.width(), 210))
-        menu.setStyleSheet("""
-            QMenu#folderSelectionMenu {
-                background-color: #112f41;
-                color: #ebfaff;
-                border: 1px solid #2f8590;
-                border-radius: 9px;
-                padding: 6px;
-                font-size: 13px;
-            }
-            QMenu#folderSelectionMenu::item {
-                background: #112f41;
-                color: #e5f7ff;
-                padding: 10px 16px;
-                margin: 2px 3px;
-                border-radius: 7px;
-            }
-            QMenu#folderSelectionMenu::item:selected {
-                background: #287281;
-                color: white;
-            }
-            QMenu#folderSelectionMenu::item:checked {
-                color: #7df0d9;
-            }
-            QMenu#folderSelectionMenu::indicator {
-                width: 0px; height: 0px;
-            }
-        """)
+        menu.setStyleSheet(menu.styleSheet() + "QMenu::indicator { width: 0px; height: 0px; }")
         for i in range(self.count()):
             action = menu.addAction(self.itemText(i))
             action.setCheckable(True)
@@ -513,7 +511,7 @@ class AutoFillWindow(AuroraFeaturesMixin, QMainWindow):
             return
         tray = QSystemTrayIcon(self.windowIcon(), self)
         tray.setToolTip("AURORA AutoFill")
-        menu = QMenu(self)
+        menu = AuroraMenu(self)
         self.tray_open_action = QAction("Abrir AURORA AutoFill", self)
         self.tray_open_action.triggered.connect(self._restore_from_tray)
         menu.addAction(self.tray_open_action)
@@ -674,23 +672,8 @@ class AutoFillWindow(AuroraFeaturesMixin, QMainWindow):
         self.token_button.setText("+ Inserir comando dinâmico ▾")
         self.token_button.setPopupMode(QToolButton.InstantPopup)
         self.token_button.setMinimumWidth(238)
-        menu = QMenu(self.token_button)
+        menu = AuroraMenu(self.token_button)
         menu.setObjectName("dynamicTokenMenu")
-        menu.setAttribute(Qt.WA_TranslucentBackground, True)
-        menu.setWindowFlag(Qt.FramelessWindowHint, True)
-        menu.setStyleSheet("""
-            QMenu#dynamicTokenMenu {
-                background-color: #112f41; color: #ebfaff;
-                border: 1px solid #2f8590; border-radius: 11px; padding: 7px;
-            }
-            QMenu#dynamicTokenMenu::item {
-                color: #e5f7ff; padding: 10px 16px; margin: 2px 3px;
-                border-radius: 7px; background: transparent;
-            }
-            QMenu#dynamicTokenMenu::item:selected {
-                color: #ffffff; background: #287281;
-            }
-        """)
         for label, token in [
             ("Data atual", "{{data}}"), ("Hora atual", "{{hora}}"),
             ("Data e hora", "{{data_hora}}"), ("Área de transferência", "{{clipboard}}"),
@@ -908,7 +891,7 @@ class AutoFillWindow(AuroraFeaturesMixin, QMainWindow):
                 self.title_input.text(), self.shortcut_input.text(),
                 self.body_input.toPlainText(), self.current_id,
                 rich_content=self.body_input.toHtml())
-        except ValueError as error:
+        except (ValueError, sqlite3.Error, OSError) as error:
             QMessageBox.warning(self, "Não foi possível salvar", str(error))
             return
         self.current_id = new_id
@@ -999,7 +982,7 @@ class AutoFillWindow(AuroraFeaturesMixin, QMainWindow):
                 self._refresh_all()
                 QMessageBox.information(self, "Importação concluída",
                                         f"Comandos importados: {imported}\nIgnorados (duplicados ou inválidos): {skipped}")
-            except (ValueError, OSError, TypeError) as exc:
+            except (ValueError, OSError, TypeError, sqlite3.Error) as exc:
                 QMessageBox.warning(self, "Erro na importação", str(exc))
 
     def _toggle_listener(self):
@@ -1287,6 +1270,9 @@ class AutoFillWindow(AuroraFeaturesMixin, QMainWindow):
         if self.tray_icon is not None and not self._quitting:
             event.ignore()
             self._hide_to_tray()
+            return
+        if not self._prepare_updates_shutdown():
+            event.ignore()
             return
         self.hotkeys.stop()
         if self._focus_monitor is not None:

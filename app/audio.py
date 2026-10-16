@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from array import array
+from hashlib import sha256
 from pathlib import Path
 import shutil
 import subprocess
@@ -12,14 +13,17 @@ from .core import application_db_path
 
 
 def adjusted_sound(source: Path, volume: int, cache_dir: Path | None = None) -> Path:
+    source = Path(source)
     volume = max(0, min(100, int(volume)))
     if volume == 100:
-        return Path(source)
+        return source
     target_dir = Path(cache_dir) if cache_dir is not None else application_db_path().parent / "audio-cache"
     target_dir.mkdir(parents=True, exist_ok=True)
-    destination = target_dir / f"aurora-glub-{volume}.wav"
-    # Regenerate on update, but avoid disk work on every expansion.
-    if destination.is_file() and destination.stat().st_mtime_ns >= Path(source).stat().st_mtime_ns:
+    # A packaged update may carry an older timestamp than the existing cache.
+    # Key the volume copy by its content so a replaced sound is always heard.
+    fingerprint = sha256(source.read_bytes()).hexdigest()[:16]
+    destination = target_dir / f"aurora-glub-{fingerprint}-{volume}.wav"
+    if destination.is_file():
         return destination
     with wave.open(str(source), "rb") as reader:
         channels, width, rate = reader.getnchannels(), reader.getsampwidth(), reader.getframerate()
