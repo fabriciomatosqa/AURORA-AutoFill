@@ -205,6 +205,10 @@ jobs:
         with:
           name: AURORA-AutoFill-Linux-${{ github.run_number }}
           path: release-assets/linux
+      - name: Organizar instaladores e conferir checksums dos artifacts
+        env:
+          RELEASE_VERSION: ${{ needs.version.outputs.version }}
+        run: python packaging/prepare_release_assets.py --version "$RELEASE_VERSION"
       - name: Publicar instaladores e checksums no GitHub Releases
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -223,11 +227,7 @@ jobs:
           fi
           printf 'Faça um backup antes de testar. O aplicativo cria outro backup antes de instalar atualizações. Os checksums SHA256 acompanham os instaladores.\n' >> RELEASE-NOTES.md
           gh release create "$RELEASE_TAG" \
-            release-assets/windows/*.exe \
-            release-assets/windows/SHA256SUMS-Windows.txt \
-            release-assets/linux/*.deb \
-            release-assets/linux/*.tar.gz \
-            release-assets/linux/SHA256SUMS-Linux.txt \
+            release-publish/* \
             --draft --title "AURORA AutoFill v$RELEASE_VERSION" \
             --notes-file RELEASE-NOTES.md "${flags[@]}"
           test "$(gh release view "$RELEASE_TAG" --json assets --jq '.assets | length')" -eq 5

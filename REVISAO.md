@@ -26,7 +26,7 @@ Revisão de confiabilidade, interface e distribuição iniciada em 16/10/2026.
 
 ## Validação executada
 
-- 167 testes automatizados aprovados no Windows com Python 3.14 e PySide6 6.12, em perfis temporários.
+- 170 testes automatizados aprovados no Windows com Python 3.14 e PySide6 6.12, em perfis temporários.
 - Capturas das telas inicial, editor e configurações no tamanho normal e no tamanho mínimo; verificação visual do menu de pastas.
 - Teste de pixels da central sob paleta nativa escura, confirmando o fundo azul.
 - Regressões para consentimento, cancelamento, backup antes da instalação, recusa de arquivo modificado e fechamento durante atualização.
