@@ -101,8 +101,11 @@ class BannerTests(unittest.TestCase):
         path = Path(__file__).resolve().parents[1] / 'assets' / 'command_click.wav'
         with wave.open(str(path), 'rb') as wav:
             self.assertEqual(wav.getnchannels(), 1)
-            self.assertEqual(wav.getframerate(), 44100)
-            self.assertLess(wav.getnframes() / wav.getframerate(), 0.10)
+            # A gota suave usa 22.050 Hz e cauda curta, sem corte abrupto.
+            self.assertEqual(wav.getframerate(), 22050)
+            duration = wav.getnframes() / wav.getframerate()
+            self.assertGreater(duration, 0.15)
+            self.assertLess(duration, 0.50)
 
 
 if __name__ == '__main__':
