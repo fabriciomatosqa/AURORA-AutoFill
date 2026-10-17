@@ -9,7 +9,7 @@ Revisão de confiabilidade, interface e distribuição iniciada em 16/10/2026.
 - O novo instalador identifica a chamada feita pela versão `0.6.1-161026` já instalada e executa a atualização automaticamente, mostrando apenas o progresso. Essa versão antiga ainda pode mostrar sua confirmação de instalação dentro do aplicativo durante a transição. O aplicativo novo usa o modo totalmente silencioso.
 - AppId, diretório de instalação, dados e preferências são mantidos. Falhas de backup ou integridade mantêm o programa aberto; edições pendentes ainda podem interromper a atualização para evitar descarte sem aviso.
 - Rodapé simplificado para **V&lt;versão&gt;**, sem a palavra “Versão”; o número completo com data é preservado.
-- 195 testes locais aprovados. O pipeline Windows também instala e atualiza o pacote real em um runner descartável, verificando substituição dos arquivos, reabertura, compatibilidade com a chamada antiga e preservação de dados sintéticos. Esse teste recusa execução no computador do usuário.
+- 197 testes locais aprovados. O pipeline Windows também instala e atualiza o pacote real em um runner descartável, verificando substituição dos arquivos, reabertura, compatibilidade com a chamada antiga e preservação de dados sintéticos. A limpeza do perfil temporário aguarda por até cinco segundos a liberação de arquivos pelo Windows, sem repetir nem ignorar as verificações. Esse teste recusa execução no computador do usuário.
 
 ## Teste de atualização com data — 16/10/2026
 

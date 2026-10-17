@@ -78,6 +78,31 @@ class PackagingTests(unittest.TestCase):
 
 
 class FrozenSmokeTests(unittest.TestCase):
+    def test_transient_windows_cleanup_lock_does_not_repeat_application_checks(self):
+        directory = Mock(name='temporary-profile')
+        directory.name = 'synthetic-profile'
+        directory.cleanup.side_effect = [PermissionError('busy'), None]
+        checks = []
+        with patch.object(smoke.tempfile, 'TemporaryDirectory', return_value=directory), \
+             patch.object(smoke.sys, 'platform', 'win32'), \
+             patch.object(smoke.time, 'sleep') as sleep:
+            with smoke.temporary_profile() as profile:
+                checks.append(profile)
+        self.assertEqual(checks, ['synthetic-profile'])
+        self.assertEqual(directory.cleanup.call_count, 2)
+        sleep.assert_called_once_with(0.25)
+
+    def test_persistent_cleanup_failure_is_not_reported_as_success(self):
+        directory = Mock()
+        directory.cleanup.side_effect = PermissionError('still busy')
+        with patch.object(smoke.tempfile, 'TemporaryDirectory', return_value=directory), \
+             patch.object(smoke.sys, 'platform', 'win32'), \
+             patch.object(smoke.time, 'sleep') as sleep:
+            with self.assertRaises(PermissionError), smoke.temporary_profile():
+                pass
+        self.assertEqual(directory.cleanup.call_count, 21)
+        self.assertEqual(sleep.call_count, 20)
+
     def run_smoke(self, corrupt=False):
         connect = sqlite3.connect
         temporary_directory = tempfile.TemporaryDirectory
@@ -128,7 +153,7 @@ class FrozenSmokeTests(unittest.TestCase):
             executable = Path(path) / 'synthetic.exe'
             executable.write_bytes(b'not executed')
             with patch.object(smoke.sqlite3, 'connect', side_effect=tracked_connect), \
-                 patch.object(smoke.tempfile, 'TemporaryDirectory', side_effect=profile), \
+                 patch.object(smoke, 'temporary_profile', side_effect=profile), \
                  patch.object(smoke.subprocess, 'run', side_effect=launch), \
                  patch.object(smoke.sys, 'argv', ['smoke', '--exe', str(executable)]), \
                  patch('builtins.print') as printed:
