@@ -59,6 +59,7 @@ class AuroraFeaturesMixin:
         self.settings_page.prereleases_toggled.connect(
             lambda checked: self._change_preference("include_prereleases", checked))
         self.settings_page.startup_toggled.connect(self._change_startup)
+        self.settings_page.start_minimized_toggled.connect(self._change_start_minimized)
         self.settings_page.play_requested.connect(self._play_confirmation)
         self.settings_page.backup_requested.connect(self._create_manual_backup)
         self.settings_page.restore_requested.connect(self._restore_user_backup)
@@ -83,7 +84,8 @@ class AuroraFeaturesMixin:
             widget = {"sound_enabled": self.settings_page.sound,
                       "sound_volume": self.settings_page.volume,
                       "check_updates": self.settings_page.updates,
-                      "include_prereleases": self.settings_page.prereleases}.get(key)
+                      "include_prereleases": self.settings_page.prereleases,
+                      "start_minimized": self.settings_page.start_minimized}.get(key)
             if widget is not None:
                 widget.blockSignals(True)
                 if key == "sound_volume":
@@ -103,12 +105,36 @@ class AuroraFeaturesMixin:
 
     def _change_startup(self, enabled):
         try:
-            set_windows_startup(enabled)
+            set_windows_startup(
+                enabled, minimized=self.preferences.get("start_minimized", False))
         except OSError as exc:
             self.settings_page.startup.blockSignals(True)
-            self.settings_page.startup.setChecked(windows_startup_enabled())
+            current = windows_startup_enabled()
+            self.settings_page.startup.setChecked(current)
             self.settings_page.startup.blockSignals(False)
+            self.settings_page.start_minimized.setEnabled(current)
             QMessageBox.warning(self, "Inicialização automática", str(exc))
+
+    def _change_start_minimized(self, enabled):
+        previous = self.preferences.get("start_minimized", False)
+        try:
+            # Only the Windows login launch receives --minimized. Manual
+            # launches still open the application window normally.
+            if windows_startup_enabled():
+                set_windows_startup(True, minimized=enabled)
+            self.preferences["start_minimized"] = enabled
+            save_preferences(self.preferences)
+        except OSError as exc:
+            self.preferences["start_minimized"] = previous
+            if windows_startup_enabled():
+                try:
+                    set_windows_startup(True, minimized=previous)
+                except OSError:
+                    pass
+            self.settings_page.start_minimized.blockSignals(True)
+            self.settings_page.start_minimized.setChecked(previous)
+            self.settings_page.start_minimized.blockSignals(False)
+            QMessageBox.warning(self, "Iniciar minimizado", str(exc))
 
     def _play_feedback(self):
         sound_file = Path(__file__).resolve().parent.parent / "assets" / "command_click.wav"
@@ -165,7 +191,8 @@ class AuroraFeaturesMixin:
             self.preferences = load_preferences()
             for widget, setting in ((self.settings_page.sound, "sound_enabled"),
                                     (self.settings_page.updates, "check_updates"),
-                                    (self.settings_page.prereleases, "include_prereleases")):
+                                    (self.settings_page.prereleases, "include_prereleases"),
+                                    (self.settings_page.start_minimized, "start_minimized")):
                 widget.blockSignals(True)
                 widget.setChecked(self.preferences[setting])
                 widget.blockSignals(False)
@@ -173,6 +200,11 @@ class AuroraFeaturesMixin:
             self.settings_page.volume.setValue(self.preferences["sound_volume"])
             self.settings_page.volume.blockSignals(False)
             self._sync_audio_controls()
+            if windows_startup_enabled():
+                # A restored startup preference should match the Run command
+                # for the next Windows sign-in.
+                set_windows_startup(
+                    True, minimized=self.preferences.get("start_minimized", False))
             self._refresh_all()
             self.dirty = False
             self._show_welcome()

@@ -34,7 +34,7 @@ Nenhum comando ou conteúdo pessoal é enviado ao GitHub. A rede é usada para c
 - **Editor e prévia 60/40:** edição com formatação e visualização do texto final.
 - **Variáveis:** data, hora, área de transferência e marcador `{{cursor}}`.
 - **Gota de confirmação:** gravação Water Droplet 2, de floraphonic, ao salvar e expandir comandos. Liga/desliga e volume nas configurações; créditos em `assets/AUDIO-LICENSE.txt`.
-- **Central de configurações:** áudio, início com Windows, backups e atualizações, sem acrescentar botões à tela principal.
+- **Central de configurações:** áudio, início com Windows, opção **Iniciar minimizado** na bandeja do sistema, backups e atualizações. O botão de configurações usa uma engrenagem SVG simétrica de seis dentes.
 - **Visual Aurora:** azul noite e ciano, menus arredondados e configurações integradas ao tema.
 - **Uma instância por perfil:** impede que duas cópias do programa processem o mesmo atalho simultaneamente. Se já estiver aberto, acesse o ícone próximo ao relógio.
 
@@ -87,6 +87,6 @@ O GitHub Actions também verifica os recursos empacotados, inicia os executávei
 
 - A colagem e o posicionamento do cursor dependem do aplicativo de destino. Valide com as versões de Word, Bloco de Notas, navegadores e Teams utilizadas no seu computador.
 - Linux exige X11/Xorg para atalhos globais; Wayland pode impedir a captura. O DEB distribuído é voltado a Ubuntu 24.04 amd64.
-- Iniciar com Windows está disponível no aplicativo Windows instalado e usa a chave `Run` do usuário atual.
+- **Iniciar com Windows** usa a chave `Run` do usuário atual. Ao marcar **Iniciar minimizado** ao lado, o Windows executa o aplicativo com `--minimized`: os atalhos ficam ativos na bandeja do sistema, sem abrir a janela. A abertura manual pelo atalho continua normal. É necessário haver suporte à bandeja do sistema; a posição do ícone, inclusive a área de ícones ocultos, é definida pelo próprio Windows.
 - O instalador Windows não está assinado digitalmente; o Windows pode exibir o aviso do SmartScreen.
 - A fonte em desenvolvimento abre a página da Release para instalar o pacote. A substituição da própria cópia está disponível nos aplicativos empacotados.

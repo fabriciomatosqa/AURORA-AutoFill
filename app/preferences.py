@@ -15,6 +15,7 @@ DEFAULTS = {
     "sound_volume": 65,
     "check_updates": True,
     "include_prereleases": IS_PRERELEASE,
+    "start_minimized": False,
 }
 RUN_NAME = "AURORAAutoFill"
 RUN_KEY = r"Software\Microsoft\Windows\CurrentVersion\Run"
@@ -28,7 +29,7 @@ def normalize_preferences(raw: dict) -> dict:
     """Use the same bounded, typed settings for files, imports and writes."""
     settings = dict(DEFAULTS)
     if isinstance(raw, dict):
-        for key in ("sound_enabled", "check_updates", "include_prereleases"):
+        for key in ("sound_enabled", "check_updates", "include_prereleases", "start_minimized"):
             if type(raw.get(key)) is bool:
                 settings[key] = raw[key]
         volume = raw.get("sound_volume")
@@ -69,6 +70,12 @@ def windows_startup_supported() -> bool:
     return sys.platform == "win32" and bool(getattr(sys, "frozen", False))
 
 
+def windows_startup_command(minimized: bool = False, executable: Path | None = None) -> str:
+    """Quote the installed executable and add the tray-only startup option."""
+    exe = Path(executable) if executable is not None else Path(sys.executable).resolve()
+    return f'"{exe}"' + (" --minimized" if minimized else "")
+
+
 def windows_startup_enabled() -> bool:
     if not windows_startup_supported():
         return False
@@ -76,13 +83,15 @@ def windows_startup_enabled() -> bool:
     try:
         with winreg.OpenKey(winreg.HKEY_CURRENT_USER, RUN_KEY, 0, winreg.KEY_READ) as key:
             command, _ = winreg.QueryValueEx(key, RUN_NAME)
-            return (isinstance(command, str) and command.strip().strip('"').casefold()
-                    == str(Path(sys.executable).resolve()).casefold())
+            return (isinstance(command, str) and command.strip().casefold() in {
+                windows_startup_command(False).casefold(),
+                windows_startup_command(True).casefold(),
+            })
     except OSError:
         return False
 
 
-def set_windows_startup(enabled: bool) -> None:
+def set_windows_startup(enabled: bool, *, minimized: bool = False) -> None:
     if not windows_startup_supported():
         raise OSError("A inicialização automática está disponível somente no aplicativo instalado no Windows.")
     import winreg
@@ -90,7 +99,7 @@ def set_windows_startup(enabled: bool) -> None:
                             winreg.KEY_SET_VALUE) as key:
         if enabled:
             winreg.SetValueEx(key, RUN_NAME, 0, winreg.REG_SZ,
-                              '"' + str(Path(sys.executable).resolve()) + '"')
+                              windows_startup_command(minimized))
         else:
             try:
                 winreg.DeleteValue(key, RUN_NAME)
