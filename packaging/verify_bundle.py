@@ -7,6 +7,10 @@ from pathlib import Path
 ASSETS = ('aurora_banner.jpg', 'aurora_icon.ico', 'aurora_icon.png',
           'aurora_icon_256.png', 'command_click.wav', 'AUDIO-LICENSE.txt',
           'checkmark.svg')
+ASSETS += tuple('icons/' + name + '.svg' for name in (
+    'settings', 'home', 'save', 'trash', 'plus', 'minus', 'export', 'import',
+    'undo', 'folder', 'play', 'pause', 'volume', 'update', 'backup', 'restore',
+    'back', 'check', 'close', 'bolt', 'bold', 'italic', 'underline'))
 
 
 def verify_bundle(dist, platform, source_root=None):

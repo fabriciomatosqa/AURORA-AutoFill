@@ -7,6 +7,7 @@ from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (QCheckBox, QFrame, QHBoxLayout, QLabel, QPushButton,
                                QScrollArea, QSlider, QVBoxLayout, QWidget)
 from .version import IS_PRERELEASE
+from .icons import apply_icon
 
 
 class SettingsPage(QWidget):
@@ -76,12 +77,12 @@ class SettingsPage(QWidget):
         heading.setObjectName("heading")
         head.addWidget(heading)
         head.addStretch()
-        back = QPushButton("← Voltar")
+        back = apply_icon(QPushButton("Voltar"), "back")
         back.clicked.connect(self.close_requested.emit)
         head.addWidget(back)
         layout.addLayout(head)
         self._label(layout, "ÁUDIO")
-        self.sound = QCheckBox("Reproduzir som ao expandir comandos")
+        self.sound = QCheckBox("Reproduzir som ao salvar e expandir comandos")
         self.sound.setChecked(prefs["sound_enabled"])
         self.sound.toggled.connect(self.sound_toggled.emit)
         layout.addWidget(self.sound)
@@ -100,7 +101,7 @@ class SettingsPage(QWidget):
         layout.addLayout(volume_row)
         self.sound.toggled.connect(self.volume.setEnabled)
         self.volume.setEnabled(self.sound.isChecked())
-        self.sample_button = QPushButton("♪ Ouvir gota de confirmação")
+        self.sample_button = apply_icon(QPushButton("Ouvir gota de confirmação"), "volume")
         self.sample_button.setToolTip("Ouvir o som com o volume escolhido")
         self.sample_button.setEnabled(self.sound.isChecked())
         self.sound.toggled.connect(self.sample_button.setEnabled)
@@ -128,10 +129,10 @@ class SettingsPage(QWidget):
         hint.setObjectName("hint")
         layout.addWidget(hint)
         backup_buttons = QHBoxLayout()
-        for label, signal in (("Criar backup completo", self.backup_requested),
-                              ("Restaurar backup", self.restore_requested),
-                              ("Abrir backups", self.open_backups_requested)):
-            button = QPushButton(label)
+        for label, signal, glyph in (("Criar backup completo", self.backup_requested, "backup"),
+                                     ("Restaurar backup", self.restore_requested, "restore"),
+                                     ("Abrir backups", self.open_backups_requested, "folder")):
+            button = apply_icon(QPushButton(label), glyph)
             button.clicked.connect(signal.emit)
             backup_buttons.addWidget(button)
         layout.addLayout(backup_buttons)
@@ -150,7 +151,7 @@ class SettingsPage(QWidget):
         updates_text.setWordWrap(True)
         updates_text.setObjectName("hint")
         layout.addWidget(updates_text)
-        self.check_button = QPushButton("↻ Verificar atualizações agora")
+        self.check_button = apply_icon(QPushButton("Verificar atualizações agora"), "update")
         self.check_button.clicked.connect(self.check_requested.emit)
         layout.addWidget(self.check_button)
         saved_hint = QLabel("As preferências são salvas automaticamente neste computador.")

@@ -2,6 +2,16 @@
 
 Revisão de confiabilidade, interface e distribuição iniciada em 16/10/2026.
 
+## Teams para Windows, cursor, áudio e ícones — 16/10/2026
+
+- Chromium/WebView consulta o editor por UI Automation também para comandos sem marcador. A validação aceita o processo filho do editor somente quando sua árvore pertence à janela em primeiro plano; mantém a identidade do campo e a conferência do texto/seleção antes de colar.
+- A seleção do atalho é confirmada por UIA antes de enviar Ctrl+V nesses editores. Não há reenvio automático de colagem. O prazo de confirmação tolera processamento assíncrono do destino.
+- O marcador `{{cursor}}` usa posição direta: seleção nativa recolhida no ponto exato ou intervalo UIA. Não percorre o conteúdo com setas. Prefixos são conferidos com coordenadas UTF-16 e tratamento de CRLF, acentos e emojis.
+- O arquivo Water Droplet 2, de floraphonic, fornecido pelo usuário substitui o efeito sintético. Toca ao salvar e após uma expansão confirmada, respeitando o volume e a opção de som. Origem e licença atualizadas.
+- Botões de configurações, edição, pastas, importação/exportação, backup e atualização usam SVG com cores explícitas e nomes acessíveis.
+- 201 testes locais aprovados, além do teste real da ponte UIA em uma janela Windows com dados sintéticos: seleção exata do atalho, início/meio/fim do texto, Unicode e rejeição de estado antigo. Capturas do editor e das configurações revisadas.
+- O teste real do UIA integra o pipeline Windows. O Teams instalado do usuário não foi acessado: a validação final no Teams para Windows depende do teste da nova compilação nesse ambiente. O Teams no navegador não foi relatado como afetado.
+
 ## Atualização silenciosa — 16/10/2026
 
 - O botão **Atualizar agora** autoriza download, verificação, backup e instalação; o aplicativo novo não solicita uma segunda confirmação de instalação. Cancelar o download, inclusive quando a conclusão já está enfileirada, impede iniciar o instalador.

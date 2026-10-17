@@ -102,7 +102,7 @@ class EngineFixture:
                 setattr(self.host, name, value.__func__)
             elif name.startswith(('_expand', '_expansion_succeeded', '_candidate', '_edit_snapshot', '_owns_clipboard',
                                   '_clipboard_source', '_perform_expansion', '_submit_expansion',
-                                  '_confirm_', '_check_cursor', '_finish_', '_resume_', '_restore_', '_toggle_listener')):
+                                  '_confirm_', '_check_cursor', '_set_caret', '_finish_', '_resume_', '_restore_', '_toggle_listener')):
                 setattr(self.host, name, MethodType(value, self.host))
 
     @property
@@ -121,6 +121,14 @@ class EngineFixture:
     def schedule(self, delay, callback):
         self.order += 1
         heapq.heappush(self.queue, (self.now + delay, self.order, callback))
+
+    def select(self, snapshot, start, end):
+        current = self.host._edit_snapshot(accessibility=bool(snapshot.identity))
+        if current != snapshot:
+            from app.windows_context import ContextUnavailable
+            raise ContextUnavailable('Field changed')
+        self.field.anchor, self.field.caret = start, end
+        return EditSnapshot(snapshot.context, snapshot.text, start, end, snapshot.identity)
 
     def until(self, time_ms):
         while self.queue and self.queue[0][0] <= time_ms:
@@ -199,7 +207,9 @@ class EngineFixture:
         for path in ('app.ui.monotonic', 'app.hotkeys.monotonic'):
             self.stack.enter_context(patch(path, side_effect=lambda: self.now / 1000))
         self.replace = self.stack.enter_context(patch('app.ui.replace_shortcut', wraps=hotkeys.replace_shortcut))
-        self.move = self.stack.enter_context(patch('app.ui.move_cursor_left', wraps=hotkeys.move_cursor_left))
+        self.move = self.stack.enter_context(patch('app.hotkeys.move_cursor_left', wraps=hotkeys.move_cursor_left))
+        self.position = self.stack.enter_context(patch('app.ui.set_caret', side_effect=lambda s, p: self.select(s, p, p)))
+        self.selection = self.stack.enter_context(patch('app.ui.select_text_range', side_effect=self.select))
         return self
 
     def __exit__(self, *args):

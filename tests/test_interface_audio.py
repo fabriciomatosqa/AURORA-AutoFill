@@ -29,13 +29,13 @@ class AudioAssetTests(unittest.TestCase):
             with wave.open(str(second), "rb") as output:
                 self.assertEqual(array("h", output.readframes(32))[0], 600)
 
-    def test_drop_is_short_and_has_silent_edges_without_clipping(self):
+    def test_supplied_drop_is_short_portable_pcm_without_clipping(self):
         source = Path(__file__).resolve().parents[1] / "assets" / "command_click.wav"
         with wave.open(str(source), "rb") as sound:
             self.assertEqual((sound.getnchannels(), sound.getsampwidth()), (1, 2))
-            self.assertLessEqual(sound.getnframes() / sound.getframerate(), 0.35)
+            self.assertLessEqual(sound.getnframes() / sound.getframerate(), 0.6)
             samples = array("h", sound.readframes(sound.getnframes()))
-        self.assertEqual((samples[0], samples[-1]), (0, 0))
+        self.assertGreater(max(abs(value) for value in samples), 100)
         self.assertLess(max(abs(value) for value in samples), 32767)
 
 

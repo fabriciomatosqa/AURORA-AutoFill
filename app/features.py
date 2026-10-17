@@ -20,6 +20,7 @@ from .update_threads import ReleaseCheckThread, InstallerDownloadThread
 from .updates import is_newer, launch_installer
 from .version import APP_VERSION
 from .versioning import display_version
+from .icons import apply_icon
 
 
 def confirm_update(parent, text):
@@ -191,7 +192,7 @@ class AuroraFeaturesMixin:
         self.undo_label = QLabel()
         self.undo_label.setStyleSheet("color: #9aefda;")
         line.addWidget(self.undo_label)
-        self.undo_button = QPushButton("Desfazer")
+        self.undo_button = apply_icon(QPushButton("Desfazer"), "undo")
         self.undo_button.setObjectName("primary")
         self.undo_button.setFixedHeight(27)
         self.undo_button.clicked.connect(self._undo_last)

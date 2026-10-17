@@ -1,4 +1,4 @@
-"""Bounded read-only UIA snapshots via Windows' built-in .NET bridge.
+"""Bounded UIA snapshots and verified text selections via Windows' .NET bridge.
 
 The isolated helper can be terminated if a provider hangs. Field text exists
 only transiently in memory/pipes, never in diagnostics or temporary files.
@@ -16,7 +16,7 @@ from ctypes import wintypes
 from pathlib import Path
 from threading import Lock, Thread
 
-from .expansion import EditSnapshot, utf16_length
+from .expansion import EditSnapshot, utf16_length, utf16_slice
 
 
 class AccessibilityUnavailable(ValueError):
@@ -78,7 +78,7 @@ class AccessibilityClient:
                     self._process = self._responses = None
                 self._starting = False
 
-    def request(self, process_id, timeout=0.5):
+    def request(self, process_id, timeout=0.5, **fields):
         self.warm()
         if not self._call_lock.acquire(blocking=False):
             raise AccessibilityUnavailable('Leitura de acessibilidade ocupada.')
@@ -94,7 +94,7 @@ class AccessibilityClient:
                     if responses.get(timeout=timeout) != {'ready': True}:
                         raise ValueError('handshake')
                     process._aurora_ready = True
-                process.stdin.write(json.dumps({'process': process_id}) + '\n')
+                process.stdin.write(json.dumps({'process': process_id, **fields}) + '\n')
                 process.stdin.flush()
                 return responses.get(timeout=timeout)
             except (queue.Empty, OSError, ValueError):
@@ -143,17 +143,40 @@ def decode_snapshot(context, response):
     return EditSnapshot(context, text, start, end, tuple(identity))
 
 
-def capture_accessible(context):
+def _request_context(context, **fields):
     api = ctypes.windll.user32
     api.GetWindowThreadProcessId.argtypes = [wintypes.HWND, ctypes.POINTER(wintypes.DWORD)]
     process_id = wintypes.DWORD()
-    if not api.GetWindowThreadProcessId(context.window, ctypes.byref(process_id)):
+    if not api.GetWindowThreadProcessId(context.control or context.window, ctypes.byref(process_id)):
         raise AccessibilityUnavailable('Janela de acessibilidade indisponível.')
-    response = _client.request(process_id.value)
+    response = _client.request(process_id.value, window=str(context.window),
+                               control=str(context.control), **fields)
     snapshot = decode_snapshot(context, response)
-    if snapshot is not None and snapshot.identity[0] != str(process_id.value):
+    # Embedded WebView providers may belong to a renderer process instead of
+    # the host HWND. The helper proves ancestry within the focused window and
+    # echoes that scope; never accept a different application's focused field.
+    if snapshot is not None and (response.get('window') != str(context.window)
+                                 or response.get('control') != str(context.control)):
         raise AccessibilityUnavailable('O destino de acessibilidade mudou.')
     return snapshot
+
+
+def capture_accessible(context):
+    return _request_context(context)
+
+
+def select_accessible(snapshot, start, end):
+    if not 0 <= start <= end <= utf16_length(snapshot.text):
+        raise AccessibilityUnavailable('Intervalo de seleção inválido.')
+    utf16_slice(snapshot.text, 0, start)
+    utf16_slice(snapshot.text, 0, end)
+    result = _request_context(snapshot.context, action='select', identity=list(snapshot.identity),
+                              text=snapshot.text, selection_start=snapshot.start,
+                              selection_end=snapshot.end, start=start, end=end)
+    if (result is None or result.identity != snapshot.identity or result.text != snapshot.text
+            or (result.start, result.end) != (start, end)):
+        raise AccessibilityUnavailable('O campo não confirmou a seleção solicitada.')
+    return result
 
 
 def warm_accessibility():

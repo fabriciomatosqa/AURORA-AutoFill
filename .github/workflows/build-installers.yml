@@ -71,7 +71,12 @@ jobs:
         env:
           QT_QPA_PLATFORM: offscreen
         run: python -m unittest discover -s tests -v
-      - name: Compilar aplicativo Windows
+      - name: Testar seleção e cursor com acessibilidade real do Windows
+        # Exercise Windows' real UIA range implementation, not just mocks.
+        # The smoke fixture owns its window and contains only synthetic text.
+        shell: pwsh
+        run: python packaging/smoke_accessibility.py
+      - name: Compilar aplicativo Windows com os recursos validados
         shell: pwsh
         run: |
           python -m PyInstaller --noconfirm --clean --windowed --onedir --name "AURORA AutoFill" --icon "assets/aurora_icon.ico" --add-data "assets;assets" --add-data "app/accessibility_worker.ps1;app" --collect-submodules pynput main.py

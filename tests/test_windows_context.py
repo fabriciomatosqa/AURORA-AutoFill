@@ -38,7 +38,7 @@ class WindowsContextTests(unittest.TestCase):
         self.assertEqual(snapshot.replace(0, 4, 'OK'), 'OK')
 
     def test_unknown_control_is_not_queried_with_edit_messages(self):
-        self.assertIsNone(self.read(class_name='Chrome_RenderWidgetHostHWND', fail=True))
+        self.assertIsNone(self.read(class_name='UnknownCustomControl', fail=True))
 
     def test_accessibility_is_opt_in_and_rechecks_focus(self):
         context = FocusContext(101, 1)
@@ -51,8 +51,8 @@ class WindowsContextTests(unittest.TestCase):
              patch('app.windows_context._api', return_value=api), \
              patch('app.windows_context.capture_accessible', return_value=expected) as accessible, \
              patch('app.windows_context.capture_focus', return_value=context):
-            self.assertIsNone(capture_edit(context))
-            accessible.assert_not_called()
+            self.assertEqual(capture_edit(context), expected)
+            accessible.assert_called_once_with(context)
             self.assertEqual(capture_edit(context, accessibility=True), expected)
             with patch('app.windows_context.capture_focus', side_effect=[context, FocusContext(102, 2)]):
                 with self.assertRaises(ContextUnavailable):

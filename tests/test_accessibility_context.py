@@ -59,7 +59,7 @@ class AccessibilityContextTests(unittest.TestCase):
                 else:
                     self.assertEqual(e.field.text, content)
                     self.assertFalse(any(calls))
-                self.assertEqual(e.api_calls, 2 if '{{cursor}}' in content else 1)
+                self.assertEqual(e.api_calls, 1)
                 self.assertEqual(e.clipboard.text(), 'original')
 
     def test_accessible_field_identity_change_prevents_paste(self):

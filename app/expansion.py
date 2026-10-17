@@ -30,6 +30,21 @@ def utf16_slice(text: str, start: int, end: int | None = None) -> str:
     return data[start * 2:None if end is None else end * 2].decode("utf-16-le")
 
 
+def prefix_offset(text: str, prefix: str) -> int:
+    """Map a rendered prefix to a native UTF-16 caret, including CRLF editors."""
+    wanted = prefix.replace('\r\n', '\n').replace('\r', '\n')
+    offset = 0
+    for character in wanted:
+        if offset >= len(text):
+            raise ValueError('O texto mudou antes de posicionar o cursor.')
+        current = text[offset]
+        step = 2 if text[offset:offset + 2] == '\r\n' else 1
+        if ('\n' if current == '\r' else current) != character:
+            raise ValueError('O texto mudou antes de posicionar o cursor.')
+        offset += step
+    return utf16_length(text[:offset])
+
+
 @dataclass(frozen=True)
 class EditSnapshot:
     context: FocusContext

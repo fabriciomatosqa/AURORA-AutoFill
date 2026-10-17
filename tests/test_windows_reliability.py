@@ -143,7 +143,9 @@ class ClipboardAndUnicodeTests(EngineTestCase):
         self.win.store.save(folder, 'Unicode', '/unicode', 'Olá {{cursor}}😀e\u0301\r\nfim')
         self.engine.listener.update_shortcuts(['/unicode'])
         self.expand('/unicode').assert_called_once_with(8)
-        self.engine.move.assert_called_once_with(6)
+        self.engine.position.assert_called_once()
+        self.assertEqual(self.engine.position.call_args.args[1], 4)
+        self.engine.move.assert_not_called()
 
     def test_confirming_space_is_selected_with_shortcut(self):
         self.engine.save('/olax', 'Outro')

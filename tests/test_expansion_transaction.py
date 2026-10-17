@@ -59,7 +59,8 @@ class ExpansionTransactionTests(EngineTestCase):
         self.engine.type('X')
         self.assertEqual(self.engine.field.text, 'AXB')
         self.engine.replace.assert_called_once()
-        self.engine.move.assert_called_once()
+        self.engine.position.assert_called_once()
+        self.engine.move.assert_not_called()
         self.win._play_confirmation.assert_called_once()
 
     def test_new_copy_during_backup_cancels_before_overwriting_clipboard(self):
@@ -294,7 +295,9 @@ class ExpansionTransactionTests(EngineTestCase):
         self.expand()
         self.engine.type('X')
         self.assertEqual(self.engine.field.text, 'AXB')
-        self.engine.move.assert_called_once_with(1)
+        self.engine.position.assert_called_once()
+        self.assertEqual(self.engine.position.call_args.args[1], 1)
+        self.engine.move.assert_not_called()
 
     def test_late_paste_does_not_move_cursor_or_report_success(self):
         self.engine.save('/ola', 'A{{cursor}}B')

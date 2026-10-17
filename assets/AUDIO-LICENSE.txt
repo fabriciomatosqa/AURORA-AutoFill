@@ -1,12 +1,15 @@
-AURORA AutoFill — som de confirmação "Glub"
+AURORA AutoFill — som de confirmação
 
-Arquivo: command_click.wav
-Efeito original e sintético de uma gota/bolha de água ("glube"), criado para o
-AURORA AutoFill. Não foram utilizados samples ou gravações de terceiros.
+Arquivo incorporado: command_click.wav
+Obra: Water Droplet 2
+Autor: floraphonic
+Fonte: https://pixabay.com/sound-effects/water-droplet-2-165634/
+Licença: Pixabay Content License (não é CC0).
+https://pixabay.com/service/license-summary/
+https://pixabay.com/service/terms/
 
-Licenciamento: CC0 1.0 Universal (domínio público).
-https://creativecommons.org/publicdomain/zero/1.0/
-
-Sintetizado em PCM WAV mono de 16 bits, 44.100 Hz, com duração de 0,32 s,
-ressonância ascendente de bolha e envelopes suaves, sem estalo no início/fim.
-Fonte reproduzível: tools/generate_feedback.py.
+O usuário forneceu floraphonic-water-droplet-2-165634.mp3 para integrar como
+feedback do aplicativo. Convertido para PCM WAV mono, 16 bits, 44.100 Hz
+com tools/import_feedback.py, preservando a gravação completa (~0,456 s).
+Crédito mantido como cortesia ao autor. O áudio integra o aplicativo e não
+é oferecido como biblioteca independente de efeitos sonoros.

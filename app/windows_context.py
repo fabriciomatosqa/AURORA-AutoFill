@@ -1,7 +1,7 @@
-"""Bounded Win32/UIA read-only context queries; no clipboard access.
+"""Bounded Win32/UIA context queries and verified selection; no clipboard access.
 
-Edit messages are used only for Edit/RichEdit controls. Unknown controls expose
-focus identity by default. Cursor operations may opt into UI Automation.
+Edit messages are used only for Edit/RichEdit controls. Chromium/WebView editors
+use UI Automation; cursor operations can request it on other custom controls.
 Snapshots are transient and never logged or persisted.
 """
 from __future__ import annotations
@@ -12,7 +12,7 @@ from ctypes import wintypes
 
 from .expansion import EditSnapshot, FocusContext
 from .accessibility_context import (AccessibilityUnavailable, capture_accessible,
-                                    warm_accessibility, stop_accessibility)
+                                    select_accessible, warm_accessibility, stop_accessibility)
 
 MAX_TEXT_UNITS = 65534  # EM_GETSEL's packed return cannot represent larger ranges.
 
@@ -72,7 +72,7 @@ def capture_edit(context: FocusContext, *, accessibility=False) -> EditSnapshot 
         raise ContextUnavailable("Não foi possível identificar o campo de destino.")
     class_name = name.value.lower()
     if class_name != "edit" and not class_name.startswith("richedit"):
-        if not accessibility:
+        if not accessibility and not class_name.startswith(('chrome_', 'webview')):
             return None
         try:
             snapshot = capture_accessible(context)
@@ -104,11 +104,46 @@ def capture_edit(context: FocusContext, *, accessibility=False) -> EditSnapshot 
         raise ContextUnavailable(str(exc)) from exc
 
 
+def select_text_range(snapshot: EditSnapshot, start: int, end: int) -> EditSnapshot:
+    """Select a validated range once; no arrow keys, clicks or clipboard edits."""
+    from .expansion import utf16_length, utf16_slice
+    if capture_focus() != snapshot.context:
+        raise ContextUnavailable('O foco mudou antes da seleção.')
+    if not 0 <= start <= end <= utf16_length(snapshot.text):
+        raise ContextUnavailable('Intervalo de seleção inválido.')
+    utf16_slice(snapshot.text, 0, start)
+    utf16_slice(snapshot.text, 0, end)
+    if snapshot.identity:
+        try:
+            result = select_accessible(snapshot, start, end)
+        except AccessibilityUnavailable as exc:
+            raise ContextUnavailable(str(exc)) from exc
+    else:
+        current = capture_edit(snapshot.context)
+        if current != snapshot:
+            raise ContextUnavailable('O campo mudou antes da seleção.')
+        try:
+            _message(_api(), snapshot.context.control, 0xB1, start, end)  # EM_SETSEL
+        except OSError as exc:
+            raise ContextUnavailable(str(exc)) from exc
+        result = capture_edit(snapshot.context)
+    if (capture_focus() != snapshot.context or result is None or result.text != snapshot.text
+            or result.identity != snapshot.identity or (result.start, result.end) != (start, end)):
+        raise ContextUnavailable('O campo não confirmou a posição solicitada.')
+    return result
+
+
+def set_caret(snapshot: EditSnapshot, offset: int) -> EditSnapshot:
+    return select_text_range(snapshot, offset, offset)
+
+
 class FocusMonitor:
     """Invalidates history even if foreground/focus changes away and then back."""
     def __init__(self, changed):
         self._hooks = []
         self._callback = None
+        self._changed = changed
+        self._last_focus = capture_focus()
         if sys.platform != "win32":
             return
         warm_accessibility()
@@ -116,7 +151,8 @@ class FocusMonitor:
         callback_type = ctypes.WINFUNCTYPE(None, wintypes.HANDLE, wintypes.DWORD,
                                          wintypes.HWND, wintypes.LONG, wintypes.LONG,
                                          wintypes.DWORD, wintypes.DWORD)
-        self._callback = callback_type(lambda *_: changed())
+        self._callback = callback_type(
+            lambda _hook, event, window, *_: self._handle_event(event, window))
         api.SetWinEventHook.argtypes = [wintypes.DWORD, wintypes.DWORD, wintypes.HMODULE,
                                       callback_type, wintypes.DWORD, wintypes.DWORD, wintypes.DWORD]
         api.SetWinEventHook.restype = wintypes.HANDLE
@@ -124,6 +160,16 @@ class FocusMonitor:
             hook = api.SetWinEventHook(event, event, None, self._callback, 0, 0, 0)
             if hook:
                 self._hooks.append(hook)
+
+    def _handle_event(self, event, window):
+        current = capture_focus()
+        # Chromium/WebView providers can announce focus again for the same
+        # field while processing a paste or UIA selection. A duplicate event
+        # must not cancel that operation. Real changes and away/back events do.
+        changed_window = event == 3 and window and window != self._last_focus.window
+        if changed_window or current != self._last_focus:
+            self._changed()
+        self._last_focus = current
 
     def stop(self):
         stop_accessibility()

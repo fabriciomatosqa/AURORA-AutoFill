@@ -23,6 +23,7 @@ class PackagingTests(unittest.TestCase):
         assets = dist / '_internal/assets'
         assets.mkdir(parents=True)
         for name in bundle.ASSETS:
+            (assets / name).parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(ROOT / 'assets' / name, assets / name)
         executable = 'AURORA AutoFill.exe' if platform == 'windows' else 'AURORA AutoFill'
         (dist / executable).write_bytes(b'synthetic-test-only')
@@ -40,7 +41,7 @@ class PackagingTests(unittest.TestCase):
             with self.subTest(platform=platform), tempfile.TemporaryDirectory() as temporary:
                 result = bundle.verify_bundle(self.fixture(temporary, platform), platform)
                 self.assertEqual(result['local_data_scan'], 'passed')
-                self.assertEqual(len(result['resources_sha256']), 8 if platform == 'windows' else 7)
+                self.assertEqual(len(result['resources_sha256']), len(bundle.ASSETS) + (platform == 'windows'))
 
     def test_windows_requires_worker_at_runtime_path(self):
         with tempfile.TemporaryDirectory() as temporary:
