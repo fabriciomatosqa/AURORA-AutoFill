@@ -64,6 +64,7 @@ const
 
 var
   LegacyAutoUpdate: Boolean;
+  LegacyStartQueued: Boolean;
 
 function IsAuroraUpdate: Boolean;
 begin
@@ -81,6 +82,7 @@ var
 begin
   Result := True;
   LegacyAutoUpdate := False;
+  LegacyStartQueued := False;
   Log('AURORA: initializing; params=' + IntToStr(ParamCount));
   for ParameterIndex := 1 to ParamCount do
     Log('AURORA: parameter ' + IntToStr(ParameterIndex) + ': ' + ParamStr(ParameterIndex));
@@ -123,10 +125,24 @@ end;
 
 function ShouldSkipPage(PageID: Integer): Boolean;
 begin
-  { Inno's normal ClickToStartPage flow advances automatically when every
-    choice page is skipped. Preparing/installing still use the normal engine;
-    this one-time transition shows progress and requires no Next/Finish clicks. }
+  { Keep the installed directory/tasks and skip choices and completion pages.
+    Preparing/installing still use the normal engine and its error checks. }
   Result := LegacyAutoUpdate;
+end;
+
+procedure CurPageChanged(CurPageID: Integer);
+begin
+  if LegacyAutoUpdate then
+    Log('AURORA: automatic update page=' + IntToStr(CurPageID));
+  if LegacyAutoUpdate and (CurPageID = wpReady) and not LegacyStartQueued then
+  begin
+    { Inno deliberately keeps wpReady until the normal wizard is visible.
+      Queue its standard Install button action so it runs after ShowModal,
+      rather than calling the handler recursively during page initialization. }
+    LegacyStartQueued := True;
+    Log('AURORA: automatic installation queued.');
+    PostMessage(WizardForm.NextButton.Handle, $00F5, 0, 0); { BM_CLICK }
+  end;
 end;
 
 procedure CurStepChanged(CurStep: TSetupStep);
