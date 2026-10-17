@@ -133,22 +133,22 @@ def main():
             legacy_profile = root / 'legacy-profile'
             legacy_profile.mkdir()
             env['APPDATA'] = str(legacy_profile)
-            # Exact invocation used by 0.6.1-161026. InitializeSetup hands off
-            # to its silent child and aborts the outer bootstrap with code 1.
-            run(['/NORESTART'], expected=(1,))
+            # Exact invocation used by 0.6.1-161026. The same installer skips
+            # its choice/finish pages and runs automatically, without relaunch.
+            run(['/NORESTART'])
             wait_for_profile(legacy_profile / 'AutoFillStudio' / 'snippets.sqlite3')
             legacy_logs = '\n'.join(read_log(log) for log in setup_temporary.glob('Setup Log*.txt'))
-            if ('AURORA: legacy updater detected; handing off without a wizard.' not in legacy_logs
-                    or 'AURORA: silent update finished; exit=0' not in legacy_logs):
+            if ('AURORA: legacy updater detected; automatic update in existing setup.' not in legacy_logs
+                    or 'AURORA: legacy automatic update completed.' not in legacy_logs):
                 dump_logs()
-                raise RuntimeError('A transicao legada nao confirmou instalacao silenciosa concluida.')
+                raise RuntimeError('A transicao legada nao confirmou atualizacao automatica concluida.')
             if hashlib.sha256(provenance.read_bytes()).digest() != expected_provenance:
                 raise RuntimeError('A transicao do atualizador antigo nao substituiu os arquivos.')
             with closing(sqlite3.connect(database)) as connection:
                 if not connection.execute(
                         "SELECT 1 FROM folders WHERE name='CI preserved update'").fetchone():
                     raise RuntimeError('Atualizacao nao preservou o perfil sintetico.')
-            print('Installer smoke: exact legacy invocation, silent handoff and data preservation passed.',
+            print('Installer smoke: exact legacy invocation, automatic update and data preservation passed.',
                   flush=True)
             time.sleep(2)
         finally:
@@ -159,7 +159,7 @@ def main():
                                         creationflags=subprocess.CREATE_NO_WINDOW)
                 if result.returncode:
                     raise RuntimeError('Nao foi possivel limpar a instalacao temporaria do CI.')
-    print('Installer smoke passed: first install; silent update/reopen; legacy handoff; data preserved.')
+    print('Installer smoke passed: first install; silent update/reopen; legacy automatic update; data preserved.')
 
 
 if __name__ == '__main__':

@@ -62,23 +62,25 @@ Filename: "{app}\{#AppExeName}"; Flags: nowait runasoriginaluser; Check: IsAuror
 const
   AuroraUninstallKey = 'Software\Microsoft\Windows\CurrentVersion\Uninstall\{6C34F9C8-9F89-4D4B-B894-0F33A4A0D379}_is1';
 
+var
+  LegacyAutoUpdate: Boolean;
+
 function IsAuroraUpdate: Boolean;
 begin
   { Silent deployment alone must not start the app; only an in-app update does. }
-  Result := ExpandConstant('{param:AURORAUPDATE|0}') = '1';
+  Result := LegacyAutoUpdate or (ExpandConstant('{param:AURORAUPDATE|0}') = '1');
 end;
 
 function InitializeSetup: Boolean;
 var
   InstalledDir: String;
-  Parameters: String;
-  ChildExitCode: Integer;
   ParameterIndex: Integer;
   LegacyRequest: Boolean;
   HasPreviousInstall: Boolean;
   PreviousExeExists: Boolean;
 begin
   Result := True;
+  LegacyAutoUpdate := False;
   Log('AURORA: initializing; params=' + IntToStr(ParamCount));
   for ParameterIndex := 1 to ParamCount do
     Log('AURORA: parameter ' + IntToStr(ParameterIndex) + ': ' + ParamStr(ParameterIndex));
@@ -87,14 +89,16 @@ begin
 
   { The installed 0.6.1-161026 updater passed only /NORESTART. Recognize that
     exact invocation, not a normal double-click or arbitrary deployment flags,
-    and hand off before the wizard is created. New updaters pass the explicit
-    marker and silent flags directly, so this branch cannot recurse. }
+    and continue automatically in this same installer. New updaters pass the
+    explicit marker and silent flags directly. Executing Setup itself before
+    installation is deliberately prohibited by Inno Setup; no self-relaunch
+    or security override is used here. }
   LegacyRequest := (not WizardSilent) and (not IsAuroraUpdate) and
     (ParamCount = 1) and (CompareText(ParamStr(1), '/NORESTART') = 0);
   if not LegacyRequest then
     Exit;
-  { Keep the registry output assignment in a separate statement. Pascal Script
-    need not evaluate the operands of a boolean expression left-to-right. }
+  { Resolve the registered directory before checking its executable, keeping
+    each validation and its diagnostic message separate. }
   InstalledDir := '';
   HasPreviousInstall := RegQueryStringValue(HKCU, AuroraUninstallKey,
     'InstallLocation', InstalledDir);
@@ -106,24 +110,27 @@ begin
   Log('AURORA: previous executable exists=' + IntToStr(Ord(PreviousExeExists)));
   if PreviousExeExists then
   begin
-    Log('AURORA: legacy updater detected; handing off without a wizard.');
-    Parameters := '/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP- ' +
-      '/CLOSEAPPLICATIONS /NORESTARTAPPLICATIONS /AURORAUPDATE=1 /LOG ' +
-      '/DIR=' + AddQuotes(InstalledDir);
-    if not Exec(ExpandConstant('{srcexe}'), Parameters, '', SW_HIDE,
-       ewWaitUntilTerminated, ChildExitCode) then
-    begin
-      Log('AURORA: failed to launch silent update; error=' + IntToStr(ChildExitCode));
-      SuppressibleMsgBox('Não foi possível iniciar a atualização do AURORA AutoFill. ' +
-        'Abra o programa e tente novamente.', mbError, MB_OK, IDOK);
-    end
-    else
-    begin
-      Log('AURORA: silent update finished; exit=' + IntToStr(ChildExitCode));
-      if ChildExitCode <> 0 then
-        SuppressibleMsgBox('A atualização não foi concluída. Abra o AURORA AutoFill ' +
-          'e tente novamente. Código: ' + IntToStr(ChildExitCode), mbError, MB_OK, IDOK);
-    end;
-    Result := False;
+    LegacyAutoUpdate := True;
+    Log('AURORA: legacy updater detected; automatic update in existing setup.');
   end;
+end;
+
+procedure InitializeWizard;
+begin
+  if LegacyAutoUpdate then
+    WizardForm.Caption := 'Atualizando AURORA AutoFill';
+end;
+
+function ShouldSkipPage(PageID: Integer): Boolean;
+begin
+  { Inno's normal ClickToStartPage flow advances automatically when every
+    choice page is skipped. Preparing/installing still use the normal engine;
+    this one-time transition shows progress and requires no Next/Finish clicks. }
+  Result := LegacyAutoUpdate;
+end;
+
+procedure CurStepChanged(CurStep: TSetupStep);
+begin
+  if LegacyAutoUpdate and (CurStep = ssDone) then
+    Log('AURORA: legacy automatic update completed.');
 end;
