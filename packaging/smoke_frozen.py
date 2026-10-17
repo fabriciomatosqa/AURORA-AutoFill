@@ -1,12 +1,31 @@
 """Start a frozen app twice with synthetic data in an isolated user profile."""
 import argparse
-from contextlib import closing
+from contextlib import closing, contextmanager
 import os
 from pathlib import Path
 import sqlite3
 import subprocess
 import sys
 import tempfile
+import time
+
+
+@contextmanager
+def temporary_profile():
+    directory = tempfile.TemporaryDirectory(prefix='aurora-frozen-profile-')
+    try:
+        yield directory.name
+    finally:
+        # Windows can retain a directory handle briefly after a frozen process
+        # exits. Retry only cleanup; never repeat or bypass the app/data checks.
+        for attempt in range(21):
+            try:
+                directory.cleanup()
+                break
+            except PermissionError:
+                if sys.platform != 'win32' or attempt == 20:
+                    raise
+                time.sleep(0.25)
 
 
 def main():
@@ -15,7 +34,7 @@ def main():
     parser.add_argument('--qt-platform', choices=('offscreen', 'xcb'), default='offscreen')
     args = parser.parse_args()
     executable = args.exe.resolve(strict=True)
-    with tempfile.TemporaryDirectory(prefix='aurora-frozen-profile-') as temporary:
+    with temporary_profile() as temporary:
         profile = Path(temporary)
         env = dict(os.environ, APPDATA=str(profile), XDG_DATA_HOME=str(profile),
                    QT_QPA_PLATFORM=args.qt_platform, AURORA_AUTOFILL_SMOKE_TEST='1')
