@@ -5,7 +5,7 @@ from pathlib import Path
 import sys
 import sqlite3
 
-from PySide6.QtCore import QObject, Qt, QMimeData, QTimer, Signal, QPoint, QRectF, QTextBoundaryFinder
+from PySide6.QtCore import QObject, Qt, QMimeData, QTimer, Signal, QPoint, QRectF, QRect, QSize, QTextBoundaryFinder
 from PySide6.QtGui import (QAction, QColor, QFont, QFontMetricsF, QIcon, QKeySequence, QPalette,
                            QShortcut, QTextCharFormat, QPainter, QPainterPath, QLinearGradient, QPen, QPixmap)
 from PySide6.QtWidgets import (
@@ -301,6 +301,53 @@ class AuroraFolderCombo(QComboBox):
         y = self.height() // 2 - 1
         painter.drawLine(x - 5, y - 2, x, y + 3)
         painter.drawLine(x, y + 3, x + 5, y - 2)
+        painter.end()
+
+
+class AuroraMenuButton(QToolButton):
+    """Menu trigger with the same rounded surface and arrow lane as folders."""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setObjectName("tokenPicker")
+        self.setMinimumHeight(40)
+        self.setStyleSheet("QToolButton#tokenPicker { font-weight: 400; }")
+        self.setPopupMode(QToolButton.InstantPopup)
+
+    def sizeHint(self):
+        size = super().sizeHint()
+        width = self.fontMetrics().horizontalAdvance(self.text()) + 76
+        return size.expandedTo(QSize(width, 40))
+
+    def paintEvent(self, event):
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.Antialiasing, True)
+        bounds = QRectF(self.rect()).adjusted(.5, .5, -.5, -.5)
+        path = QPainterPath()
+        path.addRoundedRect(bounds, 10, 10)
+        active = self.underMouse() or self.isDown() or bool(self.menu() and self.menu().isVisible())
+        painter.fillPath(path, QColor("#184156" if active else "#143345"))
+        painter.save()
+        painter.setClipPath(path)
+        arrow_left = self.width() - 29
+        painter.fillRect(QRectF(arrow_left, 0, 29, self.height()), QColor("#1b495c"))
+        painter.setPen(QColor("#28586d"))
+        painter.drawLine(arrow_left, 0, arrow_left, self.height())
+        painter.restore()
+        border = "#67e7d5" if self.hasFocus() else "#59dfcf" if active else "#2f7077"
+        painter.setPen(QPen(QColor(border), 1))
+        painter.drawPath(path)
+        center_y = self.height() // 2
+        self.icon().paint(painter, QRect(12, center_y - 9, 18, 18))
+        text_rect = QRect(36, 0, max(0, arrow_left - 44), self.height())
+        painter.setPen(QColor("#f0feff" if self.isEnabled() else "#7995ab"))
+        painter.setFont(self.font())
+        label = self.fontMetrics().elidedText(self.text(), Qt.ElideRight, text_rect.width())
+        painter.drawText(text_rect, Qt.AlignLeft | Qt.AlignVCenter, label)
+        painter.setPen(QPen(QColor("#8ef7de"), 2, Qt.SolidLine, Qt.RoundCap, Qt.RoundJoin))
+        x = self.width() - 15
+        painter.drawLine(x - 5, center_y - 3, x, center_y + 2)
+        painter.drawLine(x, center_y + 2, x + 5, center_y - 3)
         painter.end()
 
 
@@ -670,7 +717,7 @@ class AutoFillWindow(AuroraFeaturesMixin, QMainWindow):
         guide.setObjectName("hint")
         formatting_row.addWidget(guide)
         formatting_row.addStretch()
-        self.token_button = QToolButton()
+        self.token_button = AuroraMenuButton()
         self.token_button.setText("Inserir comando dinâmico")
         apply_icon(self.token_button, "plus")
         self.token_button.setToolButtonStyle(Qt.ToolButtonTextBesideIcon)
