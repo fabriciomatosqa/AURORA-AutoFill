@@ -12,6 +12,11 @@ from unittest.mock import patch
 from app import preferences
 
 
+# Qt must outlive all PySide6 widgets; collecting QApplication while other
+# tests still have Qt objects can crash the shared Qt runtime on Linux.
+QT_APPLICATION_KEEPALIVE = None
+
+
 class FakeKey:
     def __init__(self, registry):
         self.registry = registry
@@ -93,7 +98,9 @@ class MinimizedStartupTests(unittest.TestCase):
         os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
         from PySide6.QtWidgets import QApplication
         from app.settings_panel import SettingsPage
-        app = QApplication.instance() or QApplication([])
+        global QT_APPLICATION_KEEPALIVE
+        QT_APPLICATION_KEEPALIVE = QApplication.instance() or QApplication([])
+        app = QT_APPLICATION_KEEPALIVE
         opts = dict(preferences.DEFAULTS)
         opts["start_minimized"] = True
         view = SettingsPage(opts, startup_supported=True, startup_enabled=False)
