@@ -16,6 +16,8 @@ ET.register_namespace("", NS)
 component_tag = f"{{{NS}}}Component"
 file_tag = f"{{{NS}}}File"
 registry_tag = f"{{{NS}}}RegistryValue"
+directory_tag = f"{{{NS}}}Directory"
+remove_tag = f"{{{NS}}}RemoveFolder"
 
 
 def convert(source: Path) -> int:
@@ -46,6 +48,19 @@ def convert(source: Path) -> int:
         count += 1
     if not count:
         raise ValueError("Nenhum componente encontrado no XML do WiX.")
+    # WiX ICE64: EVERY folder under LocalAppDataFolder must have a
+    # RemoveFile/RemoveFolder entry to allow clean MSI uninstallation.
+    # Attach it to the first component beneath that directory, using a
+    # stable identifier; Windows removes only empty directories.
+    for directory in tree.iter(directory_tag):
+        directory_id = directory.attrib.get("Id")
+        component = next(directory.iter(component_tag), None)
+        if directory_id and component is not None:
+            component.append(ET.Element(remove_tag, {
+                "Id": "remove_" + directory_id,
+                "Directory": directory_id,
+                "On": "uninstall",
+            }))
     tree.write(source, encoding="utf-8", xml_declaration=True)
     print(f"Componentes MSI por usuario atualizados: {count}")
     return count

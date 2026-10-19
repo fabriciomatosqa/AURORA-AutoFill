@@ -20,9 +20,11 @@ class MSIComponentsTests(unittest.TestCase):
     <Component Id="cmpOne" Guid="*">
       <File Id="filOne" KeyPath="yes" Source="a.exe"/>
     </Component>
-    <Component Id="cmpTwo" Guid="*">
-      <File Id="filTwo" KeyPath="yes" Source="b.dll"/>
-    </Component>
+    <Directory Id="dirChild" Name="internal">
+      <Component Id="cmpTwo" Guid="*">
+        <File Id="filTwo" KeyPath="yes" Source="b.dll"/>
+      </Component>
+    </Directory>
   </DirectoryRef></Fragment>
 </Wix>
 """
@@ -48,6 +50,11 @@ class MSIComponentsTests(unittest.TestCase):
             module.convert(f)
             guids_again = [c.attrib["Guid"] for c in ET.parse(f).iter(module.component_tag)]
             self.assertEqual(guids_first, guids_again)
+            components = list(tree.iter(module.component_tag))
+            cleanup = components[1].find(module.remove_tag)
+            self.assertIsNotNone(cleanup)
+            self.assertEqual(cleanup.attrib["Directory"], "dirChild")
+            self.assertEqual(cleanup.attrib["On"], "uninstall")
 
 
 if __name__ == "__main__":

@@ -7,7 +7,7 @@
     <Package InstallerVersion="500" Compressed="yes" InstallScope="perUser"
              InstallPrivileges="limited" Platform="x64"
              Description="AURORA AutoFill para Windows - instalador MSI"/>
-    <MajorUpgrade AllowSameVersionUpgrades="yes"
+    <MajorUpgrade AllowSameVersionUpgrades="no"
                   DowngradeErrorMessage="Uma versao mais recente do AURORA AutoFill MSI ja esta instalada."/>
     <MediaTemplate EmbedCab="yes"/>
     <Property Id="ARPNOMODIFY" Value="1"/>
@@ -25,6 +25,8 @@
       <Component Id="MsiInstallMarker" Guid="{6E7A74A3-04A7-499C-B540-2A824B0A82D3}">
         <File Id="MsiMarker" Name="AURORA-MSI-CHANNEL.txt"
               Source="packaging\windows\AURORA-MSI-CHANNEL.txt"/>
+        <RemoveFolder Id="RemoveMsiInstallDirectory" Directory="INSTALLFOLDER" On="uninstall"/>
+        <RemoveFolder Id="RemoveMsiProgramsFolder" Directory="MsiProgramsFolder" On="uninstall"/>
         <RegistryValue Root="HKCU" Key="Software\Aurora\AutoFillMSI"
                        Name="ChannelInstalled" Type="integer" Value="1" KeyPath="yes"/>
       </Component>
