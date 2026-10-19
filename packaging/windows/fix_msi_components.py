@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from pathlib import Path
 import sys
+import uuid
 import xml.etree.ElementTree as ET
 
 NS = "http://schemas.microsoft.com/wix/2006/wi"
@@ -26,6 +27,14 @@ def convert(source: Path) -> int:
             continue
         for file in files:
             file.attrib.pop("KeyPath", None)
+        # A component containing files AND a registry key path cannot have
+        # Guid="*" in WiX 3 (CNDL0230). Derive a stable UUID from its
+        # relative source path so MSI upgrades retain component identity.
+        relative_path = files[0].attrib["Source"].replace("\\\\", "/").replace("\\", "/")
+        component.attrib["Guid"] = "{" + str(uuid.uuid5(
+            uuid.UUID("50c4af04-b7dc-48ee-aa55-c2e12f1c832f"),
+            relative_path.casefold()
+        )).upper() + "}"
         component.append(ET.Element(registry_tag, {
             "Root": "HKCU",
             "Key": r"Software\Aurora\AutoFillMSI\Files",
