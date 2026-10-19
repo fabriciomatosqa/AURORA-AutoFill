@@ -86,8 +86,8 @@ class ClipboardPasteTests(unittest.TestCase):
                 with patch('app.ui.type_backspace_and_paste') as paste, \
                      patch('app.ui.QTimer.singleShot') as timer, \
                      patch.object(win, '_play_confirmation') as play:
-                    win._perform_expansion('/ola')
-                    paste.assert_called_once_with(len('/ola'), 0)
+                    win._perform_expansion('/bemvindo')
+                    paste.assert_called_once_with(len('/bemvindo'), 0)
                     play.assert_called_once()
                     mime = QApplication.clipboard().mimeData()
                     self.assertTrue(mime.text().startswith('Olá!'))
