@@ -50,7 +50,7 @@ jobs:
           echo "tag=v$version" >> "$GITHUB_OUTPUT"
 
   windows:
-    name: Windows - EXE (PyInstaller + Inno Setup)
+    name: Windows - EXE + MSI (Inno Setup + WiX)
     needs: version
     runs-on: windows-latest
     timeout-minutes: 30
@@ -110,6 +110,16 @@ jobs:
           $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
           & $iscc "packaging/windows/AURORA-AutoFill.iss"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Criar MSI Windows usando o mesmo bundle PyInstaller
+        shell: pwsh
+        run: |
+          ./packaging/windows/build_msi.ps1
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Testar instalação e desinstalação do MSI em perfil descartável
+        shell: pwsh
+        run: |
+          python packaging/windows/smoke_msi.py --msi 'installer-win/AURORA-AutoFill-v${{ needs.version.outputs.version }}-Windows-x64.msi'
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Testar instalação silenciosa e reabertura em perfil descartável
         shell: pwsh
         run: |
@@ -119,7 +129,7 @@ jobs:
         shell: pwsh
         run: |
           Copy-Item -LiteralPath 'dist/AURORA AutoFill/SOURCE-COMMIT.txt' -Destination 'SOURCE-COMMIT.txt'
-          Get-FileHash -Algorithm SHA256 installer-win/*.exe | ForEach-Object {
+          Get-FileHash -Algorithm SHA256 (Get-ChildItem installer-win -File | Where-Object { $_.Extension -in '.exe', '.msi' } | Select-Object -ExpandProperty FullName) | ForEach-Object {
             '{0}  {1}' -f $_.Hash.ToLowerInvariant(), (Split-Path $_.Path -Leaf)
           } | Set-Content -LiteralPath 'SHA256SUMS-Windows.txt' -Encoding ascii
       - uses: actions/upload-artifact@v4
@@ -127,6 +137,7 @@ jobs:
           name: AURORA-AutoFill-Windows-${{ github.run_number }}
           path: |
             installer-win/*.exe
+            installer-win/*.msi
             windows-bundle-report.json
             SOURCE-COMMIT.txt
             SHA256SUMS-Windows.txt
@@ -264,7 +275,7 @@ jobs:
               --draft --title "AURORA AutoFill v$RELEASE_VERSION" \
               --notes-file RELEASE-NOTES.md "${flags[@]}"
           fi
-          test "$(gh release view "$RELEASE_TAG" --json assets --jq '.assets | length')" -eq 5
+          test "$(gh release view "$RELEASE_TAG" --json assets --jq '.assets | length')" -eq 6
           if [ "$IS_PRERELEASE" = true ]; then
             gh release edit "$RELEASE_TAG" --draft=false --latest=false
           else
@@ -282,7 +293,7 @@ jobs:
                 --prerelease --latest=false --title "Transição para AURORA AutoFill v$RELEASE_VERSION" \
                 --notes-file BRIDGE-NOTES.md
             fi
-            test "$(gh release view "$bridge_tag" --json assets --jq '.assets | length')" -eq 5
+            test "$(gh release view "$bridge_tag" --json assets --jq '.assets | length')" -eq 6
             gh release edit "$bridge_tag" --draft=false --latest=false
           fi
       - name: Verificar descoberta e download pelo atualizador público

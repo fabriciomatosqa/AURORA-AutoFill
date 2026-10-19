@@ -14,15 +14,16 @@ from app.versioning import canonical_to_bridge, parse_version
 def _asset_names(version: str) -> tuple[str, ...]:
     parse_version(version)
     windows = f"AURORA-AutoFill-v{version}-Windows-Setup.exe"
+    msi = f"AURORA-AutoFill-v{version}-Windows-x64.msi"
     linux = f"AURORA-AutoFill-v{version}-Linux-amd64.deb"
     portable = f"AURORA-AutoFill-v{version}-Linux-portable-amd64.tar.gz"
-    return (windows, linux, portable, "SHA256SUMS-Windows.txt", "SHA256SUMS-Linux.txt")
+    return (windows, msi, linux, portable, "SHA256SUMS-Windows.txt", "SHA256SUMS-Linux.txt")
 
 
 def _validated_sources(root: Path, version: str) -> tuple[dict[str, Path], dict[str, str]]:
     """Locate and verify all three payloads before creating any output files."""
     names = _asset_names(version)
-    windows, linux, portable, windows_manifest, linux_manifest = names
+    windows, msi, linux, portable, windows_manifest, linux_manifest = names
     sources = {}
     for name in names:
         matches = [path for path in Path(root).rglob(name) if path.is_file() and not path.is_symlink()]
@@ -30,7 +31,8 @@ def _validated_sources(root: Path, version: str) -> tuple[dict[str, Path], dict[
             raise ValueError(f"Esperado exatamente um arquivo de publicação: {name}")
         sources[name] = matches[0]
     digests = {}
-    for name, manifest in ((windows, windows_manifest), (linux, linux_manifest), (portable, linux_manifest)):
+    for name, manifest in ((windows, windows_manifest), (msi, windows_manifest),
+                           (linux, linux_manifest), (portable, linux_manifest)):
         if sources[manifest].stat().st_size > 65536:
             raise ValueError("Manifesto SHA256 maior que o permitido.")
         checksums = [parts[0].lower() for line in sources[manifest].read_text(encoding="ascii").splitlines()
@@ -48,7 +50,7 @@ def _validated_sources(root: Path, version: str) -> tuple[dict[str, Path], dict[
 
 def prepare_assets(root: Path, destination: Path, version: str) -> list[Path]:
     sources, _ = _validated_sources(root, version)
-    # Nothing is staged for publication until all three payloads pass.
+    # Nothing is staged for publication until all four payloads pass.
     destination = Path(destination)
     destination.mkdir(parents=True, exist_ok=True)
     return [Path(shutil.copy2(source, destination / name)) for name, source in sources.items()]
@@ -62,9 +64,9 @@ def prepare_bridge_assets(root: Path, destination: Path, version: str) -> list[P
     destination = Path(destination)
     destination.mkdir(parents=True, exist_ok=True)
     paths = []
-    for name, alias in zip(names[:3], bridge_names[:3]):
+    for name, alias in zip(names[:4], bridge_names[:4]):
         paths.append(Path(shutil.copy2(sources[name], destination / alias)))
-    for manifest, indexes in ((bridge_names[3], (0,)), (bridge_names[4], (1, 2))):
+    for manifest, indexes in ((bridge_names[4], (0, 1)), (bridge_names[5], (2, 3))):
         path = destination / manifest
         path.write_text("".join(f"{digests[names[index]]}  {bridge_names[index]}\n"
                                 for index in indexes), encoding="ascii")

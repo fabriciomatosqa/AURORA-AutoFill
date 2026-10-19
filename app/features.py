@@ -344,6 +344,19 @@ class AuroraFeaturesMixin:
                                     QMessageBox.No) == QMessageBox.Yes:
                 webbrowser.open(release.page_url)
             return
+        # WiX MSI is a separate installation channel from Inno Setup.
+        # Never replace an MSI installation with the EXE auto-updater: show
+        # the official release so the user can install the next MSI instead.
+        if (sys.platform == "win32" and getattr(sys, "frozen", False)
+                and (Path(sys.executable).resolve().parent / "AURORA-MSI-CHANNEL.txt").is_file()):
+            text += ("Esta instalação usa o formato MSI. Para manter o mesmo tipo "
+                     "de instalador, baixe o novo arquivo .msi na página oficial. "
+                     "Deseja abrir a página da versão?")
+            if QMessageBox.question(self, "Nova versão AURORA (MSI)", text,
+                                    QMessageBox.Yes | QMessageBox.No,
+                                    QMessageBox.No) == QMessageBox.Yes:
+                webbrowser.open(release.page_url)
+            return
         if not (release.installer_url and release.checksum_url):
             if manual:
                 QMessageBox.information(self, "Atualizações",

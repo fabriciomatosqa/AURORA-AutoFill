@@ -19,22 +19,24 @@ class ReleaseAssetsTests(unittest.TestCase):
         (windows / "installer-win").mkdir(parents=True)
         linux.mkdir()
         exe = windows / "installer-win" / f"AURORA-AutoFill-v{version}-Windows-Setup.exe"
+        msi = windows / "installer-win" / f"AURORA-AutoFill-v{version}-Windows-x64.msi"
         deb = linux / f"AURORA-AutoFill-v{version}-Linux-amd64.deb"
         tar = linux / f"AURORA-AutoFill-v{version}-Linux-portable-amd64.tar.gz"
-        for path in (exe, deb, tar):
+        for path in (exe, msi, deb, tar):
             path.write_bytes(path.name.encode())
         (windows / "SHA256SUMS-Windows.txt").write_text(
-            sha256(exe.read_bytes()).hexdigest() + "  " + exe.name + "\n", encoding="ascii")
+            "".join(sha256(path.read_bytes()).hexdigest() + "  " + path.name + "\n"
+                    for path in (exe, msi)), encoding="ascii")
         (linux / "SHA256SUMS-Linux.txt").write_text("".join(
             sha256(path.read_bytes()).hexdigest() + "  " + path.name + "\n" for path in (deb, tar)), encoding="ascii")
-        return exe, deb, tar
+        return exe, msi, deb, tar
 
-    def test_nested_windows_and_flat_linux_are_normalized_to_five_assets(self):
+    def test_nested_windows_and_flat_linux_are_normalized_to_six_assets(self):
         with tempfile.TemporaryDirectory() as folder:
             root, destination = Path(folder) / "input", Path(folder) / "output"
             exe, deb, tar = self.fixture(root)
             result = assets.prepare_assets(root, destination, VERSION)
-            self.assertEqual(len(result), 5)
+            self.assertEqual(len(result), 6)
             self.assertTrue(all(path.parent == destination for path in result))
             for source in (exe, deb, tar):
                 self.assertEqual((destination / source.name).read_bytes(), source.read_bytes())
@@ -66,7 +68,7 @@ class ReleaseAssetsTests(unittest.TestCase):
                 root, destination = Path(folder) / "input", Path(folder) / "output"
                 self.fixture(root, version)
                 result = assets.prepare_assets(root, destination, version)
-                self.assertEqual(len(result), 5)
+                self.assertEqual(len(result), 6)
                 self.assertTrue((destination / f"AURORA-AutoFill-v{version}-Windows-Setup.exe").is_file())
 
     def test_bridge_keeps_all_payload_bytes_and_rewrites_both_manifests(self):
@@ -76,8 +78,8 @@ class ReleaseAssetsTests(unittest.TestCase):
                 root, destination = Path(folder) / "input", Path(folder) / "bridge"
                 originals = self.fixture(root, version)
                 result = assets.prepare_bridge_assets(root, destination, version)
-                self.assertEqual(len(result), 5)
-                self.assertEqual(len(list(destination.iterdir())), 5)
+                self.assertEqual(len(result), 6)
+                self.assertEqual(len(list(destination.iterdir())), 6)
                 for source in originals:
                     target = destination / source.name.replace(f"v{version}-", f"v{bridge}-")
                     self.assertEqual(target.read_bytes(), source.read_bytes())
@@ -86,14 +88,14 @@ class ReleaseAssetsTests(unittest.TestCase):
                 for index, source in enumerate(originals):
                     alias = source.name.replace(f"v{version}-", f"v{bridge}-")
                     expected = f"{sha256(source.read_bytes()).hexdigest()}  {alias}\n"
-                    self.assertIn(expected, windows_manifest if index == 0 else linux_manifest)
+                    self.assertIn(expected, windows_manifest if index < 2 else linux_manifest)
                 self.assertNotIn(f"v{version}-", windows_manifest + linux_manifest)
                 # Running the normal validator over the alias confirms names and hashes.
                 validated = assets.prepare_assets(destination, Path(folder) / "validated", bridge)
-                self.assertEqual(len(validated), 5)
+                self.assertEqual(len(validated), 6)
 
     def test_bridge_does_not_stage_any_asset_when_any_canonical_payload_is_corrupt(self):
-        for damaged in (0, 1, 2):
+        for damaged in (0, 1, 2, 3):
             with self.subTest(damaged=damaged), tempfile.TemporaryDirectory() as folder:
                 root, destination = Path(folder) / "input", Path(folder) / "bridge"
                 paths = self.fixture(root, "0.6.1-161026")

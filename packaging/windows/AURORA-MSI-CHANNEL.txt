@@ -1,0 +1,4 @@
+MSI installation of AURORA AutoFill.
+Use the MSI file published in official GitHub Releases to update this installation.
+Never run the Inno Setup EXE updater over this separate installation.
+Your snippets and settings remain in %APPDATA%\AutoFillStudio.

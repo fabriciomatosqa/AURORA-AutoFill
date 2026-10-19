@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
+  <!-- Independent MSI product identity: never overwrite the Inno Setup install. -->
+  <Product Id="*" Name="AURORA AutoFill (MSI)" Language="1046"
+           Version="$(var.MsiVersion)" Manufacturer="Fabricio Matos"
+           UpgradeCode="{0E9BE382-33A8-4635-BAF8-459B520F849A}">
+    <Package InstallerVersion="500" Compressed="yes" InstallScope="perUser"
+             InstallPrivileges="limited" Platform="x64"
+             Description="AURORA AutoFill para Windows - instalador MSI"/>
+    <MajorUpgrade AllowSameVersionUpgrades="yes"
+                  DowngradeErrorMessage="Uma versão mais recente do AURORA AutoFill MSI já está instalada."/>
+    <MediaTemplate EmbedCab="yes"/>
+    <Property Id="ARPNOMODIFY" Value="1"/>
+    <Directory Id="TARGETDIR" Name="SourceDir">
+      <Directory Id="LocalAppDataFolder">
+        <Directory Id="AuroraPrograms" Name="Programs">
+          <Directory Id="INSTALLFOLDER" Name="AURORA AutoFill MSI"/>
+        </Directory>
+      </Directory>
+      <Directory Id="ProgramMenuFolder">
+        <Directory Id="AuroraMenuFolder" Name="AURORA AutoFill MSI"/>
+      </Directory>
+    </Directory>
+    <DirectoryRef Id="INSTALLFOLDER">
+      <Component Id="MsiInstallMarker" Guid="{6E7A74A3-04A7-499C-B540-2A824B0A82D3}">
+        <File Id="MsiMarker" KeyPath="yes" Name="AURORA-MSI-CHANNEL.txt"
+              Source="packaging\windows\AURORA-MSI-CHANNEL.txt"/>
+      </Component>
+    </DirectoryRef>
+    <DirectoryRef Id="AuroraMenuFolder">
+      <Component Id="AuroraShortcut" Guid="{6C5BC89D-EE4A-441D-A251-9549DA9603FD}">
+        <Shortcut Id="AuroraShortcutLink" Name="AURORA AutoFill (MSI)"
+                  Target="[INSTALLFOLDER]AURORA AutoFill.exe" WorkingDirectory="INSTALLFOLDER"/>
+        <RemoveFolder Id="RemoveAuroraMenu" On="uninstall"/>
+        <RegistryValue Root="HKCU" Key="Software\Aurora\AutoFillMSI"
+                       Name="ShortcutInstalled" Type="integer" Value="1" KeyPath="yes"/>
+      </Component>
+    </DirectoryRef>
+    <Feature Id="Complete" Level="1" Title="AURORA AutoFill" Display="expand"
+             Absent="disallow">
+      <ComponentGroupRef Id="AuroraApplicationFiles"/>
+      <ComponentRef Id="MsiInstallMarker"/>
+      <ComponentRef Id="AuroraShortcut"/>
+    </Feature>
+  </Product>
+</Wix>
