@@ -585,7 +585,7 @@ class AutoFillWindow(QMainWindow):
         shortcut_label.setObjectName("sectionTitle")
         shortcut_box.addWidget(shortcut_label)
         self.shortcut_input = QLineEdit()
-        self.shortcut_input.setPlaceholderText("/chamado")
+        self.shortcut_input.setPlaceholderText("/meuatalho")
         shortcut_box.addWidget(self.shortcut_input)
         fields.addLayout(shortcut_box, 1)
         folder_box = QVBoxLayout()
