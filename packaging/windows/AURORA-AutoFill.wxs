@@ -4,16 +4,18 @@
   <Product Id="*" Name="AURORA AutoFill (MSI)" Language="1046"
            Version="$(var.MsiVersion)" Manufacturer="Fabricio Matos"
            UpgradeCode="{0E9BE382-33A8-4635-BAF8-459B520F849A}">
-    <Package InstallerVersion="500" Compressed="yes" InstallScope="perMachine"
-             InstallPrivileges="elevated" Platform="x64"
+    <Package InstallerVersion="500" Compressed="yes" InstallScope="perUser"
+             InstallPrivileges="limited" Platform="x64"
              Description="AURORA AutoFill para Windows - instalador MSI"/>
     <MajorUpgrade AllowSameVersionUpgrades="yes"
                   DowngradeErrorMessage="Uma versao mais recente do AURORA AutoFill MSI ja esta instalada."/>
     <MediaTemplate EmbedCab="yes"/>
     <Property Id="ARPNOMODIFY" Value="1"/>
     <Directory Id="TARGETDIR" Name="SourceDir">
-      <Directory Id="ProgramFiles64Folder">
-        <Directory Id="INSTALLFOLDER" Name="AURORA AutoFill MSI"/>
+      <Directory Id="LocalAppDataFolder">
+        <Directory Id="MsiProgramsFolder" Name="Programs">
+          <Directory Id="INSTALLFOLDER" Name="AURORA AutoFill MSI"/>
+        </Directory>
       </Directory>
       <Directory Id="ProgramMenuFolder">
         <Directory Id="AuroraMenuFolder" Name="AURORA AutoFill MSI"/>
@@ -21,8 +23,10 @@
     </Directory>
     <DirectoryRef Id="INSTALLFOLDER">
       <Component Id="MsiInstallMarker" Guid="{6E7A74A3-04A7-499C-B540-2A824B0A82D3}">
-        <File Id="MsiMarker" KeyPath="yes" Name="AURORA-MSI-CHANNEL.txt"
+        <File Id="MsiMarker" Name="AURORA-MSI-CHANNEL.txt"
               Source="packaging\windows\AURORA-MSI-CHANNEL.txt"/>
+        <RegistryValue Root="HKCU" Key="Software\Aurora\AutoFillMSI"
+                       Name="ChannelInstalled" Type="integer" Value="1" KeyPath="yes"/>
       </Component>
     </DirectoryRef>
     <DirectoryRef Id="AuroraMenuFolder">
