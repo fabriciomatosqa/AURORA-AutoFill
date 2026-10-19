@@ -86,5 +86,93 @@ class PersistenceTests(unittest.TestCase):
         self.store = SnippetStore(Path(self.directory.name) / "data.sqlite3")
 
 
+class FirstRunExamplesTests(unittest.TestCase):
+    def test_new_installation_creates_only_four_examples_in_one_folder(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "snippets.sqlite3"
+            store = SnippetStore(path)
+            try:
+                store.seed_if_empty()
+                folders = store.folders()
+                self.assertEqual(len(folders), 1)
+                self.assertEqual(folders[0][1], "Conheça o AURORA")
+                snippets = store.snippets()
+                self.assertEqual(
+                    {s.shortcut for s in snippets},
+                    {"/bemvindo", "/tutorial", "/datahora", "/obrigado"},
+                )
+                self.assertTrue(all(s.folder_id == folders[0][0] for s in snippets))
+                tutorial = next(s for s in snippets if s.shortcut == "/tutorial")
+                self.assertIn("criar pastas", tutorial.content)
+                self.assertIn("Conheça o AURORA", tutorial.content)
+                date = next(s for s in snippets if s.shortcut == "/datahora")
+                self.assertIn("{{data}}", date.content)
+                self.assertIn("{{hora}}", date.content)
+                preview = render_snippet(date.content, now=datetime(2026, 10, 19, 20, 44))
+                self.assertIn("19/10/2026", preview.text)
+                self.assertIn("20:44", preview.text)
+                self.assertNotIn("{{data}}", preview.text)
+                self.assertNotIn("{{hora}}", preview.text)
+                store.seed_if_empty()
+                self.assertEqual(len(store.snippets()), 4)
+            finally:
+                store.close()
+
+    def test_existing_empty_database_is_not_populated(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "snippets.sqlite3"
+            first = SnippetStore(path)
+            first.close()
+            reopened = SnippetStore(path)
+            try:
+                reopened.seed_if_empty()
+                self.assertEqual(reopened.folders(), [])
+                self.assertEqual(reopened.snippets(), [])
+            finally:
+                reopened.close()
+
+    def test_custom_folder_prevents_examples(self):
+        with tempfile.TemporaryDirectory() as directory:
+            store = SnippetStore(Path(directory) / "data.sqlite3")
+            try:
+                store.create_folder("Minhas mensagens")
+                store.seed_if_empty()
+                self.assertEqual(len(store.folders()), 1)
+                self.assertEqual(store.snippets(), [])
+            finally:
+                store.close()
+
+    def test_deleted_examples_do_not_return_after_restarting(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "snippets.sqlite3"
+            store = SnippetStore(path)
+            store.seed_if_empty()
+            for snippet in store.snippets():
+                store.delete(snippet.id)
+            store.close()
+            reopened = SnippetStore(path)
+            try:
+                reopened.seed_if_empty()
+                self.assertEqual(reopened.snippets(), [])
+                self.assertEqual(len(reopened.folders()), 1)
+            finally:
+                reopened.close()
+
+    def test_existing_backed_up_data_is_preserved(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "snippets.sqlite3"
+            store = SnippetStore(path)
+            store.create_folder("Pessoal")
+            store.save(store.folders()[0][0], "Minha frase", "/frase", "Texto pessoal")
+            store.close()
+            reopened = SnippetStore(path)
+            try:
+                reopened.seed_if_empty()
+                self.assertEqual([s.shortcut for s in reopened.snippets()], ["/frase"])
+                self.assertEqual([name for _, name in reopened.folders()], ["Pessoal"])
+            finally:
+                reopened.close()
+
+
 if __name__ == "__main__":
     unittest.main()
