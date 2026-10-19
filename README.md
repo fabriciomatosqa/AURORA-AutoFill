@@ -16,7 +16,17 @@ Expansor de texto desktop para Windows e Linux, em Python/PySide6. Cadastra atal
 - **Linux:** teste aprimorado no GitHub Actions, incluindo bibliotecas X11, execução offscreen e validação sob Xvfb, além de conferir que o banner e o arquivo de som foram incluídos no executável.
 - **Rodapé:** crédito permanente: *Desenvolvido por Fabricio Matos • 2026*.
 
-## Instalar no Windows
+## Primeira instalação: Conheça o AURORA
+
+Em uma instalação realmente nova (sem banco de dados anterior), o aplicativo cria a pasta **Conheça o AURORA** com quatro exemplos editáveis:
+
+- `/bemvindo` — apresenta o AURORA AutoFill e seus benefícios.
+- `/tutorial` — ensina a criar atalhos e organizar conteúdos em pastas.
+- `/datahora` — demonstra os marcadores dinâmicos `{{data}}`, `{{hora}}` e `{{data_hora}}`.
+- `/obrigado` — agradece pela instalação e compartilha uma mensagem motivacional.
+
+A pasta inicial pode ser editada e os exemplos podem ser apagados. **Bancos de dados já existentes, inclusive vazios, não recebem esses exemplos novamente**, para preservar exclusões, dados próprios e backups importados. Atualizações não removem nem alteram atalhos antigos.
+
 
 Acesse [Actions](https://github.com/fabriciomatosqa/AURORA-AutoFill/actions), abra a execução de **Compilar instaladores AURORA AutoFill**, baixe o artefato `AURORA-AutoFill-v0.5.2-Windows-Setup` e extraia o instalador `.exe`.
 
