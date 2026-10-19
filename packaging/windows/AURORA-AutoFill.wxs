@@ -8,7 +8,7 @@
              InstallPrivileges="limited" Platform="x64"
              Description="AURORA AutoFill para Windows - instalador MSI"/>
     <MajorUpgrade AllowSameVersionUpgrades="yes"
-                  DowngradeErrorMessage="Uma versão mais recente do AURORA AutoFill MSI já está instalada."/>
+                  DowngradeErrorMessage="Uma versao mais recente do AURORA AutoFill MSI ja esta instalada."/>
     <MediaTemplate EmbedCab="yes"/>
     <Property Id="ARPNOMODIFY" Value="1"/>
     <Directory Id="TARGETDIR" Name="SourceDir">
