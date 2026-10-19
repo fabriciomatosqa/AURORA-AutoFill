@@ -34,17 +34,17 @@ class ReleaseAssetsTests(unittest.TestCase):
     def test_nested_windows_and_flat_linux_are_normalized_to_six_assets(self):
         with tempfile.TemporaryDirectory() as folder:
             root, destination = Path(folder) / "input", Path(folder) / "output"
-            exe, deb, tar = self.fixture(root)
+            exe, msi, deb, tar = self.fixture(root)
             result = assets.prepare_assets(root, destination, VERSION)
             self.assertEqual(len(result), 6)
             self.assertTrue(all(path.parent == destination for path in result))
-            for source in (exe, deb, tar):
+            for source in (exe, msi, deb, tar):
                 self.assertEqual((destination / source.name).read_bytes(), source.read_bytes())
 
     def test_bad_checksum_prevents_any_publication_files(self):
         with tempfile.TemporaryDirectory() as folder:
             root, destination = Path(folder) / "input", Path(folder) / "output"
-            exe, _, _ = self.fixture(root)
+            exe, _, _, _ = self.fixture(root)
             exe.write_bytes(b"modified")
             with self.assertRaisesRegex(ValueError, "SHA256"):
                 assets.prepare_assets(root, destination, VERSION)
@@ -53,7 +53,7 @@ class ReleaseAssetsTests(unittest.TestCase):
     def test_missing_or_duplicate_installer_is_rejected(self):
         with tempfile.TemporaryDirectory() as folder:
             root, destination = Path(folder) / "input", Path(folder) / "output"
-            exe, _, _ = self.fixture(root)
+            exe, _, _, _ = self.fixture(root)
             (root / exe.name).write_bytes(exe.read_bytes())
             with self.assertRaisesRegex(ValueError, "exatamente um"):
                 assets.prepare_assets(root, destination, VERSION)
