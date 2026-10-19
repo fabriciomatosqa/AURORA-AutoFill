@@ -14,6 +14,15 @@ SHORTCUT_PATTERN = re.compile(r"^/[^\s/]{1,30}$")
 VARIABLE_PATTERN = re.compile(r"\{\{([a-zA-Z_]+)\}\}")
 
 
+# Exemplos de apresentação para instalações verdadeiramente novas.
+WELCOME_SNIPPETS: tuple[tuple[str, str, str], ...] = (
+    ("Boas-vindas", "/bemvindo", "Olá! 👋 Seja muito bem-vindo ao AURORA AutoFill!\n\nEstamos felizes em ter você por aqui! ✨\n\nCom o AURORA AutoFill, suas tarefas do dia a dia ficarão mais simples, rápidas e práticas.\n\nImagine escrever textos inteiros digitando apenas algumas letras. É exatamente isso que o AURORA AutoFill faz por você!\n\nMenos digitação, mais produtividade e mais tempo para o que realmente importa! 🚀"),
+    ("Atalhos e pastas", "/tutorial", "✨ Você sabia que pode escrever textos completos usando apenas pequenos atalhos?\n\nCom o AURORA AutoFill, é muito fácil!\n\n⌨️ Como funcionam os atalhos?\n\nImagine que você cadastrou o atalho /ola com a mensagem:\n\n\"Olá! Tudo bem com você? Espero que esteja tendo um ótimo dia!\"\n\nAgora, sempre que você digitar /ola em um campo de texto compatível, o AURORA AutoFill poderá substituí-lo automaticamente pela mensagem completa.\n\nVocê pode criar quantos atalhos precisar, personalizar suas mensagens e editar tudo quando quiser!\n\n📁 Organize seus textos com pastas!\n\nPara facilitar ainda mais sua rotina, o AURORA AutoFill permite criar pastas para organizar seus atalhos por assunto, categoria ou preferência.\n\nPor exemplo:\n• 📁 Pessoal — mensagens para amigos e familiares.\n• 📁 Estudos — anotações e textos utilizados nos estudos.\n• 📁 Dia a dia — mensagens e informações que você utiliza frequentemente.\n\nAssim como esta pasta Conheça o AURORA, você pode criar suas próprias pastas e manter tudo organizado e fácil de encontrar!\n\n💡 Uma dica especial: comece criando alguns atalhos para as mensagens que você mais digita. Aos poucos, você perceberá quanto tempo consegue economizar!\n\n🚀 Você cria uma vez, organiza do seu jeito e ganha tempo todos os dias!"),
+    ("Data e hora automáticas", "/datahora", "📅 Que tal deixar o AURORA AutoFill cuidar da data e da hora para você?\n\nAlém de expandir textos, o AURORA AutoFill permite utilizar informações dinâmicas, como a data e a hora atuais.\n\nAssim, você não precisa atualizar essas informações manualmente toda vez que utilizar um texto.\n\nPor exemplo:\n\n📅 Data: {{data}}\n🕒 Hora: {{hora}}\n\nAo utilizar este atalho, o AURORA AutoFill preenche a data e a hora correspondentes ao momento da utilização. Você também pode usar {{data_hora}} em seus próprios textos.\n\n✨ Pequenos recursos que fazem uma grande diferença na sua rotina!"),
+    ("Agradecimento e motivação", "/obrigado", "💜 Obrigado por escolher o AURORA AutoFill!\n\nÉ uma alegria saber que nosso programa fará parte do seu dia a dia.\n\nO AURORA AutoFill foi criado com um propósito simples: facilitar sua vida, economizar seu tempo e tornar suas atividades mais práticas.\n\nLembre-se: produtividade não significa fazer mais coisas o tempo todo, mas encontrar maneiras inteligentes de fazer o que realmente importa.\n\nCada segundo economizado é uma oportunidade de dedicar mais tempo a você, aos seus sonhos e às pessoas que ama.\n\n🌌 Que o AURORA AutoFill seja uma pequena ferramenta para grandes conquistas!\n\nObrigado por fazer parte dessa jornada! 🚀"),
+)
+
+
 @dataclass(frozen=True)
 class Snippet:
     id: int
@@ -80,6 +89,9 @@ def application_db_path() -> Path:
 class SnippetStore:
     def __init__(self, db_path: str | Path):
         path = Path(db_path)
+        # Se o banco já existia (mesmo vazio), nunca recrie exemplos após atualização,
+        # exclusão de pastas ou restauração de backup.
+        self._new_database = not path.exists()
         path.parent.mkdir(parents=True, exist_ok=True)
         self.connection = sqlite3.connect(str(path))
         self.connection.row_factory = sqlite3.Row
@@ -197,14 +209,21 @@ class SnippetStore:
         return imported, skipped
 
     def seed_if_empty(self) -> None:
-        if self.folders():
+        """Cria a apresentação somente na primeira abertura de um banco novo."""
+        if not self._new_database or self.folders() or self.snippets():
             return
-        folder = self.create_folder("Meus atalhos")
-        self.save(folder, "Boas-vindas", "/ola", "Olá! Tudo bem? Posso ajudar em alguma coisa?")
-        self.save(folder, "Data e hora", "/agora", "Hoje é {{data}}, às {{hora}}.")
-        self.save(folder, "Chamado de TI", "/chamado", "Olá,\n\nSua solicitação foi registrada em {{data}}.\n\nAtenciosamente,\nEquipe de TI")
-        self.save(folder, "Modelo com cursor", "/resposta", "Olá, {{cursor}}!\n\nObrigado pelo contato.")
-        self.save(folder, "Conteúdo copiado", "/colar", "Informação recebida: {{clipboard}}")
+        # Uma transação evita que uma falha grave deixe parte dos exemplos gravados.
+        with self.connection:
+            folder = self.connection.execute(
+                "INSERT INTO folders(name) VALUES (?)", ("Conheça o AURORA",)
+            ).lastrowid
+            for title, shortcut, body in WELCOME_SNIPPETS:
+                validate_shortcut(shortcut)
+                self.connection.execute(
+                    "INSERT INTO snippets(folder_id, title, shortcut, content) VALUES (?,?,?,?)",
+                    (folder, title, shortcut, body),
+                )
+        self._new_database = False
 
     def close(self) -> None:
         self.connection.close()
