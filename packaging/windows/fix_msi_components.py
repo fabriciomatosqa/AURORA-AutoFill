@@ -48,19 +48,43 @@ def convert(source: Path) -> int:
         count += 1
     if not count:
         raise ValueError("Nenhum componente encontrado no XML do WiX.")
-    # WiX ICE64: EVERY folder under LocalAppDataFolder must have a
-    # RemoveFile/RemoveFolder entry to allow clean MSI uninstallation.
-    # Attach it to the first component beneath that directory, using a
-    # stable identifier; Windows removes only empty directories.
-    for directory in tree.iter(directory_tag):
-        directory_id = directory.attrib.get("Id")
-        component = next(directory.iter(component_tag), None)
-        if directory_id and component is not None:
-            component.append(ET.Element(remove_tag, {
-                "Id": "remove_" + directory_id,
+    # WiX heat puts directories and components in DIFFERENT fragments.
+    # Components are not nested under their folders. ICE64 needs a
+    # RemoveFolder entry for each harvested directory in the MSI RemoveFile
+    # table. Put these in a dedicated component explicitly referenced by
+    # the harvested component group. No suppression of ICE validations.
+    directories = sorted({
+        directory.attrib["Id"] for directory in tree.iter(directory_tag)
+        if directory.attrib.get("Id")
+    })
+    if directories:
+        group = next((item for item in tree.iter(f"{{{NS}}}ComponentGroup")
+                      if item.attrib.get("Id") == "AuroraApplicationFiles"), None)
+        if group is None:
+            raise ValueError("Grupo de componentes WiX nao encontrado.")
+        fragment = ET.SubElement(tree.getroot(), f"{{{NS}}}Fragment")
+        ref = ET.SubElement(fragment, f"{{{NS}}}DirectoryRef", {"Id": "INSTALLFOLDER"})
+        cleanup = ET.SubElement(ref, component_tag, {
+            "Id": "AuroraMsiCleanupDirectories",
+            "Guid": "{E58C83C3-CF7E-4AAA-9A8C-708E234D7292}",
+        })
+        for index, directory_id in enumerate(directories):
+            ET.SubElement(cleanup, remove_tag, {
+                "Id": f"RemoveHarvestedDir{index}",
                 "Directory": directory_id,
                 "On": "uninstall",
-            }))
+            })
+        ET.SubElement(cleanup, registry_tag, {
+            "Root": "HKCU",
+            "Key": r"Software\Aurora\AutoFillMSI",
+            "Name": "CleanupDirectories",
+            "Value": "1",
+            "Type": "integer",
+            "KeyPath": "yes",
+        })
+        ET.SubElement(group, f"{{{NS}}}ComponentRef", {
+            "Id": "AuroraMsiCleanupDirectories",
+        })
     tree.write(source, encoding="utf-8", xml_declaration=True)
     print(f"Componentes MSI por usuario atualizados: {count}")
     return count

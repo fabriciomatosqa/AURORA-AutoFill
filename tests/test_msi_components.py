@@ -1,4 +1,4 @@
-"""WiX components under LocalAppData must use HKCU registry key paths."""
+"""WiX heat directory/component fragments remain valid for per-user MSI."""
 from pathlib import Path
 import importlib.util
 import tempfile
@@ -13,19 +13,25 @@ spec.loader.exec_module(module)
 
 
 class MSIComponentsTests(unittest.TestCase):
-    def test_heat_components_use_hkcu_and_remove_file_keypath(self):
+    def test_heat_components_use_hkcu_and_register_all_directories(self):
+        # heat -cg creates directories and components in SEPARATE fragments.
         xml = """<?xml version="1.0" encoding="utf-8"?>
 <Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
-  <Fragment><DirectoryRef Id="INSTALLFOLDER">
-    <Component Id="cmpOne" Guid="*">
-      <File Id="filOne" KeyPath="yes" Source="a.exe"/>
-    </Component>
-    <Directory Id="dirChild" Name="internal">
-      <Component Id="cmpTwo" Guid="*">
+  <Fragment>
+    <DirectoryRef Id="INSTALLFOLDER">
+      <Directory Id="dirChild" Name="internal"/>
+    </DirectoryRef>
+  </Fragment>
+  <Fragment>
+    <ComponentGroup Id="AuroraApplicationFiles">
+      <Component Id="cmpOne" Directory="INSTALLFOLDER" Guid="*">
+        <File Id="filOne" KeyPath="yes" Source="a.exe"/>
+      </Component>
+      <Component Id="cmpTwo" Directory="dirChild" Guid="*">
         <File Id="filTwo" KeyPath="yes" Source="b.dll"/>
       </Component>
-    </Directory>
-  </DirectoryRef></Fragment>
+    </ComponentGroup>
+  </Fragment>
 </Wix>
 """
         with tempfile.TemporaryDirectory() as tmp:
@@ -33,8 +39,10 @@ class MSIComponentsTests(unittest.TestCase):
             f.write_text(xml, encoding="utf-8")
             self.assertEqual(module.convert(f), 2)
             tree = ET.parse(f)
+            components = [c for c in tree.iter(module.component_tag)
+                          if c.find(module.file_tag) is not None]
             names = []
-            for component in tree.iter(module.component_tag):
+            for component in components:
                 file = component.find(module.file_tag)
                 self.assertNotIn("KeyPath", file.attrib)
                 registry = component.find(module.registry_tag)
@@ -44,17 +52,22 @@ class MSIComponentsTests(unittest.TestCase):
                 self.assertNotEqual(component.attrib["Guid"], "*")
                 names.append(registry.attrib["Name"])
             self.assertEqual(names, ["cmpOne", "cmpTwo"])
-            guids_first = [c.attrib["Guid"] for c in tree.iter(module.component_tag)]
-            self.assertEqual(len(set(guids_first)), 2)
+            cleanup = next(c for c in tree.iter(module.component_tag)
+                           if c.attrib["Id"] == "AuroraMsiCleanupDirectories")
+            removed = [x.attrib["Directory"] for x in cleanup.findall(module.remove_tag)]
+            self.assertEqual(removed, ["dirChild"])
+            self.assertEqual(cleanup.find(module.registry_tag).attrib["Root"], "HKCU")
+            groups = [g for g in tree.iter(f"{{{module.NS}}}ComponentGroup")
+                      if g.attrib.get("Id") == "AuroraApplicationFiles"]
+            refs = [x.attrib["Id"] for x in groups[0].findall(f"{{{module.NS}}}ComponentRef")]
+            self.assertIn("AuroraMsiCleanupDirectories", refs)
+            guids = [c.attrib["Guid"] for c in components]
+            self.assertEqual(len(set(guids)), len(guids))
             f.write_text(xml, encoding="utf-8")
             module.convert(f)
-            guids_again = [c.attrib["Guid"] for c in ET.parse(f).iter(module.component_tag)]
-            self.assertEqual(guids_first, guids_again)
-            components = list(tree.iter(module.component_tag))
-            cleanup = components[1].find(module.remove_tag)
-            self.assertIsNotNone(cleanup)
-            self.assertEqual(cleanup.attrib["Directory"], "dirChild")
-            self.assertEqual(cleanup.attrib["On"], "uninstall")
+            second = [c.attrib["Guid"] for c in ET.parse(f).iter(module.component_tag)
+                      if c.find(module.file_tag) is not None]
+            self.assertEqual(guids, second)
 
 
 if __name__ == "__main__":
