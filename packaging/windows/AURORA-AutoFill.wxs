@@ -30,7 +30,7 @@
         <Shortcut Id="AuroraShortcutLink" Name="AURORA AutoFill (MSI)"
                   Target="[INSTALLFOLDER]AURORA AutoFill.exe" WorkingDirectory="INSTALLFOLDER"/>
         <RemoveFolder Id="RemoveAuroraMenu" On="uninstall"/>
-        <RegistryValue Root="HKLM" Key="Software\Aurora\AutoFillMSI"
+        <RegistryValue Root="HKCU" Key="Software\Aurora\AutoFillMSI"
                        Name="ShortcutInstalled" Type="integer" Value="1" KeyPath="yes"/>
       </Component>
     </DirectoryRef>
