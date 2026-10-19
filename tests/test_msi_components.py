@@ -38,7 +38,7 @@ class MSIComponentsTests(unittest.TestCase):
                 registry = component.find(module.registry_tag)
                 self.assertEqual(registry.attrib["Root"], "HKCU")
                 self.assertEqual(registry.attrib["KeyPath"], "yes")
-                self.assertRegex(component.attrib["Guid"], r"^\\{[0-9A-F-]{36}\\}$")
+                self.assertRegex(component.attrib["Guid"], r"^\{[0-9A-F-]{36}\}$")
                 self.assertNotEqual(component.attrib["Guid"], "*")
                 names.append(registry.attrib["Name"])
             self.assertEqual(names, ["cmpOne", "cmpTwo"])

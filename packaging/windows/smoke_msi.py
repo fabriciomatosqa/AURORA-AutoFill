@@ -20,14 +20,16 @@ def main():
     msi = args.msi.resolve(strict=True)
     with tempfile.TemporaryDirectory(prefix="aurora-msi-", dir=os.environ.get("RUNNER_TEMP")) as directory:
         root = Path(directory)
-        install = root / "application MSI with spaces"
+        # Keep INSTALLFOLDER inside the user's LocalAppData profile.
+        local = Path(os.environ["LOCALAPPDATA"])
+        install = local / "Programs" / f"AURORA AutoFill MSI smoke {root.name}"
         log = root / "msi-install.log"
         uninstall_log = root / "msi-uninstall.log"
 
         def show_log(path):
             if path.exists():
                 raw = path.read_bytes()
-                encoding = "utf-16" if raw.startswith((b"\\xff\\xfe", b"\\xfe\\xff")) else "utf-8"
+                encoding = "utf-16" if raw.startswith((bytes((255, 254)), bytes((254, 255)))) else "utf-8"
                 print(raw.decode(encoding, errors="replace")[-12000:], flush=True)
 
         def invoke(*args, logfile):
