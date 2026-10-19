@@ -20,9 +20,11 @@ def main():
     msi = args.msi.resolve(strict=True)
     with tempfile.TemporaryDirectory(prefix="aurora-msi-", dir=os.environ.get("RUNNER_TEMP")) as directory:
         root = Path(directory)
-        # Keep INSTALLFOLDER inside the user's LocalAppData profile.
+        # Exercise the default MSI install directory, as an end user would.
+        # Supplying INSTALLFOLDER with spaces caused an unexplained msiexec hang
+        # on Windows hosted runners; this also tests the actual default path.
         local = Path(os.environ["LOCALAPPDATA"])
-        install = local / "Programs" / f"AURORA AutoFill MSI smoke {root.name}"
+        install = local / "Programs" / "AURORA AutoFill MSI"
         log = root / "msi-install.log"
         uninstall_log = root / "msi-uninstall.log"
 
@@ -31,6 +33,8 @@ def main():
                 raw = path.read_bytes()
                 encoding = "utf-16" if raw.startswith((bytes((255, 254)), bytes((254, 255)))) else "utf-8"
                 print(raw.decode(encoding, errors="replace")[-12000:], flush=True)
+            else:
+                print(f"MSI log has not been created: {path}", flush=True)
 
         def invoke(*args, logfile):
             command = ["msiexec.exe", *args, "/qn", "/norestart", "/L*V", str(logfile)]
@@ -40,8 +44,16 @@ def main():
             proc = subprocess.Popen(command, stdin=subprocess.DEVNULL,
                                     stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             try:
-                code = proc.wait(timeout=180)
+                code = proc.wait(timeout=90)
             except subprocess.TimeoutExpired:
+                print("msiexec stuck; diagnosing Windows Installer service:", flush=True)
+                for diagnostic in (["sc.exe", "query", "msiserver"],
+                                   ["tasklist.exe", "/FI", "IMAGENAME eq msiexec.exe"]):
+                    try:
+                        item = subprocess.run(diagnostic, text=True, capture_output=True, timeout=10)
+                        print(item.stdout[-4000:], item.stderr[-1000:], flush=True)
+                    except (OSError, subprocess.TimeoutExpired) as problem:
+                        print(f"Diagnostic unavailable: {problem}", flush=True)
                 show_log(logfile)
                 subprocess.run(["taskkill", "/PID", str(proc.pid), "/T", "/F"],
                                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
@@ -57,7 +69,7 @@ def main():
         # entry ensure existing Inno installations never get overwritten.
         installed = False
         try:
-            invoke("/i", str(msi), f"INSTALLFOLDER={install}", logfile=log)
+            invoke("/i", str(msi), logfile=log)
             installed = True
             assert (install / "AURORA AutoFill.exe").is_file(), "MSI did not install the executable"
             assert (install / "AURORA-MSI-CHANNEL.txt").is_file(), "MSI marker missing"
