@@ -34,6 +34,8 @@ New-Item -ItemType Directory -Force $work | Out-Null
 $harvest = Join-Path $work 'ApplicationFiles.wxs'
 & $heat dir $bundle -nologo -cg AuroraApplicationFiles -dr INSTALLFOLDER -srd -scom -sreg -ag -var var.SourceDir -out $harvest
 if ($LASTEXITCODE -ne 0) { throw 'WiX heat falhou ao coletar PyInstaller.' }
+python packaging/windows/fix_msi_components.py $harvest
+if ($LASTEXITCODE -ne 0) { throw 'Nao foi possivel preparar componentes MSI por usuario.' }
 & $candle -nologo -arch x64 "-dSourceDir=$bundle" "-dMsiVersion=$msiVersion" -out (Join-Path $work 'Aurora.wixobj') 'packaging/windows/AURORA-AutoFill.wxs'
 if ($LASTEXITCODE -ne 0) { throw 'WiX candle falhou no projeto MSI.' }
 & $candle -nologo -arch x64 "-dSourceDir=$bundle" -out (Join-Path $work 'ApplicationFiles.wixobj') $harvest
