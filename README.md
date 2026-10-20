@@ -27,18 +27,18 @@ Os exemplos antigos `/ola`, `/agora`, `/chamado`, `/resposta` e `/colar` **não 
 
 Em instalações existentes, **nenhum comando pessoal é excluído nem substituído**. Os exemplos nunca são recriados após exclusão, restauração de backup ou atualização. Para testar o comportamento de primeira instalação, utilize um perfil temporário isolado; não apague dados pessoais.
 
-### Pasta de dados AuroraAutoFill e migração sem perda
+### Pasta exclusiva de dados AuroraAutoFill
 
-A pasta de dados passou a se chamar **AuroraAutoFill**:
+O AURORA AutoFill utiliza **somente** a pasta oficial abaixo, criando-a automaticamente quando necessário:
 
 - Windows: `%APPDATA%\\AuroraAutoFill`
 - Linux: `~/.local/share/AuroraAutoFill` (ou `$XDG_DATA_HOME/AuroraAutoFill`)
 
-Quando a pasta nova **não existe** e há uma pasta legada `AutoFillStudio`, o aplicativo renomeia a pasta antiga inteira **antes** de abrir o banco. Isso preserva `snippets.sqlite3`, `settings.json`, backups, pastas extras e arquivos auxiliares, sem conversão destrutiva.
+Nela ficam `snippets.sqlite3`, `settings.json`, backups e os demais dados do perfil. O aplicativo **não busca, importa, renomeia, move nem exclui** o antigo diretório `AutoFillStudio`. A pasta antiga permanece intocada, se existir.
 
-Se ambas as pastas já existirem, o aplicativo mantém ambas intactas e utiliza **AuroraAutoFill**: revise os perfis antes de excluir a antiga. Se não for possível migrar por permissões ou arquivos abertos, o aplicativo interrompe a abertura em vez de criar um banco vazio por engano. Nunca exclua os dados originais para forçar uma atualização.
+**Atenção ao testar:** se seus comandos estão apenas no diretório antigo, eles **não aparecem automaticamente** na nova instalação. Exporte ou faça backup dos seus dados antes de trocar de instalação e importe ou restaure no AURORA quando desejar. Se a pasta nova não contiver banco de dados, serão criados os quatro exemplos da pasta **Conheça o AURORA**.
 
-O identificador da instalação Windows, a localização do executável e o formato dos arquivos de backup **não mudaram**; o JSON legado `AutoFillStudioBackup` continua aceito por compatibilidade.
+Os formatos de backup continuam compatíveis, incluindo o JSON legado `AutoFillStudioBackup`. Remover a migração entre *pastas* não altera os recursos de importar e restaurar backups.
 
 ### Nova marca transparente
 
