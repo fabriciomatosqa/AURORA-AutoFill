@@ -16,6 +16,7 @@ from PySide6.QtWidgets import (
 from .core import Snippet, SnippetStore, application_db_path, render_snippet
 from .hotkeys import GlobalHotkeyListener, type_backspace_and_paste
 from .formatting import has_rich_formatting, render_rich_html
+from .branding import brand_webp_bytes
 
 
 STYLESHEET = """
@@ -307,7 +308,17 @@ class AutoFillWindow(QMainWindow):
         except (TypeError, ValueError):
             self._text_zoom = 100
         self.setWindowTitle("AURORA AutoFill v0.5.3 — Expansor de textos")
-        self.setWindowIcon(QIcon(str(Path(__file__).resolve().parent.parent / "assets" / "aurora_icon.png")))
+        assets = Path(__file__).resolve().parent.parent / "assets"
+        self._brand_pixmap = QPixmap()
+        try:
+            if not self._brand_pixmap.loadFromData(brand_webp_bytes(assets), "WEBP"):
+                raise ValueError("Qt não conseguiu decodificar a marca WEBP.")
+        except (ValueError, OSError) as exc:
+            # PNG gerado no empacotamento garante a marca mesmo sem plugin WEBP.
+            self._brand_pixmap = QPixmap(str(assets / "aurora_icon.png"))
+            if self._brand_pixmap.isNull():
+                raise RuntimeError("Ícone AURORA indisponível.") from exc
+        self.setWindowIcon(QIcon(self._brand_pixmap))
         # Impede a compactação horizontal desordenada dos campos; em telas de
         # pouca altura o editor usa rolagem própria, sem sobrepor controles.
         screen = QApplication.primaryScreen()
@@ -385,7 +396,7 @@ class AutoFillWindow(QMainWindow):
         h.setContentsMargins(28, 16, 26, 16)
         h.setSpacing(14)
         brand_mark = QLabel()
-        brand_mark.setPixmap(QIcon(str(assets / "aurora_icon.png")).pixmap(82, 82))
+        brand_mark.setPixmap(self._brand_pixmap.scaled(82, 82, Qt.KeepAspectRatio, Qt.SmoothTransformation))
         brand_mark.setFixedSize(82, 82)
         h.addWidget(brand_mark)
         brand_box = QVBoxLayout()
