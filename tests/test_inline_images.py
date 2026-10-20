@@ -35,7 +35,9 @@ class InlineImageTests(unittest.TestCase):
     def test_mixed_text_and_inline_image_roundtrip(self):
         editor = AuroraImageEditor()
         editor.setPlainText("Antes do print\n")
-        self.assertTrue(editor.insert_image(self.image()))
+        errors = []
+        editor.imageRejected.connect(errors.append)
+        self.assertTrue(editor.insert_image(self.image()), errors)
         editor.insertPlainText("\nDepois do print")
         html = editor.toHtml()
         sources = image_sources(html)
@@ -59,8 +61,10 @@ class InlineImageTests(unittest.TestCase):
         editor = AuroraImageEditor()
         clipboard = QMimeData()
         clipboard.setImageData(self.image())
+        errors = []
+        editor.imageRejected.connect(errors.append)
         editor.insertFromMimeData(clipboard)
-        self.assertTrue(contains_inline_images(editor.toHtml()))
+        self.assertTrue(contains_inline_images(editor.toHtml()), errors)
         self.assertEqual(plain_text_fallback(editor.toPlainText()), "[Imagem]")
 
     def test_external_image_paste_is_rejected_without_loading_remote_resource(self):
@@ -85,7 +89,9 @@ class InlineImageTests(unittest.TestCase):
     def test_inline_images_survive_json_and_whole_profile_backup(self):
         editor = AuroraImageEditor()
         editor.insertPlainText("Texto\n")
-        self.assertTrue(editor.insert_image(self.image()))
+        errors = []
+        editor.imageRejected.connect(errors.append)
+        self.assertTrue(editor.insert_image(self.image()), errors)
         editor.insertPlainText("\nFim")
         html = editor.toHtml()
         fallback = plain_text_fallback(editor.toPlainText())
