@@ -38,6 +38,38 @@ $timer.Start()
 '''
 
 
+def launch_synthetic_editor(powershell):
+    """Start just the synthetic WinForms fixture before warming the UIA helper.
+
+    A Windows hosted runner may cold-start PowerShell/.NET slowly. We do not
+    weaken the UIA assertions; failure to create the window remains fatal.
+    """
+    failures = []
+    for attempt in range(3):
+        fixture = subprocess.Popen(
+            [str(powershell), '-NoProfile', '-NonInteractive', '-STA',
+             '-Command', FIXTURE], stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+            text=True, creationflags=subprocess.CREATE_NO_WINDOW)
+        lines = queue.Queue()
+        Thread(target=lambda proc=fixture, target=lines:
+               target.put(proc.stdout.readline()), daemon=True).start()
+        try:
+            handles = json.loads(lines.get(timeout=15))
+            if (not isinstance(handles, dict)
+                    or not all(type(handles.get(k)) is int and handles[k] > 0
+                               for k in ('window', 'control'))):
+                raise ValueError('invalid HWND values')
+            return fixture, handles
+        except (queue.Empty, ValueError) as exc:
+            if fixture.poll() is None:
+                fixture.kill()
+            _, errors = fixture.communicate(timeout=5)
+            # Only synthetic fixture diagnostics; never dump document data.
+            failures.append(f'attempt {attempt + 1}: {type(exc).__name__}, '
+                            f'exit={fixture.returncode}, stderr={errors[-240:]}')
+    raise RuntimeError('Synthetic Windows editor unavailable: ' + '; '.join(failures))
+
+
 def main():
     if sys.platform != 'win32':
         raise SystemExit('This smoke test requires Windows')
@@ -47,12 +79,7 @@ def main():
     from app.expansion import FocusContext, utf16_length, utf16_slice
     from app.windows_context import capture_focus
     powershell = Path(os.environ['SystemRoot']) / 'System32/WindowsPowerShell/v1.0/powershell.exe'
-    fixture = subprocess.Popen([str(powershell), '-NoProfile', '-NonInteractive', '-STA',
-                                '-Command', FIXTURE], stdout=subprocess.PIPE,
-                               stderr=subprocess.PIPE, text=True,
-                               creationflags=subprocess.CREATE_NO_WINDOW)
-    lines = queue.Queue()
-    Thread(target=lambda: lines.put(fixture.stdout.readline()), daemon=True).start()
+    fixture = None
 
     def select_verified_with_retry(previous, start, end):
         """Retry only cold UIA transport delays against the SAME synthetic field.
@@ -86,20 +113,16 @@ def main():
                 time.sleep(.1)
 
     try:
+        # Starting two cold PowerShell/.NET processes concurrently caused
+        # intermittent fixture timeouts on GitHub-hosted Windows runners.
+        fixture, handles = launch_synthetic_editor(powershell)
         warm_accessibility()
-        try:
-            handles = json.loads(lines.get(timeout=20))
-        except queue.Empty as exc:
-            raise RuntimeError('Synthetic Windows editor did not start within 20 seconds') from exc
-        if not isinstance(handles, dict) or not all(isinstance(handles.get(k), int)
-                                                     for k in ('window', 'control')):
-            raise RuntimeError('Synthetic editor returned invalid HWND values')
         context = FocusContext(handles['window'], handles['control'])
         api = ctypes.windll.user32
         api.SetForegroundWindow.argtypes = [wintypes.HWND]
         api.SetForegroundWindow(context.window)
         # Wait only for our synthetic editor and the cold bridge handshake.
-        deadline = time.monotonic() + 12
+        deadline = time.monotonic() + 20
         snapshot = None
         while time.monotonic() < deadline:
             if capture_focus() == context:
@@ -139,9 +162,10 @@ def main():
         print('UIA smoke passed: exact shortcut selection, direct caret, Unicode, stale request rejection')
     finally:
         stop_accessibility()
-        if fixture.poll() is None:
-            fixture.kill()
-        fixture.communicate(timeout=5)
+        if fixture is not None:
+            if fixture.poll() is None:
+                fixture.kill()
+            fixture.communicate(timeout=5)
 
 
 if __name__ == '__main__':
