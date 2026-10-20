@@ -95,7 +95,9 @@ class AccessibilityContextTests(unittest.TestCase):
                 e.drain()
             self.assertEqual(e.field.text, 'AB')
             e.move.assert_not_called()
-            e.host._play_confirmation.assert_not_called()
+            # Acionamento de Ctrl+V confirmado; a posterior troca de
+            # identidade impede mover o cursor, mas não cancela o som já tocado.
+            e.host._play_confirmation.assert_called_once()
 
     def test_unsupported_or_unresponsive_provider_preserves_shortcut(self):
         for failure in (None, AccessibilityUnavailable('unavailable')):

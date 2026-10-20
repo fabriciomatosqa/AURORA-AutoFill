@@ -27,7 +27,8 @@ from .version import APP_VERSION
 from .icons import apply_icon
 from .branding import brand_webp_bytes
 from .inline_images import AuroraImageEditor, contains_inline_images, plain_text_fallback, validate_inline_html, image_sources, read_image_file
-from .clipboard_content import clone_mime, expansion_mime, image_mime, prepare_mixed_content
+from .clipboard_content import (clone_mime, expansion_mime, image_mime,
+                                message_as_image_mime, prepare_mixed_content)
 
 
 def cursor_steps(text: str) -> int:
@@ -1281,6 +1282,12 @@ class AutoFillWindow(AuroraFeaturesMixin, QMainWindow):
                 operation.document_cursor_prefix = mixed.document_cursor_prefix
                 operation.left_moves = mixed.left_moves
                 operation.image_count, operation.image_only = mixed.image_count, mixed.image_only
+                # Modo opcional para mensageiros que aceitam capturas como
+                # anexos, mas rejeitam <img> dentro do HTML.
+                internal_test = self.isActiveWindow() and self.focusWidget() is self.test_box
+                operation.bitmap_mode = bool(
+                    getattr(self, "preferences", {}).get("images_as_single_picture", False)
+                    and not internal_test)
                 if "\x00" in operation.text:
                     raise ValueError("O texto contém um caractere NUL e não pode ser colado.")
                 operation.text.encode("utf-16-le")
@@ -1308,12 +1315,14 @@ class AutoFillWindow(AuroraFeaturesMixin, QMainWindow):
                         else self._clone_clipboard_mime())
             from uuid import uuid4
             token = uuid4().hex.encode("ascii")
-            payload = expansion_mime(operation.text, operation.rich_html, image_only=operation.image_only)
+            payload = (message_as_image_mime(operation.rich_html) if operation.bitmap_mode
+                       else expansion_mime(operation.text, operation.rich_html,
+                                           image_only=operation.image_only))
             payload.setData("application/x-aurora-expansion", token)
             if self._clipboard_sequence() != backup_sequence:
                 raise ValueError("O clipboard mudou durante a preparação; colagem cancelada.")
             clipboard.setMimeData(payload)
-            lease = ClipboardLease(operation.candidate.identifier, original, operation.text, token,
+            lease = ClipboardLease(operation.candidate.identifier, original, payload.text(), token,
                                    self._clipboard_sequence())
             operation.lease = self._clipboard_lease = lease
             self._clipboard_pending = True
@@ -1354,6 +1363,21 @@ class AutoFillWindow(AuroraFeaturesMixin, QMainWindow):
             else:
                 operation.stage = "sent"
                 replace_shortcut(cursor_steps(operation.candidate.shortcut))
+            # Para navegadores a confirmação de conteúdo pode não estar
+            # disponível. Reproduzir o som ao ACIONAR a colagem, sem afirmar
+            # que o destino aceitou imagens/anexos. Não toca duas vezes.
+            if (operation.image_count or operation.before is None
+                    or operation.before.identity):
+                operation.feedback_played = True
+                self._play_confirmation()
+            if operation.bitmap_mode:
+                # O destino recebe um PNG nativo. UIA não pode comprovar se
+                # um mensageiro criou o anexo; não repetir Ctrl+V.
+                lease.consumed = True
+                self._finish_expansion(
+                    operation, "Imagem única enviada para colagem. Confira o anexo "
+                               "no Teams antes de enviar a mensagem.")
+                return
             operation.deadline = monotonic() + 1.5
             QTimer.singleShot(10, lambda op=operation: self._confirm_expansion(op))
         except Exception as exc:
@@ -1446,7 +1470,9 @@ class AutoFillWindow(AuroraFeaturesMixin, QMainWindow):
         if operation.image_count and not operation.images_confirmed:
             message += " · Imagens não verificadas no destino. Se necessário, use Copiar para outro aplicativo no editor."
         self.statusBar().showMessage(message, 10000 if operation.image_count else 3000)
-        self._play_confirmation()
+        if not operation.feedback_played:
+            operation.feedback_played = True
+            self._play_confirmation()
         self._finish_expansion(operation)
 
     def _finish_expansion(self, operation, message=""):
@@ -1457,7 +1483,8 @@ class AutoFillWindow(AuroraFeaturesMixin, QMainWindow):
         if operation and operation.lease:
             lease = operation.lease
             sent = operation.stage in {"sent", "moving", "confirmed"}
-            delay = 1450 if sent and (operation.image_count or not lease.consumed) else 0
+            delay = (3500 if sent and operation.bitmap_mode else
+                     1450 if sent and (operation.image_count or not lease.consumed) else 0)
             QTimer.singleShot(delay, lambda saved=lease: self._restore_clipboard(saved))
         self._active_candidate = None
         self._expansion_operation = None
