@@ -17,7 +17,8 @@ env:
 
 concurrency:
   group: aurora-installers-${{ github.ref }}
-  cancel-in-progress: false
+  # Cancela apenas testes PR obsoletos; uma publicação da main nunca é interrompida.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   version:
