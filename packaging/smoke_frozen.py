@@ -50,7 +50,7 @@ def main():
                 raise SystemExit(f'Aplicativo compilado terminou com codigo {result.returncode}')
 
         launch()
-        database = profile / 'AutoFillStudio' / 'snippets.sqlite3'
+        database = profile / 'AuroraAutoFill' / 'snippets.sqlite3'
         if not database.is_file():
             raise SystemExit('Banco nao foi criado no perfil temporario esperado.')
         with closing(sqlite3.connect(database)) as connection, connection:
