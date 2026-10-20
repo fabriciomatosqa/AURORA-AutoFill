@@ -786,8 +786,8 @@ class AutoFillWindow(AuroraFeaturesMixin, QMainWindow):
         self.copy_content_menu.aboutToShow.connect(self._prepare_copy_menu)
         self.copy_content_button.setMenu(self.copy_content_menu)
         copy_row.addWidget(self.copy_content_button)
-        copy_hint = QLabel("Se a imagem não aparecer no destino, copie cada imagem por este menu e cole com Ctrl+V.\n"
-                          "ChatGPT e Teams podem recebê-la como anexo, fora da posição original do texto.")
+        copy_hint = QLabel("Teams: use Copiar mensagem como imagem única e cole com Ctrl+V.\n"
+                          "Se o destino não aceitar, tente Copiar imagem individual. Verifique o anexo antes de enviar.")
         copy_hint.setObjectName("hint")
         copy_hint.setWordWrap(True)
         copy_row.addWidget(copy_hint, 1)
