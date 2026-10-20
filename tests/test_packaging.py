@@ -138,7 +138,7 @@ class FrozenSmokeTests(unittest.TestCase):
 
         def launch(_args, **kwargs):
             self.assertTrue(all(connection.closed for connection in connections))
-            database = Path(kwargs['env']['APPDATA']) / 'AutoFillStudio/snippets.sqlite3'
+            database = Path(kwargs['env']['APPDATA']) / 'AuroraAutoFill/snippets.sqlite3'
             database.parent.mkdir(parents=True, exist_ok=True)
             with closing(connect(database)) as connection, connection:
                 if not launches:
