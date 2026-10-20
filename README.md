@@ -1,78 +1,105 @@
-# AURORA AutoFill v0.5.3
+# AURORA AutoFill — referência funcional v0.6.1 (19/10/2026)
+
+> **Referência aprovada visualmente pelo usuário:** execução [GitHub Actions #39292588074](https://github.com/fabriciomatosqa/AURORA-AutoFill/actions/runs/39292588074), com seis jobs concluídos com sucesso. Código exato: [`1e451261ddf2a3fc0f060aaefe42dfaf328b77ae`](https://github.com/fabriciomatosqa/AURORA-AutoFill/tree/1e451261ddf2a3fc0f060aaefe42dfaf328b77ae), na branch [`dev/correcao-expansao-windows`](https://github.com/fabriciomatosqa/AURORA-AutoFill/tree/dev/correcao-expansao-windows). Na captura do usuário, a janela mostra **V0.6.1-191026**.
+>
+> **ATENÇÃO — branches divergentes:** este README preserva a documentação do código funcional acima, **mas o código da branch `main` ainda vem da linha v0.5.x e NÃO corresponde aos recursos v0.6.1 descritos abaixo**. O commit funcional tem alterações importantes de interface, expansão, configurações, backups, atualizações, testes e empacotamento que não estão na `main`. **Não use a `main` atual para gerar o instalador de referência.** Para continuar a evolução, primeiro alinhe o código com o commit funcional por um processo revisado. Esta alteração de README **não** migra, restaura ou altera nenhum arquivo executável.
+>
+> **Recuperação segura:** `git switch dev/correcao-expansao-windows` e `git rev-parse HEAD` devem indicar `1e451261ddf2a3fc0f060aaefe42dfaf328b77ae` enquanto a branch permanecer inalterada; para fixar a versão independentemente de futuras alterações, utilize `git checkout 1e451261ddf2a3fc0f060aaefe42dfaf328b77ae` (HEAD destacado) ou crie uma branch de recuperação a partir desse commit. Não faça `git reset --hard` nem force push sem revisar os dados a preservar.
+
+---
+
+## Documentação original da versão funcional
+
 
 **Expansão inteligente de textos • Mais tempo para você**  
-**Desenvolvido por Fabricio Matos • 2026**  
-[Repositório do projeto](https://github.com/fabriciomatosqa/AURORA-AutoFill)
+Desenvolvido por Fabricio Matos
 
-Expansor de texto desktop para Windows e Linux, em Python/PySide6. Cadastra atalhos, organiza por pastas, mantém os dados localmente e substitui atalhos em outros aplicativos.
+Expansor de textos desktop para Windows e Linux, criado em Python/PySide6. Organize comandos em pastas, escreva um atalho como `/resposta` e insira o texto em outros aplicativos. Os comandos, a formatação e as preferências ficam neste computador; a expansão não exige conta ou conexão com a internet.
 
-## Novidades da v0.5.3
+## Instalar e atualizar
 
-- **Controle de tamanho do texto:** ajuste de **80% a 120%** com trilho e indicador da identidade Aurora, além de botão para retornar a 100%. O ajuste vale para editor e pré-visualização, é lembrado entre as sessões e não modifica os modelos cadastrados.
-- **Nova logo transparente:** a marca triangular recebida é usada no cabeçalho, ícone da janela, bandeja do sistema, executável e instalador Windows, atalhos e pacote Linux. Os ícones PNG e ICO são gerados automaticamente antes da compilação.
-- **Instalação e atualização:** pacotes agora usam o identificador v0.5.3. Para recompilar localmente, o gerador Windows prepara automaticamente os ícones (Pillow só é usado durante a compilação).
+Baixe os instaladores na página oficial de [GitHub Releases](https://github.com/fabriciomatosqa/AURORA-AutoFill/releases). **Durante o desenvolvimento, os lançamentos marcados como Pre-release são versões de teste e também aparecem no atualizador do aplicativo.**
 
-## Histórico da v0.5.2
+**Receber versões de teste** vem ativado nas compilações de desenvolvimento. Para acompanhar somente versões estáveis, desmarque essa opção nas configurações; sua escolha fica salva.
 
-- **Banner panorâmico corrigido:** a paisagem em alta resolução agora é desenhada num componente com recorte proporcional, sem a deformação de `border-image stretch`.
-- **Marca tipográfica revisada:** desenho vetorial com tipografia mais forte, refinamento no gradiente e um filete inspirado na aurora boreal. O resultado pode variar ligeiramente conforme as fontes disponíveis no sistema.
-- **Compatibilidade com Bloco de Notas (Windows 10/11):** a expansão é iniciada após liberar a última tecla e esperar um curto intervalo. O conteúdo é enviado pelo clipboard usando Unicode e Ctrl+V em vez de eventos individuais para cada letra; modelos realmente formatados continuam incluindo HTML para Word/Outlook.
-- **Área de transferência:** o conteúdo anterior é recuperado após a expansão se o usuário não tiver copiado outro item enquanto isso.
-- **Som de confirmação:** clique `.wav` original, sintetizado especificamente para este projeto, reproduzido de maneira assíncrona após enviar o comando. Sem samples de terceiros e sem QtMultimedia.
-- **Linux:** teste aprimorado no GitHub Actions, incluindo bibliotecas X11, execução offscreen e validação sob Xvfb, além de conferir que o banner e o arquivo de som foram incluídos no executável.
-- **Rodapé:** crédito permanente: *Desenvolvido por Fabricio Matos • 2026*.
+- **Windows (.exe):** baixe `AURORA-AutoFill-v<versão>-Windows-Setup.exe` (Inno Setup, sem privilégios de administrador). É o formato atual e permite atualização automática pelo AURORA.
+- **Windows (.msi):** baixe `AURORA-AutoFill-v<versão>-Windows-x64.msi` (WiX Toolset, Windows x64). O MSI usa a **mesma compilação PyInstaller** e é publicado junto com o EXE, com SHA-256 no manifesto Windows. Instala em `%LOCALAPPDATA%\\Programs\\AURORA AutoFill MSI` (sem exigir administrador), separado do Inno Setup, com registro de desinstalação e atalho no menu Iniciar. **Prefira somente um formato instalado por vez**: antes de trocar o EXE pelo MSI, desinstale o programa antigo após fazer backup. Os dados ficam em `%APPDATA%\\AutoFillStudio` e não são removidos com a desinstalação.
+- **Atualizações da instalação MSI:** a tela de atualizações abre o GitHub Releases para baixar o **próximo MSI**; ela não executa o instalador EXE/Inno. A automação de atualização silenciosa existente continua exclusiva da instalação EXE. Para instalar/atualizar via linha de comando: `msiexec /i AURORA-AutoFill-vVERSAO-Windows-x64.msi /qn /norestart`.
+- **Ubuntu 24.04 amd64:** baixe o `.deb` e abra no gerenciador de pacotes, ou use `sudo apt install ./arquivo.deb`. Há também um `.tar.gz` portátil.
 
-## Primeira instalação: Conheça o AURORA
+**Primeira migração da v0.6.0:** é necessário baixar e instalar esta nova compilação uma vez. O atualizador antigo procurava exclusivamente lançamentos estáveis e não consegue descobrir versões de teste. Depois dessa migração, use **⚙ Configurações → Verificar atualizações agora**; as próximas compilações poderão ser baixadas pelo programa.
 
-Em uma instalação realmente nova (sem banco de dados anterior), o aplicativo cria a pasta **Conheça o AURORA** com quatro exemplos editáveis:
+### Como funciona a atualização pelo aplicativo
 
-- `/bemvindo` — apresenta o AURORA AutoFill e seus benefícios.
-- `/tutorial` — ensina a criar atalhos e organizar conteúdos em pastas.
-- `/datahora` — demonstra os marcadores dinâmicos `{{data}}`, `{{hora}}` e `{{data_hora}}`.
-- `/obrigado` — agradece pela instalação e compartilha uma mensagem motivacional.
+1. Ao iniciar, o AURORA consulta os lançamentos oficiais do repositório `fabriciomatosqa/AURORA-AutoFill`, se a opção de avisar estiver habilitada. Também é possível verificar manualmente nas configurações.
+2. Compara a versão instalada com as publicadas, incluindo versões de teste com data como `0.6.1-161026` (16/10/2026). As datas são comparadas pelo calendário, inclusive na virada de mês e ano. Rascunhos e versões antigas não são oferecidos. O instalador precisa ser compatível com o sistema.
+3. Oferece **Atualizar agora**. Esse clique autoriza o download, a verificação, o backup e a instalação. Mostra o progresso com opção de cancelar; a consulta e o download ocorrem em segundo plano.
+4. Confere a integridade SHA256 e cria um backup completo **antes** de iniciar a instalação. Se o backup ou a verificação falhar, a instalação não é iniciada e o aplicativo continua aberto. Se houver edição não salva no editor, o aplicativo permite cancelar para protegê-la.
+5. No Windows, fecha o AURORA, atualiza em segundo plano sem o assistente de “Avançar” e reabre automaticamente. A primeira instalação manual continua com o assistente normal. A cópia anterior ainda pode pedir a confirmação antiga de instalação ao receber esta mudança; nessa transição, o instalador mostra apenas o progresso e segue sozinho. As seguintes usam o fluxo de um clique e a instalação totalmente silenciosa.
+6. No Linux, abre o `.deb` no gerenciador de pacotes; a confirmação e eventuais permissões são solicitadas pelo sistema. Se não houver gerenciador associado, a atualização pode ser instalada manualmente pela Release.
 
-A pasta inicial pode ser editada e os exemplos podem ser apagados. **Bancos de dados já existentes, inclusive vazios, não recebem esses exemplos novamente**, para preservar exclusões, dados próprios e backups importados. Atualizações não removem nem alteram atalhos antigos.
+Nenhum comando ou conteúdo pessoal é enviado ao GitHub. A rede é usada para consultar lançamentos e baixar o instalador escolhido. SHA256 verifica a integridade em relação aos arquivos publicados; o instalador ainda não possui assinatura de código.
 
+## Recursos
 
-## Instalar no Windows
+- **Pastas e ordenação:** arraste comandos para reorganizar; a ordem permanece salva ao reiniciar. Excluir uma pasta transfere seus comandos para outra pasta.
+- **Desfazer por 10 segundos:** ao excluir um comando ou uma pasta, use o aviso no rodapé para recuperar a operação.
+- **Editor e prévia 60/40:** edição com formatação e visualização do texto final.
+- **Variáveis:** data, hora, área de transferência e marcador `{{cursor}}`.
+- **Gota de confirmação:** gravação Water Droplet 2, de floraphonic, ao salvar e expandir comandos. Liga/desliga e volume nas configurações; créditos em `assets/AUDIO-LICENSE.txt`.
+- **Central de configurações:** áudio, início com Windows, opção **Iniciar minimizado** na bandeja do sistema, backups e atualizações. O botão de configurações usa uma engrenagem SVG simétrica de seis dentes.
+- **Visual Aurora:** azul noite e ciano, menus arredondados e configurações integradas ao tema.
+- **Uma instância por perfil:** impede que duas cópias do programa processem o mesmo atalho simultaneamente. Se já estiver aberto, acesse o ícone próximo ao relógio.
 
-Acesse [Actions](https://github.com/fabriciomatosqa/AURORA-AutoFill/actions), abra a execução de **Compilar instaladores AURORA AutoFill**, baixe o artefato `AURORA-AutoFill-v0.5.3-Windows-Setup` e extraia o instalador `.exe`.
+**Formulários dinâmicos não foram implementados** e continuam aguardando avaliação.
 
-A configuração usa GitHub Actions + PyInstaller + Inno Setup no Windows. O usuário final não precisa instalar Python. Para gerar localmente no Windows, execute `gerar_instalador_windows.bat` com Python e Inno Setup instalados.
+## Proteger e recuperar os dados
 
-## Instalar no Linux (Ubuntu/Debian, amd64)
+**Exportar JSON** inclui todas as pastas e todos os comandos, com formatação e ordem. **Importar JSON** acrescenta os dados ao banco atual; não apaga comandos existentes e ignora atalhos já cadastrados. Pastas vazias também são preservadas.
 
-No mesmo Actions, baixe `AURORA-AutoFill-v0.5.3-Linux`, extraia o `.deb` e instale com:
+**Criar backup completo** salva um `.aurora-backup.zip` com o banco SQLite e as preferências. **Restaurar backup** substitui os dados atuais pelos do arquivo selecionado, após confirmação. Uma cópia de segurança é criada antes de restaurar. A estrutura do arquivo é validada antes da substituição.
 
-```bash
-sudo apt install ./AURORA-AutoFill-v0.5.3-Linux-amd64.deb
-```
+Os arquivos ficam em:
 
-Execute pelo menu de aplicativos ou digitando `aurora-autofill` no terminal. Há ainda uma versão `.tar.gz` portátil. Os atalhos globais dependem de X11/Xorg; o Wayland restringe a captura de teclas por outros aplicativos. O feedback sonoro no Linux usa `paplay`, `pw-play` ou `aplay` se disponíveis, com beep do Qt como alternativa.
+| Dados | Windows | Linux |
+| --- | --- | --- |
+| Pasta de dados | `%APPDATA%\AutoFillStudio` | `~/.local/share/AutoFillStudio` |
+| Banco | `snippets.sqlite3` | `snippets.sqlite3` |
+| Preferências | `settings.json` | `settings.json` |
+| Backups completos | Subpasta `backups` | Subpasta `backups` |
 
-## Executar pelo código-fonte
+Backups manuais não são apagados automaticamente. Backups automáticos pré-atualização mantêm as últimas cinco cópias. O botão **Abrir backups** abre a pasta de recuperação.
 
-Python 3.11+:
+## Compilações e histórico de versões
+
+Cada push em `dev/correcao-expansao-windows` ou `main` executa [os testes e a compilação Windows EXE/MSI e Linux](https://github.com/fabriciomatosqa/AURORA-AutoFill/actions/workflows/build-installers.yml). Somente depois de ambos os sistemas passarem, os instaladores e os checksums são publicados juntos em uma **Pre-release**. A versão usa `BASE-DDMMAA`, por exemplo `0.6.1-161026`, com a data no horário de Brasília. Uma segunda atualização no mesmo dia recebe `.2`, a terceira `.3`, preservando as publicações anteriores. Repetir uma compilação do mesmo commit reutiliza sua versão.
+
+**Transição da v0.6.1-dev.22.1:** o atualizador já instalado usa SemVer e considera um sufixo numérico anterior a `dev`. Para permitir o teste remoto, cada lançamento com data também publica uma referência de compatibilidade `BASE-update.AAAAMMDD` (e a mesma revisão, quando houver). Ela contém cópias dos mesmos instaladores, com nomes e manifestos SHA256 esperados pelo cliente antigo. Por isso, a primeira confirmação no aplicativo antigo poderá mencionar `0.6.1-update.20261016`; após instalar, a janela, o rodapé e o instalador mostram `0.6.1-161026`. O novo atualizador reconhece ambos como a mesma versão e não propõe reinstalação. Ambos os lançamentos continuam sendo de teste.
+
+Os artifacts de diagnóstico do Actions expiram em 30 dias. Os instaladores publicados em Releases permanecem disponíveis para recuperação; o workflow não apaga Releases estáveis nem de teste.
+
+A base da próxima versão fica apenas em `app/version.py`. `packaging/build_version.py` grava os metadados da compilação antes dos testes e do empacotamento; aplicativo, nome dos instaladores e tag principal usam a mesma versão com data. O Windows recebe também uma versão numérica; o DEB usa `~update.AAAAMMDD` para manter a ordem cronológica, superar os pacotes `~dev` e ficar abaixo da futura versão estável. Os metadados de versão não alteram a pasta de dados nem o identificador do aplicativo.
+
+Uma versão estável exige uma tag intencional `vX.Y.Z`, correspondente à base em `app/version.py`, e ambos os builds aprovados. Depois de publicar uma estável, aumente a base para a próxima versão antes de continuar os testes. Preserve pelo menos as últimas três Releases estáveis.
+
+## Desenvolvimento e testes
+
+Python 3.11 ou mais novo:
 
 ```bash
 python -m pip install -r requirements.txt
+python -m unittest discover -s tests -v
 python main.py
 ```
 
-## Testes
+Para executar os testes de interface sem monitor, defina `QT_QPA_PLATFORM=offscreen`. Os testes usam perfis temporários e simulações de teclado, sem enviar comandos a outros aplicativos.
 
-```bash
-python -m unittest discover -s tests -v
-QT_QPA_PLATFORM=offscreen AURORA_AUTOFILL_SMOKE_TEST=1 python main.py
-```
+O GitHub Actions também verifica os recursos empacotados, inicia os executáveis compilados em perfis temporários e confirma a preservação dos dados antes de publicar os instaladores. Depois da publicação, o atualizador novo e o código exato do atualizador da `0.6.1-dev.22.1` consultam e baixam os instaladores Windows/Linux, verificando o SHA256 sem executá-los. Para converter novamente a gravação fornecida, use `python tools/import_feedback.py caminho/do/audio.mp3`; o gerador antigo é apenas uma alternativa sintética.
 
-**Limites importantes:** o fluxo de colagem foi criado para aumentar a compatibilidade com Notepad, navegadores, Word e editores comuns, mas nenhum injetor de teclas consegue garantir funcionamento em *todos* os programas, especialmente aplicativos elevados/protegidos, campos de senha, jogos e sessões remotas. A correção do Notepad foi verificada em testes de eventos Win32 simulados; deve ser validada em um Windows real antes de considerá-la definitiva.
+## Limitações e validação manual
 
-## Dados e privacidade
-
-- Windows: `%APPDATA%\AutoFillStudio\snippets.sqlite3`.
-- Linux: `~/.local/share/AutoFillStudio/snippets.sqlite3`.
-- O aplicativo funciona localmente, sem enviar textos para servidores.
-- Seus atalhos e pastas continuam preservados após atualizações.
-- Use **Exportar** para fazer backup antes de instalar uma nova versão.
-- Ao clicar no **X**, a janela fica na bandeja do sistema, onde suportado; selecione **Encerrar** no ícone para fechar de fato.
+- A colagem e o posicionamento do cursor dependem do aplicativo de destino. Valide com as versões de Word, Bloco de Notas, navegadores e Teams utilizadas no seu computador.
+- Linux exige X11/Xorg para atalhos globais; Wayland pode impedir a captura. O DEB distribuído é voltado a Ubuntu 24.04 amd64.
+- **Iniciar com Windows** usa a chave `Run` do usuário atual. Ao marcar **Iniciar minimizado** ao lado, o Windows executa o aplicativo com `--minimized`: os atalhos ficam ativos na bandeja do sistema, sem abrir a janela. A abertura manual pelo atalho continua normal. É necessário haver suporte à bandeja do sistema; a posição do ícone, inclusive a área de ícones ocultos, é definida pelo próprio Windows.
+- O instalador Windows não está assinado digitalmente; o Windows pode exibir o aviso do SmartScreen.
+- A fonte em desenvolvimento abre a página da Release para instalar o pacote. A substituição da própria cópia está disponível nos aplicativos empacotados.
