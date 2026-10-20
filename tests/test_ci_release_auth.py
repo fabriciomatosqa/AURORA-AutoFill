@@ -62,7 +62,7 @@ class CIGitHubTokenTests(unittest.TestCase):
                 self.mock_module._request(address, json_response=True)
 
     def test_rejects_header_injection(self):
-        for token in ("bad\\r\\nSecret: yes", "invalid\\nheader"):
+        for token in ("bad\r\nSecret: yes", "invalid\nheader"):
             with self.assertRaises(ValueError):
                 authenticate_release_metadata(
                     SimpleNamespace(_request=updates._request), token)
