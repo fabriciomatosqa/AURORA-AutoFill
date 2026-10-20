@@ -366,7 +366,8 @@ class ExpansionTransactionTests(EngineTestCase):
     def test_unknown_control_reports_unconfirmed_and_cursor_refuses_before_edit(self):
         self.engine.readable = False
         self.expand()
-        self.win._play_confirmation.assert_not_called()
+        # O som indica que o Ctrl+V foi acionado, não que o browser confirmou.
+        self.win._play_confirmation.assert_called_once()
         self.assertEqual(self.clipboard.text(), 'original')
         with EngineFixture() as e:
             e.readable = False
