@@ -5,13 +5,15 @@ isolated image, never a representation of an entire mixed document.
 """
 from dataclasses import dataclass
 from datetime import datetime
+from math import ceil
 
-from PySide6.QtCore import QBuffer, QByteArray, QIODevice, QMimeData
-from PySide6.QtGui import QTextDocument
+from PySide6.QtCore import QBuffer, QByteArray, QIODevice, QMimeData, QRectF
+from PySide6.QtGui import QImage, QColor, QFont, QPainter, QTextDocument
 
 from .core import render_snippet
 from .formatting import render_rich_html
-from .inline_images import decode_embedded_image, image_sources, validate_inline_html
+from .inline_images import (EmbeddedImageDocument, decode_embedded_image,
+                            image_sources, validate_inline_html)
 
 
 def image_notice_text(text: str) -> str:
@@ -50,8 +52,10 @@ def prepare_mixed_content(html: str, clipboard_text: str, now: datetime) -> Mixe
     )
 
 
-def image_mime(source: str) -> QMimeData:
-    image = decode_embedded_image(source)
+def bitmap_mime(image: QImage) -> QMimeData:
+    """Clipboard de imagem real para destinos que tratam PNG como anexo."""
+    if image.isNull():
+        raise ValueError("Imagem inválida para a área de transferência.")
     payload = QMimeData()
     payload.setImageData(image)  # Qt maps to native DIB/DIBV5 on Windows.
     png = QByteArray()
@@ -62,6 +66,47 @@ def image_mime(source: str) -> QMimeData:
     buffer.close()
     payload.setData("image/png", png)
     return payload
+
+
+def image_mime(source: str) -> QMimeData:
+    return bitmap_mime(decode_embedded_image(source))
+
+
+def render_message_as_bitmap(html: str) -> QImage:
+    """Converte a mensagem INTEIRA (texto e imagens) em uma única figura.
+
+    Algumas caixas do Teams ignoram <img> no CF_HTML, mas aceitam uma captura
+    PNG colada como anexo. Esta alternativa opt-in preserva visualmente a
+    mensagem; o texto da imagem não continua editável nem pesquisável.
+    """
+    validate_inline_html(html)
+    document = EmbeddedImageDocument()
+    document.setDefaultFont(QFont("Segoe UI", 11))
+    document.setDocumentMargin(0)
+    document.setHtml(html)
+    document.setTextWidth(720)
+    content_height = max(1, ceil(document.size().height()))
+    width, height = 760, content_height + 40
+    if (height > 7000 or width * height > 10_000_000):
+        raise ValueError(
+            "O comando é muito longo para virar uma única imagem. "
+            "Use a cópia de imagens separadas.")
+    result = QImage(width, height, QImage.Format_ARGB32_Premultiplied)
+    if result.isNull():
+        raise ValueError("Não foi possível preparar a imagem da mensagem.")
+    result.fill(QColor("#ffffff"))
+    painter = QPainter(result)
+    try:
+        painter.translate(20, 20)
+        document.drawContents(painter, QRectF(0, 0, 720, content_height))
+    finally:
+        painter.end()
+    return result
+
+
+def message_as_image_mime(html: str) -> QMimeData:
+    """Somente PNG e bitmap: evita Teams preferir texto/plain como fallback."""
+    return bitmap_mime(render_message_as_bitmap(html))
 
 
 def expansion_mime(text: str, html: str = "", *, image_only: bool = False) -> QMimeData:
