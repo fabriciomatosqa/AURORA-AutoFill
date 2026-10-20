@@ -1,15 +1,15 @@
-"""Interface do AURORA AutoFill v0.5.2 (PySide6)."""
+"""Interface do AURORA AutoFill v0.5.3 (PySide6)."""
 from __future__ import annotations
 
 from pathlib import Path
 
-from PySide6.QtCore import QObject, Qt, QMimeData, QTimer, Signal, QPoint, QRectF
+from PySide6.QtCore import QObject, Qt, QMimeData, QTimer, Signal, QPoint, QRectF, QSettings
 from PySide6.QtGui import (QAction, QColor, QFont, QFontMetricsF, QIcon, QKeySequence, QPalette,
                            QShortcut, QTextCharFormat, QPainter, QPainterPath, QLinearGradient, QPen, QPixmap)
 from PySide6.QtWidgets import (
     QApplication, QComboBox, QFileDialog, QFrame, QHBoxLayout, QInputDialog,
     QLabel, QLineEdit, QListView, QListWidget, QListWidgetItem, QMainWindow, QMenu, QMessageBox,
-    QPlainTextEdit, QPushButton, QScrollArea, QSplitter, QStackedWidget, QSystemTrayIcon,
+    QPlainTextEdit, QPushButton, QScrollArea, QSlider, QSplitter, QStackedWidget, QSystemTrayIcon,
     QTextEdit, QStatusBar, QToolButton, QVBoxLayout, QWidget,
 )
 
@@ -19,7 +19,7 @@ from .formatting import has_rich_formatting, render_rich_html
 
 
 STYLESHEET = """
-/* AURORA 0.5.2 — acabamento visual da identidade Aurora */
+/* AURORA 0.5.3 — acabamento visual da identidade Aurora */
 QWidget { font-family: "Segoe UI", "Inter", "Noto Sans", sans-serif; }
 QMainWindow, QWidget#body, QWidget#rightPane, QWidget#editorPage, QWidget#welcomePage {
   background-color: #091426; color: #eaf4ff; }
@@ -89,6 +89,23 @@ QMessageBox, QInputDialog, QFileDialog { background: #132338; color: #eaf5ff; }
 QMessageBox QLabel, QInputDialog QLabel, QFileDialog QLabel { color: #eaf5ff; background: transparent; }
 QMessageBox QPushButton, QInputDialog QPushButton, QFileDialog QPushButton { color: #eaf5ff; background: #1c334a; }
 QToolTip { background: #17354c; color: #fff; border: 1px solid #4eb9b2; }
+/* Controle de zoom Aurora: 80–120%, sem alterar o conteúdo armazenado. */
+QLabel#zoomCaption { color: #a7c9d6; font-size: 12px; font-weight: 600; }
+QLabel#zoomPercent { border: 1px solid #388784; border-radius: 8px;
+  background: #15394a; color: #8cf2e1; padding: 7px 9px; font-weight: 750; }
+QPushButton#zoomReset { border: 1px solid #35657b; background: #143045;
+  color: #a8f1e0; padding: 6px 9px; }
+QPushButton#zoomReset:hover { background: #24566b; }
+QSlider#auroraZoom::groove:horizontal {
+  height: 7px; border-radius: 3px; border: 1px solid #326277;
+  background: #17374a; }
+QSlider#auroraZoom::sub-page:horizontal { border-radius: 3px;
+  background: #48c9c2; }
+QSlider#auroraZoom::handle:horizontal {
+  background: #91f9e5; border: 2px solid #197b84;
+  width: 17px; height: 17px; margin: -7px -1px; border-radius: 9px; }
+QSlider#auroraZoom::handle:horizontal:hover {
+  background: #d2fff4; border-color: #55d5d1; }
 """
 
 
@@ -284,7 +301,12 @@ class AutoFillWindow(QMainWindow):
         self._hotkeys_enabled = True
         self._clipboard_clone: QMimeData | None = None
         self._clipboard_written = ""
-        self.setWindowTitle("AURORA AutoFill v0.5.2 — Expansor de textos")
+        self.settings = QSettings("Aurora", "AURORA AutoFill")
+        try:
+            self._text_zoom = max(80, min(120, int(self.settings.value("editor/text_zoom", 100))))
+        except (TypeError, ValueError):
+            self._text_zoom = 100
+        self.setWindowTitle("AURORA AutoFill v0.5.3 — Expansor de textos")
         self.setWindowIcon(QIcon(str(Path(__file__).resolve().parent.parent / "assets" / "aurora_icon.png")))
         # Impede a compactação horizontal desordenada dos campos; em telas de
         # pouca altura o editor usa rolagem própria, sem sobrepor controles.
@@ -531,7 +553,7 @@ class AutoFillWindow(QMainWindow):
         sample_label = QLabel("TESTE SEUS ATALHOS")
         sample_label.setObjectName("sectionTitle")
         v.addWidget(sample_label)
-        sample_help = QLabel("Clique abaixo e digite /ola, /agora ou /chamado. O comando será substituído pelo texto cadastrado se a detecção global estiver ativa.")
+        sample_help = QLabel("Clique abaixo e experimente /bemvindo, /tutorial ou /datahora. Em instalações anteriores, use os atalhos cadastrados por você.")
         sample_help.setWordWrap(True)
         v.addWidget(sample_help)
         self.test_box = QPlainTextEdit()
@@ -604,6 +626,31 @@ class AutoFillWindow(QMainWindow):
         content_label.setObjectName("sectionTitle")
         content_header.addWidget(content_label)
         content_header.addStretch()
+        zoom_caption = QLabel("Tamanho do texto")
+        zoom_caption.setObjectName("zoomCaption")
+        content_header.addWidget(zoom_caption)
+        self.text_zoom_slider = QSlider(Qt.Horizontal)
+        self.text_zoom_slider.setObjectName("auroraZoom")
+        self.text_zoom_slider.setRange(80, 120)
+        self.text_zoom_slider.setSingleStep(5)
+        self.text_zoom_slider.setPageStep(10)
+        self.text_zoom_slider.setTickInterval(10)
+        self.text_zoom_slider.setTickPosition(QSlider.TicksBelow)
+        self.text_zoom_slider.setFixedWidth(132)
+        self.text_zoom_slider.setAccessibleName("Tamanho do texto entre 80% e 120%")
+        self.text_zoom_slider.setToolTip("Ajusta somente o tamanho visual do editor e da pré-visualização.")
+        self.text_zoom_slider.setValue(self._text_zoom)
+        content_header.addWidget(self.text_zoom_slider)
+        self.text_zoom_value = QLabel(f"{self._text_zoom}%")
+        self.text_zoom_value.setObjectName("zoomPercent")
+        self.text_zoom_value.setMinimumWidth(55)
+        self.text_zoom_value.setAlignment(Qt.AlignCenter)
+        content_header.addWidget(self.text_zoom_value)
+        self.text_zoom_reset = QPushButton("100%")
+        self.text_zoom_reset.setObjectName("zoomReset")
+        self.text_zoom_reset.setToolTip("Restaurar tamanho padrão do texto")
+        self.text_zoom_reset.clicked.connect(lambda: self.text_zoom_slider.setValue(100))
+        content_header.addWidget(self.text_zoom_reset)
         v.addLayout(content_header)
         self.body_input = QTextEdit()
         self.body_input.setPlaceholderText("Escreva aqui o conteúdo que será inserido...")
@@ -651,6 +698,15 @@ class AutoFillWindow(QMainWindow):
         self.preview.setMaximumHeight(125)
         self.preview.setPlaceholderText("O resultado do modelo aparecerá aqui.")
         v.addWidget(self.preview, 1)
+        # O zoom atua só na visualização e nunca muda HTML ou atalhos salvos.
+        self._editor_font_base = self.body_input.font().pointSizeF()
+        if self._editor_font_base <= 0:
+            self._editor_font_base = 10.0
+        self._preview_font_base = self.preview.font().pointSizeF()
+        if self._preview_font_base <= 0:
+            self._preview_font_base = 10.0
+        self.text_zoom_slider.valueChanged.connect(self._set_text_zoom)
+        self._set_text_zoom(self._text_zoom)
         tip = QLabel("{{cursor}} posiciona o ponto de digitação. Atalhos: Ctrl+N (novo) e Ctrl+S (salvar).")
         tip.setObjectName("hint")
         tip.setWordWrap(True)
@@ -681,6 +737,18 @@ class AutoFillWindow(QMainWindow):
         self.body_input.textChanged.connect(self._mark_dirty)
         self.body_input.textChanged.connect(self._update_preview)
         self.editor_folder.currentIndexChanged.connect(self._mark_dirty)
+
+    def _set_text_zoom(self, percentage: int):
+        """Zoom apenas de leitura: não formata nem modifica o modelo."""
+        percentage = max(80, min(120, int(percentage)))
+        self._text_zoom = percentage
+        self.text_zoom_value.setText(f"{percentage}%")
+        for widget, base_points in ((self.body_input, self._editor_font_base),
+                                    (self.preview, self._preview_font_base)):
+            font = QFont(widget.font())
+            font.setPointSizeF(max(1.0, base_points * percentage / 100.0))
+            widget.setFont(font)
+        self.settings.setValue("editor/text_zoom", percentage)
 
     def _apply_format(self, mode: str, active: bool):
         fmt = QTextCharFormat()
