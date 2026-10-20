@@ -262,11 +262,11 @@ class ExpansionTransactionTests(EngineTestCase):
 
     def test_old_restore_cannot_restore_or_unlock_new_lease(self):
         self.engine.type('/ola')
-        self.engine.until(75)
+        self.engine.until(45)
         old = self.win._clipboard_lease
         self.engine.until(100)
         self.engine.type('/ola')
-        self.engine.until(175)
+        self.engine.until(145)
         new = self.win._clipboard_lease
         self.assertIsNot(old, new)
         self.win._restore_clipboard(old)
@@ -296,7 +296,7 @@ class ExpansionTransactionTests(EngineTestCase):
     def test_sent_cursor_expansion_does_not_expire_during_web_confirmation(self):
         self.engine.save('/ola', 'A{{cursor}}B')
         self.engine.type('/ola')
-        self.engine.until(75)
+        self.engine.until(45)
         operation = self.win._expansion_operation
         self.assertIsNotNone(operation)
         self.assertEqual(operation.stage, 'sent')
@@ -312,7 +312,7 @@ class ExpansionTransactionTests(EngineTestCase):
     def test_sent_cursor_expansion_still_rejects_real_input_change(self):
         self.engine.save('/ola', 'A{{cursor}}B')
         self.engine.type('/ola')
-        self.engine.until(75)
+        self.engine.until(45)
         operation = self.win._expansion_operation
         self.assertIsNotNone(operation)
         self.engine.listener.invalidate()
