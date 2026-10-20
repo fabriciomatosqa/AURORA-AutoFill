@@ -12,7 +12,10 @@ _TOKEN_RE = re.compile(r'\{\{(?:data_hora|data|hora|clipboard|area_transferencia
 
 
 def has_rich_formatting(html: str) -> bool:
-    return bool(html and _FORMATTED_RE.search(html))
+    # Modelos com imagens precisam de CF_HTML mesmo sem negrito/itálico.
+    return bool(html and (_FORMATTED_RE.search(html) or
+                          re.search(r'<img\\b[^>]*\\bsrc\\s*=\\s*[\x22\x27]data:image/',
+                                    html, re.I)))
 
 
 def render_rich_html(html: str, clipboard_text: str, now: datetime | None = None) -> str:
