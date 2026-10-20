@@ -25,6 +25,7 @@ from .features import AuroraFeaturesMixin
 from .version import APP_VERSION
 from .icons import apply_icon
 from .branding import brand_webp_bytes
+from .inline_images import AuroraImageEditor, contains_inline_images, plain_text_fallback, validate_inline_html
 
 
 def cursor_steps(text: str) -> int:
@@ -448,8 +449,8 @@ class AutoFillWindow(AuroraFeaturesMixin, QMainWindow):
         h.setContentsMargins(28, 16, 26, 16)
         h.setSpacing(14)
         brand_mark = QLabel()
-        brand_mark.setPixmap(self._aurora_logo.scaled(82, 82, Qt.KeepAspectRatio, Qt.SmoothTransformation))
-        brand_mark.setFixedSize(82, 82)
+        brand_mark.setPixmap(self._aurora_logo.scaled(108, 108, Qt.KeepAspectRatio, Qt.SmoothTransformation))
+        brand_mark.setFixedSize(108, 108)
         h.addWidget(brand_mark)
         brand_box = QVBoxLayout()
         brand_box.setSpacing(2)
@@ -709,8 +710,10 @@ class AutoFillWindow(AuroraFeaturesMixin, QMainWindow):
         content_header.addWidget(content_label)
         content_header.addStretch()
         v.addLayout(content_header)
-        self.body_input = QTextEdit()
+        self.body_input = AuroraImageEditor()
         self.body_input.setPlaceholderText("Escreva aqui o conteúdo que será inserido...")
+        self.body_input.imageRejected.connect(
+            lambda message: QMessageBox.warning(self, "Imagem não inserida", message))
         # Formatação rich-text: salva HTML mas mantém texto simples para apps básicos.
         formatting_row = QHBoxLayout()
         formatting_row.setSpacing(8)
@@ -727,6 +730,11 @@ class AutoFillWindow(AuroraFeaturesMixin, QMainWindow):
         guide.setObjectName("hint")
         formatting_row.addWidget(guide)
         formatting_row.addStretch()
+        self.insert_image_button = QPushButton("🖼 Inserir imagem")
+        self.insert_image_button.setToolTip(
+            "Insira PNG ou JPG entre parágrafos, ou cole um print com Ctrl+V.")
+        self.insert_image_button.clicked.connect(self._insert_image_file)
+        formatting_row.addWidget(self.insert_image_button)
         self.token_button = AuroraMenuButton()
         self.token_button.setText("Inserir comando dinâmico")
         apply_icon(self.token_button, "plus")
@@ -752,7 +760,7 @@ class AutoFillWindow(AuroraFeaturesMixin, QMainWindow):
         preview_label = QLabel("PRÉ-VISUALIZAÇÃO")
         preview_label.setObjectName("sectionTitle")
         v.addWidget(preview_label)
-        self.preview = QPlainTextEdit()
+        self.preview = AuroraImageEditor()
         self.preview.setReadOnly(True)
         self.preview.setMinimumHeight(145)
         self.preview.setPlaceholderText("O resultado do modelo aparecerá aqui.")
@@ -788,6 +796,22 @@ class AutoFillWindow(AuroraFeaturesMixin, QMainWindow):
         self.body_input.textChanged.connect(self._update_preview)
         self.editor_folder.currentIndexChanged.connect(self._mark_dirty)
 
+    def _insert_image_file(self):
+        path, _ = QFileDialog.getOpenFileName(
+            self, "Inserir foto ou print", "",
+            "Imagens (*.png *.jpg *.jpeg *.webp *.bmp);;Todos os arquivos (*)")
+        if not path:
+            return
+        image = QPixmap(path)
+        if image.isNull():
+            QMessageBox.warning(self, "Imagem inválida",
+                                "Não foi possível abrir esse arquivo de imagem.")
+            return
+        if self.body_input.insert_image(image):
+            self.body_input.setFocus()
+            self.statusBar().showMessage(
+                "Imagem incorporada ao texto. Salve o comando para reutilizar.", 5000)
+
     def _apply_format(self, mode: str, active: bool):
         fmt = QTextCharFormat()
         if mode == "bold":
@@ -812,9 +836,14 @@ class AutoFillWindow(AuroraFeaturesMixin, QMainWindow):
             self.dirty = True
 
     def _update_preview(self):
-        text = self.body_input.toPlainText()
-        result = render_snippet(text, QApplication.clipboard().text())
-        self.preview.setPlainText(result.text)
+        text = plain_text_fallback(self.body_input.toPlainText())
+        current_clipboard = QApplication.clipboard().text()
+        result = render_snippet(text, current_clipboard)
+        rich_html = self.body_input.toHtml()
+        if contains_inline_images(rich_html):
+            self.preview.setHtml(render_rich_html(rich_html, current_clipboard))
+        else:
+            self.preview.setPlainText(result.text)
 
     def _refresh_all(self):
         self._loading = True
@@ -943,6 +972,11 @@ class AutoFillWindow(AuroraFeaturesMixin, QMainWindow):
         self.snippet_list.blockSignals(False)
         self.stack.setCurrentIndex(0)
 
+    def _validated_editor_html(self) -> str:
+        html = self.body_input.toHtml()
+        validate_inline_html(html)
+        return html
+
     def _save(self):
         if self.stack.currentIndex() != 1:
             return
@@ -950,8 +984,8 @@ class AutoFillWindow(AuroraFeaturesMixin, QMainWindow):
             new_id = self.store.save(
                 self.editor_folder.currentData(),
                 self.title_input.text(), self.shortcut_input.text(),
-                self.body_input.toPlainText(), self.current_id,
-                rich_content=self.body_input.toHtml())
+                plain_text_fallback(self.body_input.toPlainText()), self.current_id,
+                rich_content=self._validated_editor_html())
         except (ValueError, sqlite3.Error, OSError) as error:
             QMessageBox.warning(self, "Não foi possível salvar", str(error))
             return
