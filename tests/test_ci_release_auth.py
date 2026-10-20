@@ -73,11 +73,13 @@ class CIGitHubTokenTests(unittest.TestCase):
         spec = importlib.util.spec_from_file_location("aurora_ci_legacy_auth", location)
         module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(module)
-        with patch.object(module, "load_legacy_updater",
-                          return_value=SimpleNamespace(
-                              is_newer=lambda *_: False,
-                              _request=updates._request)) as load, \\
-             patch.dict("os.environ", {"AURORA_CI_GITHUB_TOKEN": "ci-test-only"}):
+        with (
+            patch.object(module, "load_legacy_updater",
+                         return_value=SimpleNamespace(
+                             is_newer=lambda *_: False,
+                             _request=updates._request)) as load,
+            patch.dict("os.environ", {"AURORA_CI_GITHUB_TOKEN": "ci-test-only"}),
+        ):
             with self.assertRaisesRegex(ValueError, "não é mais recente"):
                 module.verify_legacy_update("0.6.1-dev.21.1")
             self.assertEqual(
