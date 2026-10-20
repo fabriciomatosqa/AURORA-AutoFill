@@ -761,6 +761,19 @@ class AutoFillWindow(QMainWindow):
             widget.setFont(font)
         self.settings.setValue("editor/text_zoom", percentage)
 
+    def _html_for_storage(self) -> str:
+        """Serializa HTML no tamanho original, independente do zoom de leitura."""
+        current_font = QFont(self.body_input.font())
+        normal_font = QFont(current_font)
+        normal_font.setPointSizeF(self._editor_font_base)
+        if self._text_zoom != 100:
+            self.body_input.setFont(normal_font)
+        try:
+            return self.body_input.toHtml()
+        finally:
+            if self._text_zoom != 100:
+                self.body_input.setFont(current_font)
+
     def _apply_format(self, mode: str, active: bool):
         fmt = QTextCharFormat()
         if mode == "bold":
@@ -902,7 +915,7 @@ class AutoFillWindow(QMainWindow):
                 self.editor_folder.currentData(),
                 self.title_input.text(), self.shortcut_input.text(),
                 self.body_input.toPlainText(), self.current_id,
-                rich_content=self.body_input.toHtml())
+                rich_content=self._html_for_storage())
         except ValueError as error:
             QMessageBox.warning(self, "Não foi possível salvar", str(error))
             return
