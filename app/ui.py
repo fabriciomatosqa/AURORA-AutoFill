@@ -24,6 +24,7 @@ from .formatting import has_rich_formatting, render_rich_html
 from .features import AuroraFeaturesMixin
 from .version import APP_VERSION
 from .icons import apply_icon
+from .branding import brand_webp_bytes
 
 
 def cursor_steps(text: str) -> int:
@@ -382,7 +383,16 @@ class AutoFillWindow(AuroraFeaturesMixin, QMainWindow):
         self._expansion_operation = None
         self._queued_candidate = None
         self.setWindowTitle(f"AURORA AutoFill V{APP_VERSION} — Expansor de textos")
-        self.setWindowIcon(QIcon(str(Path(__file__).resolve().parent.parent / "assets" / "aurora_icon.png")))
+        assets = Path(__file__).resolve().parent.parent / "assets"
+        self._aurora_logo = QPixmap()
+        try:
+            if not self._aurora_logo.loadFromData(brand_webp_bytes(assets), "WEBP"):
+                raise ValueError("Qt não conseguiu carregar a nova imagem.")
+        except (ValueError, OSError) as exc:
+            self._aurora_logo = QPixmap(str(assets / "aurora_icon.png"))
+            if self._aurora_logo.isNull():
+                raise RuntimeError("Ícone AURORA ausente ou inválido.") from exc
+        self.setWindowIcon(QIcon(self._aurora_logo))
         # Impede a compactação horizontal desordenada dos campos; em telas de
         # pouca altura o editor usa rolagem própria, sem sobrepor controles.
         screen = QApplication.primaryScreen()
@@ -438,7 +448,7 @@ class AutoFillWindow(AuroraFeaturesMixin, QMainWindow):
         h.setContentsMargins(28, 16, 26, 16)
         h.setSpacing(14)
         brand_mark = QLabel()
-        brand_mark.setPixmap(QIcon(str(assets / "aurora_icon.png")).pixmap(82, 82))
+        brand_mark.setPixmap(self._aurora_logo.scaled(82, 82, Qt.KeepAspectRatio, Qt.SmoothTransformation))
         brand_mark.setFixedSize(82, 82)
         h.addWidget(brand_mark)
         brand_box = QVBoxLayout()
@@ -625,7 +635,7 @@ class AutoFillWindow(AuroraFeaturesMixin, QMainWindow):
         sample_label = QLabel("TESTE SEUS ATALHOS")
         sample_label.setObjectName("sectionTitle")
         v.addWidget(sample_label)
-        sample_help = QLabel("Clique abaixo e digite /ola, /agora ou /chamado. O comando será substituído pelo texto cadastrado se a detecção global estiver ativa.")
+        sample_help = QLabel("Clique abaixo e experimente /bemvindo, /tutorial ou /datahora. Quem já utiliza o AURORA pode testar seus próprios atalhos.")
         sample_help.setWordWrap(True)
         v.addWidget(sample_help)
         self.test_box = QPlainTextEdit()
