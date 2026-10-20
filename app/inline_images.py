@@ -55,7 +55,8 @@ def decode_embedded_image(source: str) -> QImage:
         raise ValueError("Imagem incorporada inválida.") from exc
     if not data or len(data) > MAX_IMAGE_BYTES:
         raise ValueError("Uma imagem ultrapassa o limite de 2 MB.")
-    image = QImage.fromData(data, match.group(1).upper().encode("ascii"))
+    # Qt identifica o formato pela assinatura do arquivo; evitar a sobrecarga com formato.
+    image = QImage.fromData(data)
     if image.isNull():
         raise ValueError("O arquivo da imagem não pôde ser decodificado.")
     if image.width() > 8192 or image.height() > 8192:
