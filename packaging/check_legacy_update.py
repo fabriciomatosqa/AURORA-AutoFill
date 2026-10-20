@@ -7,6 +7,7 @@ executing an installer or substituting the new updater's version comparison.
 from __future__ import annotations
 
 import argparse
+import os
 from pathlib import Path
 import re
 import subprocess
@@ -17,6 +18,9 @@ from types import ModuleType
 import uuid
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from github_api_auth import authenticate_release_metadata
+
 LEGACY_COMMIT = "583ff467efc40c2b6ebfe1fcfa2b7ce216c60730"
 LEGACY_VERSION = "0.6.1-dev.22.1"
 REPOSITORY = "fabriciomatosqa/AURORA-AutoFill"
@@ -65,6 +69,7 @@ def load_legacy_updater(legacy_ref: str = LEGACY_COMMIT):
 def verify_legacy_update(version: str, *, display_version: str | None = None,
                          legacy_ref: str = LEGACY_COMMIT) -> None:
     legacy = load_legacy_updater(legacy_ref)
+    authenticate_release_metadata(legacy, os.environ.get('AURORA_CI_GITHUB_TOKEN'))
     if not legacy.is_newer(version):
         raise ValueError("A versão de migração não é mais recente para o aplicativo antigo.")
     for system in ("win32", "linux"):

@@ -17,7 +17,8 @@ env:
 
 concurrency:
   group: aurora-installers-${{ github.ref }}
-  cancel-in-progress: false
+  # Cancela apenas testes PR obsoletos; uma publicação da main nunca é interrompida.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   version:
@@ -388,10 +389,12 @@ jobs:
       - name: Verificar descoberta e download pelo atualizador público
         env:
           RELEASE_VERSION: ${{ needs.version.outputs.version }}
+          AURORA_CI_GITHUB_TOKEN: ${{ github.token }}
         run: python packaging/check_published_update.py --version "$RELEASE_VERSION"
       - name: Verificar atualização com o código da versão instalada dev.22.1
         if: needs.version.outputs.prerelease == 'true'
         env:
           RELEASE_VERSION: ${{ needs.version.outputs.version }}
+          AURORA_CI_GITHUB_TOKEN: ${{ github.token }}
           BRIDGE_VERSION: ${{ needs.version.outputs.bridge }}
         run: python packaging/check_legacy_update.py --version "$BRIDGE_VERSION" --display-version "$RELEASE_VERSION"
