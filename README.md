@@ -1,4 +1,4 @@
-# AURORA AutoFill v0.5.2
+# AURORA AutoFill v0.5.3
 
 **Expansão inteligente de textos • Mais tempo para você**  
 **Desenvolvido por Fabricio Matos • 2026**  
@@ -6,7 +6,13 @@
 
 Expansor de texto desktop para Windows e Linux, em Python/PySide6. Cadastra atalhos, organiza por pastas, mantém os dados localmente e substitui atalhos em outros aplicativos.
 
-## O que mudou na v0.5.2
+## Novidades da v0.5.3
+
+- **Controle de tamanho do texto:** ajuste de **80% a 120%** com trilho e indicador da identidade Aurora, além de botão para retornar a 100%. O ajuste vale para editor e pré-visualização, é lembrado entre as sessões e não modifica os modelos cadastrados.
+- **Nova logo transparente:** a marca triangular recebida é usada no cabeçalho, ícone da janela, bandeja do sistema, executável e instalador Windows, atalhos e pacote Linux. Os ícones PNG e ICO são gerados automaticamente antes da compilação.
+- **Instalação e atualização:** pacotes agora usam o identificador v0.5.3. Para recompilar localmente, o gerador Windows prepara automaticamente os ícones (Pillow só é usado durante a compilação).
+
+## Histórico da v0.5.2
 
 - **Banner panorâmico corrigido:** a paisagem em alta resolução agora é desenhada num componente com recorte proporcional, sem a deformação de `border-image stretch`.
 - **Marca tipográfica revisada:** desenho vetorial com tipografia mais forte, refinamento no gradiente e um filete inspirado na aurora boreal. O resultado pode variar ligeiramente conforme as fontes disponíveis no sistema.
@@ -28,16 +34,18 @@ Em uma instalação realmente nova (sem banco de dados anterior), o aplicativo c
 A pasta inicial pode ser editada e os exemplos podem ser apagados. **Bancos de dados já existentes, inclusive vazios, não recebem esses exemplos novamente**, para preservar exclusões, dados próprios e backups importados. Atualizações não removem nem alteram atalhos antigos.
 
 
-Acesse [Actions](https://github.com/fabriciomatosqa/AURORA-AutoFill/actions), abra a execução de **Compilar instaladores AURORA AutoFill**, baixe o artefato `AURORA-AutoFill-v0.5.2-Windows-Setup` e extraia o instalador `.exe`.
+## Instalar no Windows
+
+Acesse [Actions](https://github.com/fabriciomatosqa/AURORA-AutoFill/actions), abra a execução de **Compilar instaladores AURORA AutoFill**, baixe o artefato `AURORA-AutoFill-v0.5.3-Windows-Setup` e extraia o instalador `.exe`.
 
 A configuração usa GitHub Actions + PyInstaller + Inno Setup no Windows. O usuário final não precisa instalar Python. Para gerar localmente no Windows, execute `gerar_instalador_windows.bat` com Python e Inno Setup instalados.
 
 ## Instalar no Linux (Ubuntu/Debian, amd64)
 
-No mesmo Actions, baixe `AURORA-AutoFill-v0.5.2-Linux`, extraia o `.deb` e instale com:
+No mesmo Actions, baixe `AURORA-AutoFill-v0.5.3-Linux`, extraia o `.deb` e instale com:
 
 ```bash
-sudo apt install ./AURORA-AutoFill-v0.5.2-Linux-amd64.deb
+sudo apt install ./AURORA-AutoFill-v0.5.3-Linux-amd64.deb
 ```
 
 Execute pelo menu de aplicativos ou digitando `aurora-autofill` no terminal. Há ainda uma versão `.tar.gz` portátil. Os atalhos globais dependem de X11/Xorg; o Wayland restringe a captura de teclas por outros aplicativos. O feedback sonoro no Linux usa `paplay`, `pw-play` ou `aplay` se disponíveis, com beep do Qt como alternativa.
