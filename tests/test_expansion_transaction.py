@@ -12,16 +12,47 @@ from engine_fixture import key
 class ExpansionTransactionTests(EngineTestCase):
     def test_f7_01_typing_at_former_selection_gap_preserves_content(self):
         phrase = 'Olá! Este é um teste do AURORA.'
-        for delay in (50, 74, 75, 80, 84, 86, 96):
+        for delay in (20, 44, 45, 50, 74, 75, 80, 96):
             with self.subTest(delay=delay), EngineFixture() as e:
                 e.save('/ola', phrase)
                 e.type('/ola')
                 e.schedule(delay, lambda: e.type('x'))
                 e.drain()
-                self.assertEqual(e.field.text, '/olax' if delay < 75 else phrase + 'x')
-                self.assertEqual(e.api_calls, 0 if delay < 75 else 1)
+                self.assertEqual(e.field.text, '/olax' if delay < 45 else phrase + 'x')
+                self.assertEqual(e.api_calls, 0 if delay < 45 else 1)
                 self.assertEqual(e.clipboard.text(), 'original')
                 self.assertFalse(e.shift or e.ctrl)
+
+    def test_fast_dispatch_after_last_key_reaches_destination(self):
+        self.engine.save('/rapido', 'OK')
+        self.engine.type('/rapido')
+        self.engine.until(44)
+        self.assertEqual(self.engine.field.text, '/rapido')
+        self.assertEqual(self.engine.api_calls, 0)
+        self.engine.until(45)
+        self.assertEqual(self.engine.field.text, 'OK')
+        self.assertEqual(self.engine.api_calls, 1)
+
+    def test_web_uia_selection_does_not_repeat_preselection_snapshot(self):
+        from app.expansion import EditSnapshot
+        self.engine.save('/web', 'Conteúdo pronto')
+        calls = []
+
+        def accessible_snapshot(context, *, accessibility=False):
+            calls.append(accessibility)
+            snap = self.engine.snapshot(context)
+            return EditSnapshot(context, snap.text, snap.start, snap.end,
+                                ('browser-window', 'editor', 'document'))
+
+        with patch('app.ui.capture_edit', side_effect=accessible_snapshot):
+            self.engine.type('/web')
+            self.engine.until(45)
+            self.assertEqual(self.engine.field.text, 'Conteúdo pronto')
+            # Captura inicial + validação executada pela própria seleção UIA.
+            # A leitura redundante que causava mais latência não deve existir.
+            self.assertEqual(len(calls), 2)
+            self.engine.drain()
+            self.assertEqual(self.clipboard.text(), 'original')
 
     def test_replacement_batch_is_not_split_even_above_128_events(self):
         # Exercise backend limit without changing the store's 30-character rule.
@@ -111,7 +142,7 @@ class ExpansionTransactionTests(EngineTestCase):
         self.assertEqual(self.engine.field.text, 'BEFORE OK AFTER')
 
     def test_additional_typing_before_selection_cancels_without_editing(self):
-        for delay in (0, 20, 50):
+        for delay in (0, 20, 44):
             with self.subTest(delay=delay), EngineFixture() as e:
                 e.type('/ola')
                 e.schedule(delay, lambda: e.type('x'))
