@@ -2,6 +2,9 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+
+from .data_paths import application_db_path
+from .welcome import initial_snippets
 from datetime import datetime
 from pathlib import Path
 import json
@@ -70,17 +73,12 @@ def render_snippet(template: str, clipboard_text: str = "", now: datetime | None
     return RenderResult("".join(result), 0 if cursor_pos is None else total_length - cursor_pos)
 
 
-def application_db_path() -> Path:
-    if sys.platform == "win32":
-        root = Path(os.environ.get("APPDATA", str(Path.home() / "AppData" / "Roaming")))
-    else:
-        root = Path(os.environ.get("XDG_DATA_HOME", str(Path.home() / ".local" / "share")))
-    return root / "AutoFillStudio" / "snippets.sqlite3"
-
-
 class SnippetStore:
     def __init__(self, db_path: str | Path):
         path = Path(db_path)
+        # Um banco já existente, inclusive vazio, não deve receber exemplos de
+        # novo após uma atualização, exclusão ou restauração de backup.
+        self._fresh_database = not path.exists()
         path.parent.mkdir(parents=True, exist_ok=True)
         self.connection = sqlite3.connect(str(path))
         self.connection.row_factory = sqlite3.Row
@@ -366,14 +364,22 @@ class SnippetStore:
         return imported, skipped
 
     def seed_if_empty(self) -> None:
-        if self.folders():
+        """Introduz o AURORA apenas quando o banco realmente acaba de nascer."""
+        if not self._fresh_database or self.folders() or self.snippets():
             return
-        folder = self.create_folder("Meus atalhos")
-        self.save(folder, "Boas-vindas", "/ola", "Olá! Tudo bem? Posso ajudar em alguma coisa?")
-        self.save(folder, "Data e hora", "/agora", "Hoje é {{data}}, às {{hora}}.")
-        self.save(folder, "Chamado de TI", "/chamado", "Olá,\n\nSua solicitação foi registrada em {{data}}.\n\nAtenciosamente,\nEquipe de TI")
-        self.save(folder, "Modelo com cursor", "/resposta", "Olá, {{cursor}}!\n\nObrigado pelo contato.")
-        self.save(folder, "Conteúdo copiado", "/colar", "Informação recebida: {{clipboard}}")
+        # A operação é atômica: nunca disponibiliza quatro modelos incompletos.
+        with self.connection:
+            folder = self.connection.execute(
+                "INSERT INTO folders(name) VALUES (?)", ("Conheça o AURORA",)
+            ).lastrowid
+            for position, (title, shortcut, content, rich_content) in enumerate(initial_snippets()):
+                validate_shortcut(shortcut)
+                self.connection.execute(
+                    "INSERT INTO snippets(folder_id, title, shortcut, content, rich_content, sort_order) "
+                    "VALUES (?, ?, ?, ?, ?, ?)",
+                    (folder, title, shortcut, content, rich_content, position),
+                )
+        self._fresh_database = False
 
     def close(self) -> None:
         self.connection.close()
