@@ -12,7 +12,9 @@ _TOKEN_RE = re.compile(r'\{\{(?:data_hora|data|hora|clipboard|area_transferencia
 
 
 def has_rich_formatting(html: str) -> bool:
-    return bool(html and _FORMATTED_RE.search(html))
+    # Imagens data URI pedem HTML no clipboard mesmo sem negrito ou itálico.
+    return bool(html and (_FORMATTED_RE.search(html) or
+                          ("<img" in html.lower() and "data:image/" in html.lower())))
 
 
 def render_rich_html(html: str, clipboard_text: str, now: datetime | None = None) -> str:
