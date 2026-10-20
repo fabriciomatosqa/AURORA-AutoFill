@@ -18,6 +18,7 @@ from types import ModuleType
 import uuid
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 from github_api_auth import authenticate_release_metadata
 
 LEGACY_COMMIT = "583ff467efc40c2b6ebfe1fcfa2b7ce216c60730"
