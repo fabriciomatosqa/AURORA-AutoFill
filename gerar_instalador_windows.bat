@@ -10,10 +10,12 @@ if errorlevel 1 (
 )
 echo.
 echo [1/3] Instalando dependencias de compilacao...
-py -3 -m pip install -r requirements.txt pyinstaller==6.16.0
+py -3 -m pip install -r requirements.txt pyinstaller==6.16.0 pillow
 if errorlevel 1 goto error
 echo.
-echo [2/3] Compilando o aplicativo...
+echo [2/3] Gerando icones e compilando o aplicativo...
+py -3 scripts\build_branding.py
+if errorlevel 1 goto error
 py -3 -m PyInstaller --noconfirm --clean --windowed --onedir --name "AURORA AutoFill" --icon "assets\aurora_icon.ico" --add-data "assets;assets" --add-data "app\accessibility_worker.ps1;app" --collect-submodules pynput main.py
 if errorlevel 1 goto error
 py -3 packaging\verify_bundle.py --platform windows
