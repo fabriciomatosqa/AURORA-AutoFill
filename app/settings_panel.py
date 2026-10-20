@@ -13,6 +13,7 @@ from .icons import apply_icon
 class SettingsPage(QWidget):
     sound_toggled = Signal(bool)
     volume_changed = Signal(int)
+    picture_mode_toggled = Signal(bool)
     startup_toggled = Signal(bool)
     start_minimized_toggled = Signal(bool)
     updates_toggled = Signal(bool)
@@ -83,10 +84,16 @@ class SettingsPage(QWidget):
         head.addWidget(back)
         layout.addLayout(head)
         self._label(layout, "ÁUDIO")
-        self.sound = QCheckBox("Reproduzir som ao salvar e expandir comandos")
+        self.sound = QCheckBox("Reproduzir som ao salvar e acionar comandos")
         self.sound.setChecked(prefs["sound_enabled"])
         self.sound.toggled.connect(self.sound_toggled.emit)
         layout.addWidget(self.sound)
+        sound_hint = QLabel(
+            "O som indica que a colagem foi acionada; alguns navegadores "
+            "não permitem confirmar se o conteúdo foi aceito.")
+        sound_hint.setObjectName("hint")
+        sound_hint.setWordWrap(True)
+        layout.addWidget(sound_hint)
         volume_row = QHBoxLayout()
         volume_row.addWidget(QLabel("Volume"))
         self.volume = QSlider(Qt.Horizontal)
@@ -110,6 +117,21 @@ class SettingsPage(QWidget):
         self.volume_label.setEnabled(self.sound.isChecked())
         self.sample_button.clicked.connect(self.play_requested.emit)
         layout.addWidget(self.sample_button)
+        self._divider(layout)
+        self._label(layout, "COMPATIBILIDADE COM MENSAGEIROS")
+        self.picture_mode = QCheckBox(
+            "Colar comandos com imagens como uma figura única (Teams e navegadores)")
+        self.picture_mode.setChecked(prefs.get("images_as_single_picture", False))
+        self.picture_mode.toggled.connect(self.picture_mode_toggled.emit)
+        layout.addWidget(self.picture_mode)
+        picture_hint = QLabel(
+            "Opcional. Em comandos com prints, converte texto e imagens em "
+            "uma captura PNG única, como um anexo. O texto deixa de ser "
+            "editável e a aceitação depende do aplicativo. "
+            "O teste interno do AURORA continua exibindo o conteúdo original.")
+        picture_hint.setWordWrap(True)
+        picture_hint.setObjectName("hint")
+        layout.addWidget(picture_hint)
         self._divider(layout)
         self._label(layout, "INICIALIZAÇÃO")
         startup_row = QHBoxLayout()
