@@ -38,8 +38,12 @@ class TextZoomTests(unittest.TestCase):
                     self.assertEqual(win.text_zoom_value.text(), "120%")
                     self.assertGreater(win.body_input.font().pointSizeF(), default_size)
                     self.assertEqual(win.body_input.toPlainText(), original_content)
-                    self.assertEqual(win.body_input.toHtml(), original_html)
+                    self.assertEqual(win._html_for_storage(), original_html)
                     self.assertFalse(win.dirty)
+                    # Regravação sem modificações deve preservar a formatação.
+                    win._save()
+                    saved = next(s for s in win.store.snippets() if s.shortcut == "/obrigado")
+                    self.assertEqual(saved.rich_content, original_html)
                     win.text_zoom_slider.setValue(80)
                     self.assertEqual(win.text_zoom_value.text(), "80%")
                     self.assertLess(win.body_input.font().pointSizeF(), default_size)
