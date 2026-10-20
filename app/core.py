@@ -177,6 +177,22 @@ class SnippetStore:
         sql += " ORDER BY sort_order ASC, id DESC"
         return [Snippet(**dict(row)) for row in self.connection.execute(sql, params)]
 
+    def snippet_by_shortcut(self, shortcut: str) -> Snippet | None:
+        """Busca indexada sem carregar todos os comandos ou seus prints.
+
+        A restrição UNIQUE COLLATE NOCASE do SQLite já mantém um índice sobre
+        shortcut: a leitura de um único item é rápida mesmo com muitos blobs
+        HTML/Base64 armazenados em outros comandos.
+        """
+        if not shortcut:
+            return None
+        row = self.connection.execute(
+            "SELECT id, folder_id, title, shortcut, content, rich_content "
+            "FROM snippets WHERE shortcut = ? COLLATE NOCASE LIMIT 1",
+            (shortcut.strip(),),
+        ).fetchone()
+        return Snippet(**dict(row)) if row else None
+
     def save(self, folder_id: int, title: str, shortcut: str, content: str,
              snippet_id: int | None = None, rich_content: str = "") -> int:
         if not all(isinstance(value, str) for value in (title, shortcut, content, rich_content)):

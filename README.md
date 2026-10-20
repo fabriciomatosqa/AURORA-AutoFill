@@ -46,6 +46,13 @@ A logo triangular transparente foi aplicada ao **cabeçalho, ícone da janela, b
 
 Para compilar manualmente, prepare os ícones primeiro com `python -m pip install pillow` e `python scripts/build_branding.py`. O conteúdo do banco não muda ao atualizar a identidade visual.
 
+## Ajustes de interface, Teams e rapidez dos atalhos
+
+- **Botão Inserir imagem:** o pictograma antigo foi substituído pelo ícone SVG de fotografia, com traço arredondado, cor e tamanho idênticos aos demais controles do AURORA.
+- **Diagnóstico de colagem no Teams:** no editor, o menu **Copiar para outro aplicativo → Copiar mensagem como imagem única (Teams)** prepara diretamente um PNG/bitmap nativo com texto e prints. Volte ao Teams, coloque o cursor na mensagem e pressione **Ctrl+V**. Esse teste manual permite distinguir rejeição de anexos pelo Teams de falhas na detecção de atalho/foco da colagem automática. O menu preserva o PNG no clipboard até nova cópia, sem restauração automática. Texto dentro desse PNG não é editável.
+- **Modo automático:** a opção existente nas Configurações **Colar comandos com imagens como uma figura única** permanece disponível e desligada inicialmente. Nem Teams nem ChatGPT garantem suporte universal a conteúdo misto; confirme que o anexo apareceu antes de enviar. Quando necessário, use a colagem manual das imagens.
+- **Desempenho:** a expansão usa uma **consulta indexada pelo atalho** no SQLite em vez de carregar todos os comandos e suas imagens; também faz menos consultas redundantes a UI Automation e aquece seu serviço em segundo plano para reduzir a latência do primeiro uso. O pequeno tempo de estabilização de tecla caiu de 75 para **45 ms**, mas o tempo total real ainda depende da resposta do editor de destino. Todas as validações de contexto, texto e seleção para evitar exclusões indevidas continuam obrigatórias.
+
 ## Imagens e prints dentro dos comandos
 
 O cabeçalho usa a marca AURORA com **108 × 108 pixels**, mantendo o banner original.
