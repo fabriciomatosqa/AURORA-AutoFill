@@ -1,4 +1,4 @@
-"""Instalação limpa, migração de perfil e regressões de dados da v0.6.1."""
+"""Instalação limpa e diretório exclusivo de dados da v0.6.1."""
 import sqlite3
 import tempfile
 import unittest
@@ -89,58 +89,77 @@ class FirstRunTests(unittest.TestCase):
 
 
 class DataDirectoryTests(unittest.TestCase):
-    def test_existing_profile_moves_entire_directory(self):
+    def test_creates_only_official_directory_on_first_use(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            with patch("app.data_paths._profile_root", return_value=root):
+                target = application_db_path()
+                self.assertEqual(target, root / "AuroraAutoFill" / "snippets.sqlite3")
+                self.assertTrue(target.parent.is_dir())
+                self.assertEqual(data_paths.application_data_dir(), target.parent)
+                self.assertFalse((root / "AutoFillStudio").exists())
+
+    def test_existing_legacy_directory_is_never_read_moved_or_deleted(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             old = root / "AutoFillStudio"
             old.mkdir()
             store = SnippetStore(old / "snippets.sqlite3")
-            folder = store.create_folder("Pessoal")
-            store.save(folder, "Minha mensagem", "/eu", "Texto guardado")
+            folder = store.create_folder("Antiga")
+            store.save(folder, "Mensagem", "/antigo", "Preservar sem acessar")
             store.close()
-            (old / "settings.json").write_text('{"sound_volume": 55}', encoding="utf-8")
+            original_db = (old / "snippets.sqlite3").read_bytes()
+            (old / "settings.json").write_text('{"sound_volume": 50}', encoding="utf-8")
             (old / "backups").mkdir()
-            (old / "backups" / "backup.aurora-backup.zip").write_bytes(b"preserve")
-            with patch("app.data_paths._profile_root", return_value=root):
+            (old / "backups" / "preservar.zip").write_bytes(b"backup")
+
+            with patch("app.data_paths._profile_root", return_value=root), \
+                 patch.object(Path, "rename", side_effect=AssertionError("Migração proibida")):
                 target = application_db_path()
                 self.assertEqual(target, root / "AuroraAutoFill" / "snippets.sqlite3")
-                self.assertFalse(old.exists())
-                self.assertEqual((target.parent / "settings.json").read_text(encoding="utf-8"),
-                                 '{"sound_volume": 55}')
-                self.assertEqual((target.parent / "backups" / "backup.aurora-backup.zip").read_bytes(),
-                                 b"preserve")
-                migrated = SnippetStore(target)
+                self.assertTrue(target.parent.is_dir())
+                fresh = SnippetStore(target)
                 try:
-                    migrated.seed_if_empty()
-                    self.assertEqual([s.shortcut for s in migrated.snippets()], ["/eu"])
+                    fresh.seed_if_empty()
+                    self.assertEqual({s.shortcut for s in fresh.snippets()},
+                                     {"/bemvindo", "/tutorial", "/datahora", "/obrigado"})
                 finally:
-                    migrated.close()
+                    fresh.close()
 
-    def test_if_both_directories_exist_neither_is_deleted(self):
+            self.assertEqual((old / "snippets.sqlite3").read_bytes(), original_db)
+            self.assertEqual((old / "settings.json").read_text(encoding="utf-8"),
+                             '{"sound_volume": 50}')
+            self.assertEqual((old / "backups" / "preservar.zip").read_bytes(),
+                             b"backup")
+
+    def test_existing_new_directory_is_reused_without_resetting_data(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
-            old, target = root / "AutoFillStudio", root / "AuroraAutoFill"
-            old.mkdir()
+            target = root / "AuroraAutoFill"
             target.mkdir()
-            (old / "old.txt").write_text("original", encoding="utf-8")
-            (target / "new.txt").write_text("new", encoding="utf-8")
+            store = SnippetStore(target / "snippets.sqlite3")
+            folder = store.create_folder("Pessoal")
+            store.save(folder, "Mensagem", "/meu", "Conteúdo mantido")
+            store.close()
             with patch("app.data_paths._profile_root", return_value=root):
-                self.assertEqual(data_paths.application_data_dir(), target)
-            self.assertEqual((old / "old.txt").read_text(encoding="utf-8"), "original")
-            self.assertEqual((target / "new.txt").read_text(encoding="utf-8"), "new")
+                db = application_db_path()
+                again = SnippetStore(db)
+                try:
+                    again.seed_if_empty()
+                    self.assertEqual([(s.shortcut, s.content) for s in again.snippets()],
+                                     [("/meu", "Conteúdo mantido")])
+                finally:
+                    again.close()
 
-    def test_failed_migration_must_not_start_empty_profile(self):
+    def test_invalid_official_path_is_not_overwritten(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
-            old = root / "AutoFillStudio"
-            old.mkdir()
-            (old / "snippets.sqlite3").write_bytes(b"existing data")
-            with patch("app.data_paths._profile_root", return_value=root), \
-                 patch.object(Path, "rename", side_effect=OSError("locked")):
-                with self.assertRaisesRegex(OSError, "Não foi possível migrar"):
+            occupied = root / "AuroraAutoFill"
+            occupied.write_bytes(b"nao substituir")
+            with patch("app.data_paths._profile_root", return_value=root):
+                with self.assertRaises(OSError):
                     application_db_path()
-            self.assertTrue((old / "snippets.sqlite3").is_file())
-            self.assertFalse((root / "AuroraAutoFill").exists())
+            self.assertEqual(occupied.read_bytes(), b"nao substituir")
 
 
 if __name__ == "__main__":
