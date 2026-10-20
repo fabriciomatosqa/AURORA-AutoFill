@@ -1243,7 +1243,7 @@ class AutoFillWindow(AuroraFeaturesMixin, QMainWindow):
             if not self._candidate_valid(candidate):
                 raise ValueError("A digitação ou o destino mudou; expansão cancelada.")
             shortcut = candidate.shortcut
-            snippet = next((s for s in self.store.snippets() if s.shortcut == shortcut.rstrip(" ")), None)
+            snippet = self.store.snippet_by_shortcut(shortcut)
             if not snippet:
                 self._finish_expansion(None)
                 return
