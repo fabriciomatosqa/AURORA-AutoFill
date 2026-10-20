@@ -46,6 +46,20 @@ A logo triangular transparente foi aplicada ao **cabeçalho, ícone da janela, b
 
 Para compilar manualmente, prepare os ícones primeiro com `python -m pip install pillow` e `python scripts/build_branding.py`. O conteúdo do banco não muda ao atualizar a identidade visual.
 
+## Imagens e prints dentro dos comandos
+
+O cabeçalho usa a marca AURORA com **108 × 108 pixels**, mantendo o banner original.
+
+No editor de comandos, o botão **🖼 Inserir imagem** permite escolher uma foto ou um print (PNG, JPG, WebP ou BMP). Também é possível copiar uma captura de tela e colá-la com **Ctrl+V** diretamente entre os parágrafos.
+
+- As imagens são convertidas em PNG, dimensionadas para facilitar a visualização e **incorporadas ao próprio HTML do comando** (`rich_content`) em vez de depender de links ou pastas externas.
+- **Os backups completos e a exportação JSON preservam as imagens**, porque elas permanecem junto com os dados do comando.
+- Por segurança e desempenho, cada imagem incorporada fica limitada a **2 MB**, cada comando a **12 imagens** e o conjunto a **10 MB**. O programa reduz a resolução quando necessário.
+- A pré-visualização mostra o texto formatado com as imagens. Ao digitar o atalho, o AURORA envia HTML enriquecido ao aplicativo de destino.
+- **Compatibilidade de colagem:** a inserção das imagens depende de o destino aceitar HTML com imagens incorporadas (`data:`). Algumas caixas de mensagem, navegadores e programas podem remover ou rejeitar esse tipo de imagem. Em campos que aceitam somente texto, aparece a indicação `[Imagem]` na posição correspondente. O aplicativo não consegue garantir que todos os destinos aceitem figuras pelo mesmo atalho.
+
+Os comandos anteriores continuam compatíveis e não precisam ser modificados. Imagens copiadas de páginas da internet que dependam de URLs externas não são importadas automaticamente; salve a imagem localmente ou use uma captura para evitar referências quebradas.
+
 ## Instalar e atualizar
 
 Baixe os instaladores na página oficial de [GitHub Releases](https://github.com/fabriciomatosqa/AURORA-AutoFill/releases). **Durante o desenvolvimento, os lançamentos marcados como Pre-release são versões de teste e também aparecem no atualizador do aplicativo.**
