@@ -1,28 +1,64 @@
-"""Interface do AURORA AutoFill v0.5.3 (PySide6)."""
+"""Interface desktop do AURORA AutoFill (PySide6)."""
 from __future__ import annotations
 
 from pathlib import Path
+import sys
+import sqlite3
 
-from PySide6.QtCore import QObject, Qt, QMimeData, QTimer, Signal, QPoint, QRectF, QSettings
+from PySide6.QtCore import QObject, Qt, QMimeData, QTimer, Signal, QPoint, QRectF, QRect, QSize, QTextBoundaryFinder
 from PySide6.QtGui import (QAction, QColor, QFont, QFontMetricsF, QIcon, QKeySequence, QPalette,
                            QShortcut, QTextCharFormat, QPainter, QPainterPath, QLinearGradient, QPen, QPixmap)
 from PySide6.QtWidgets import (
-    QApplication, QComboBox, QFileDialog, QFrame, QHBoxLayout, QInputDialog,
+    QApplication, QAbstractItemView, QComboBox, QFileDialog, QFrame, QHBoxLayout, QInputDialog,
     QLabel, QLineEdit, QListView, QListWidget, QListWidgetItem, QMainWindow, QMenu, QMessageBox,
-    QPlainTextEdit, QPushButton, QScrollArea, QSlider, QSplitter, QStackedWidget, QSystemTrayIcon,
+    QPlainTextEdit, QPushButton, QScrollArea, QSplitter, QStackedWidget, QSystemTrayIcon,
     QTextEdit, QStatusBar, QToolButton, QVBoxLayout, QWidget,
 )
 
 from .core import Snippet, SnippetStore, application_db_path, render_snippet
-from .hotkeys import GlobalHotkeyListener, type_backspace_and_paste
+from .hotkeys import GlobalHotkeyListener, replace_shortcut, paste_clipboard
+from .expansion import ClipboardLease, EditSnapshot, ExpansionCandidate, ExpansionOperation, utf16_slice, prefix_offset
+from .windows_context import ContextUnavailable, FocusMonitor, capture_focus, capture_edit, set_caret, select_text_range
+from time import monotonic
 from .formatting import has_rich_formatting, render_rich_html
+from .features import AuroraFeaturesMixin
+from .version import APP_VERSION
+from .icons import apply_icon
 from .branding import brand_webp_bytes
 
 
+def cursor_steps(text: str) -> int:
+    """Conta caracteres visuais, tratando CRLF como uma quebra de linha."""
+    finder = QTextBoundaryFinder(QTextBoundaryFinder.Grapheme, text.replace("\r\n", "\n"))
+    count = 0
+    while finder.toNextBoundary() != -1:
+        count += 1
+    return count
+
+
+def windows_clipboard_sequence():
+    import sys
+    if sys.platform == "win32":
+        import ctypes
+        return ctypes.windll.user32.GetClipboardSequenceNumber()
+    return None
+
+
+def foreground_window():
+    import sys
+    if sys.platform == "win32":
+        import ctypes
+        api = ctypes.windll.user32.GetForegroundWindow
+        api.restype = ctypes.c_void_p
+        return api()
+    return None
+
+
 STYLESHEET = """
-/* AURORA 0.5.3 — acabamento visual da identidade Aurora */
+/* AURORA — acabamento visual da identidade Aurora Boreal */
 QWidget { font-family: "Segoe UI", "Inter", "Noto Sans", sans-serif; }
-QMainWindow, QWidget#body, QWidget#rightPane, QWidget#editorPage, QWidget#welcomePage {
+QMainWindow, QWidget#body, QWidget#rightPane, QWidget#editorPage, QWidget#welcomePage,
+QStackedWidget {
   background-color: #091426; color: #eaf4ff; }
 QWidget#topbar { background-color: #06152b; }
 QLabel { background: transparent; color: #eaf4ff; }
@@ -68,6 +104,10 @@ QPushButton, QToolButton {
   border-radius: 8px; padding: 9px 12px; border: 1px solid #38536b;
   background: #1b3149; color: #f0fbff; font-weight: 620; }
 QPushButton:hover, QToolButton:hover { background: #294a62; border-color: #6adacc; }
+QPushButton:pressed, QToolButton:pressed { background: #255763; border-color: #79ead8; }
+QPushButton:disabled, QToolButton:disabled {
+  color: #7995ab; background: #162a3e; border-color: #2b4358; }
+QPushButton:focus, QToolButton:focus { border-color: #79ead8; }
 QPushButton:checked { background: #255b63; border-color: #68e3d0; color: #fff; }
 QPushButton#primary { background: #49d0ba; color: #09283b; border: 1px solid #49d0ba; font-weight: 760; }
 QPushButton#primary:hover { background: #8af2d9; }
@@ -90,28 +130,11 @@ QMessageBox, QInputDialog, QFileDialog { background: #132338; color: #eaf5ff; }
 QMessageBox QLabel, QInputDialog QLabel, QFileDialog QLabel { color: #eaf5ff; background: transparent; }
 QMessageBox QPushButton, QInputDialog QPushButton, QFileDialog QPushButton { color: #eaf5ff; background: #1c334a; }
 QToolTip { background: #17354c; color: #fff; border: 1px solid #4eb9b2; }
-/* Controle de zoom Aurora: 80–120%, sem alterar o conteúdo armazenado. */
-QLabel#zoomCaption { color: #a7c9d6; font-size: 12px; font-weight: 600; }
-QLabel#zoomPercent { border: 1px solid #388784; border-radius: 8px;
-  background: #15394a; color: #8cf2e1; padding: 7px 9px; font-weight: 750; }
-QPushButton#zoomReset { border: 1px solid #35657b; background: #143045;
-  color: #a8f1e0; padding: 6px 9px; }
-QPushButton#zoomReset:hover { background: #24566b; }
-QSlider#auroraZoom::groove:horizontal {
-  height: 7px; border-radius: 3px; border: 1px solid #326277;
-  background: #17374a; }
-QSlider#auroraZoom::sub-page:horizontal { border-radius: 3px;
-  background: #48c9c2; }
-QSlider#auroraZoom::handle:horizontal {
-  background: #91f9e5; border: 2px solid #197b84;
-  width: 17px; height: 17px; margin: -7px -1px; border-radius: 9px; }
-QSlider#auroraZoom::handle:horizontal:hover {
-  background: #d2fff4; border-color: #55d5d1; }
 """
 
 
 class HotkeySignals(QObject):
-    triggered = Signal(str)
+    triggered = Signal(object)
 
 
 class AuroraBanner(QWidget):
@@ -224,6 +247,24 @@ class AuroraWordmark(QWidget):
         painter.end()
 
 
+class AuroraMenu(QMenu):
+    """Rounded popup with an explicitly transparent window outside its corners."""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setAttribute(Qt.WA_TranslucentBackground, True)
+        self.setWindowFlags(self.windowFlags() | Qt.FramelessWindowHint | Qt.NoDropShadowWindowHint)
+        self.setStyleSheet("""
+            QMenu { background: #112f41; color: #ebfaff; border: 1px solid #2f8590;
+                border-radius: 10px; padding: 6px; font-size: 13px; }
+            QMenu::item { background: transparent; color: #e5f7ff;
+                padding: 10px 16px; margin: 2px 3px; border-radius: 7px; }
+            QMenu::item:selected { background: #287281; color: white; }
+            QMenu::item:checked { color: #7df0d9; }
+            QMenu::separator { background: #355168; height: 1px; margin: 4px 8px; }
+        """)
+
+
 class AuroraFolderCombo(QComboBox):
     """Exibe as pastas usando menu Qt próprio, evitando bordas nativas acinzentadas."""
 
@@ -232,36 +273,10 @@ class AuroraFolderCombo(QComboBox):
         self._folder_menu = None
 
     def showPopup(self):
-        menu = QMenu(self)
+        menu = AuroraMenu(self)
         menu.setObjectName("folderSelectionMenu")
         menu.setMinimumWidth(max(self.width(), 210))
-        menu.setStyleSheet("""
-            QMenu#folderSelectionMenu {
-                background-color: #112f41;
-                color: #ebfaff;
-                border: 1px solid #2f8590;
-                border-radius: 9px;
-                padding: 6px;
-                font-size: 13px;
-            }
-            QMenu#folderSelectionMenu::item {
-                background: #112f41;
-                color: #e5f7ff;
-                padding: 10px 16px;
-                margin: 2px 3px;
-                border-radius: 7px;
-            }
-            QMenu#folderSelectionMenu::item:selected {
-                background: #287281;
-                color: white;
-            }
-            QMenu#folderSelectionMenu::item:checked {
-                color: #7df0d9;
-            }
-            QMenu#folderSelectionMenu::indicator {
-                width: 0px; height: 0px;
-            }
-        """)
+        menu.setStyleSheet(menu.styleSheet() + "QMenu::indicator { width: 0px; height: 0px; }")
         for i in range(self.count()):
             action = menu.addAction(self.itemText(i))
             action.setCheckable(True)
@@ -290,11 +305,72 @@ class AuroraFolderCombo(QComboBox):
         painter.end()
 
 
-class AutoFillWindow(QMainWindow):
+class AuroraMenuButton(QToolButton):
+    """Menu trigger with the same rounded surface and arrow lane as folders."""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setObjectName("tokenPicker")
+        self.setMinimumHeight(40)
+        self.setStyleSheet("QToolButton#tokenPicker { font-weight: 400; }")
+        self.setPopupMode(QToolButton.InstantPopup)
+
+    def sizeHint(self):
+        size = super().sizeHint()
+        width = self.fontMetrics().horizontalAdvance(self.text()) + 76
+        return size.expandedTo(QSize(width, 40))
+
+    def paintEvent(self, event):
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.Antialiasing, True)
+        bounds = QRectF(self.rect()).adjusted(.5, .5, -.5, -.5)
+        path = QPainterPath()
+        path.addRoundedRect(bounds, 10, 10)
+        active = self.underMouse() or self.isDown() or bool(self.menu() and self.menu().isVisible())
+        painter.fillPath(path, QColor("#184156" if active else "#143345"))
+        painter.save()
+        painter.setClipPath(path)
+        arrow_left = self.width() - 29
+        painter.fillRect(QRectF(arrow_left, 0, 29, self.height()), QColor("#1b495c"))
+        painter.setPen(QColor("#28586d"))
+        painter.drawLine(arrow_left, 0, arrow_left, self.height())
+        painter.restore()
+        border = "#67e7d5" if self.hasFocus() else "#59dfcf" if active else "#2f7077"
+        painter.setPen(QPen(QColor(border), 1))
+        painter.drawPath(path)
+        center_y = self.height() // 2
+        self.icon().paint(painter, QRect(12, center_y - 9, 18, 18))
+        text_rect = QRect(36, 0, max(0, arrow_left - 44), self.height())
+        painter.setPen(QColor("#f0feff" if self.isEnabled() else "#7995ab"))
+        painter.setFont(self.font())
+        label = self.fontMetrics().elidedText(self.text(), Qt.ElideRight, text_rect.width())
+        painter.drawText(text_rect, Qt.AlignLeft | Qt.AlignVCenter, label)
+        painter.setPen(QPen(QColor("#8ef7de"), 2, Qt.SolidLine, Qt.RoundCap, Qt.RoundJoin))
+        x = self.width() - 15
+        painter.drawLine(x - 5, center_y - 3, x, center_y + 2)
+        painter.drawLine(x, center_y + 2, x + 5, center_y - 3)
+        painter.end()
+
+
+class ReorderableSnippetList(QListWidget):
+    """Permite arrastar e soltar comandos e avisa quando a ordem foi alterada."""
+    reordered = Signal()
+
+    def dropEvent(self, event):
+        if event.source() is not self:
+            event.ignore()
+            return
+        super().dropEvent(event)
+        if event.isAccepted():
+            self.reordered.emit()
+
+
+class AutoFillWindow(AuroraFeaturesMixin, QMainWindow):
     def __init__(self):
         super().__init__()
         self.store = SnippetStore(application_db_path())
         self.store.seed_if_empty()
+        self._initialize_features()
         self.current_id: int | None = None
         self.dirty = False
         self._loading = False
@@ -302,23 +378,21 @@ class AutoFillWindow(QMainWindow):
         self._hotkeys_enabled = True
         self._clipboard_clone: QMimeData | None = None
         self._clipboard_written = ""
-        self.settings = QSettings("Aurora", "AURORA AutoFill")
-        try:
-            self._text_zoom = max(80, min(120, int(self.settings.value("editor/text_zoom", 100))))
-        except (TypeError, ValueError):
-            self._text_zoom = 100
-        self.setWindowTitle("AURORA AutoFill v0.5.3 — Expansor de textos")
+        self._clipboard_lease = None
+        self._active_candidate = None
+        self._expansion_operation = None
+        self._queued_candidate = None
+        self.setWindowTitle(f"AURORA AutoFill V{APP_VERSION} — Expansor de textos")
         assets = Path(__file__).resolve().parent.parent / "assets"
-        self._brand_pixmap = QPixmap()
+        self._aurora_logo = QPixmap()
         try:
-            if not self._brand_pixmap.loadFromData(brand_webp_bytes(assets), "WEBP"):
-                raise ValueError("Qt não conseguiu decodificar a marca WEBP.")
+            if not self._aurora_logo.loadFromData(brand_webp_bytes(assets), "WEBP"):
+                raise ValueError("Qt não conseguiu carregar a nova imagem.")
         except (ValueError, OSError) as exc:
-            # PNG gerado no empacotamento garante a marca mesmo sem plugin WEBP.
-            self._brand_pixmap = QPixmap(str(assets / "aurora_icon.png"))
-            if self._brand_pixmap.isNull():
-                raise RuntimeError("Ícone AURORA indisponível.") from exc
-        self.setWindowIcon(QIcon(self._brand_pixmap))
+            self._aurora_logo = QPixmap(str(assets / "aurora_icon.png"))
+            if self._aurora_logo.isNull():
+                raise RuntimeError("Ícone AURORA ausente ou inválido.") from exc
+        self.setWindowIcon(QIcon(self._aurora_logo))
         # Impede a compactação horizontal desordenada dos campos; em telas de
         # pouca altura o editor usa rolagem própria, sem sobrepor controles.
         screen = QApplication.primaryScreen()
@@ -343,41 +417,19 @@ class AutoFillWindow(QMainWindow):
         self._update_listener_shortcuts()
         started, message = self.hotkeys.start()
         self._hotkeys_enabled = started
-        self.listen_button.setText("● Atalhos ativos" if started else "○ Atalhos indisponíveis")
+        self._focus_monitor = FocusMonitor(self.hotkeys.invalidate) if started else None
+        self.listen_button.setText("Atalhos ativos" if started else "Atalhos indisponíveis")
+        apply_icon(self.listen_button, "bolt" if started else "pause")
         self.listen_button.setEnabled(started)
         self.listen_button.setToolTip("Ativar/desativar expansão em outros programas")
         self.statusBar().showMessage(message)
         self._refresh_all()
         self._show_welcome()
+        QTimer.singleShot(10000, self._initial_release_check)
 
     def _play_confirmation(self):
-        """Reproduz o clique original de forma assíncrona, sem bloquear a GUI.
-
-        Não utiliza QtMultimedia: ambientes Linux sem PipeWire podem travar
-        ao inicializar o módulo de áudio; Windows usa winsound nativo.
-        """
-        import sys
-        import shutil
-        import subprocess
-        path = str(Path(__file__).resolve().parent.parent / "assets" / "command_click.wav")
-        try:
-            if sys.platform == "win32":
-                import winsound
-                winsound.PlaySound(path, winsound.SND_FILENAME | winsound.SND_ASYNC | winsound.SND_NODEFAULT)
-                return
-            for player in ("paplay", "pw-play", "aplay"):
-                binary = shutil.which(player)
-                if binary:
-                    subprocess.Popen([binary, path], stdin=subprocess.DEVNULL,
-                                     stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-                                     start_new_session=True)
-                    return
-            QApplication.beep()
-        except Exception:
-            try:
-                QApplication.beep()
-            except Exception:
-                pass
+        """Som suave com liga/desliga e volume independente do Windows."""
+        self._play_feedback()
 
     def _build_ui(self):
         outer = QWidget()
@@ -396,7 +448,7 @@ class AutoFillWindow(QMainWindow):
         h.setContentsMargins(28, 16, 26, 16)
         h.setSpacing(14)
         brand_mark = QLabel()
-        brand_mark.setPixmap(self._brand_pixmap.scaled(82, 82, Qt.KeepAspectRatio, Qt.SmoothTransformation))
+        brand_mark.setPixmap(self._aurora_logo.scaled(82, 82, Qt.KeepAspectRatio, Qt.SmoothTransformation))
         brand_mark.setFixedSize(82, 82)
         h.addWidget(brand_mark)
         brand_box = QVBoxLayout()
@@ -414,11 +466,17 @@ class AutoFillWindow(QMainWindow):
         brand_box.addWidget(caption)
         h.addLayout(brand_box)
         h.addStretch(1)
-        self.listen_button = QPushButton("● Atalhos ativos")
+        self.listen_button = apply_icon(QPushButton("Atalhos ativos"), "bolt")
         self.listen_button.setObjectName("headerButton")
         self.listen_button.setMinimumWidth(162)
         self.listen_button.clicked.connect(self._toggle_listener)
         h.addWidget(self.listen_button)
+        settings_button = apply_icon(QPushButton(), "settings", label="Configurações e atualizações")
+        settings_button.setObjectName("headerButton")
+        settings_button.setToolTip("Configurações e atualizações")
+        settings_button.setFixedWidth(42)
+        settings_button.clicked.connect(self._show_settings)
+        h.addWidget(settings_button)
         layout.addWidget(top)
 
         splitter = QSplitter(Qt.Horizontal)
@@ -436,7 +494,7 @@ class AutoFillWindow(QMainWindow):
         title.setObjectName("sectionTitle")
         sidebar_head.addWidget(title)
         sidebar_head.addStretch()
-        new_btn = QPushButton("+ Novo")
+        new_btn = apply_icon(QPushButton("Novo"), "plus", color="#09283b")
         new_btn.setObjectName("primary")
         new_btn.setToolTip("Criar novo comando")
         new_btn.clicked.connect(self._new_snippet)
@@ -453,22 +511,30 @@ class AutoFillWindow(QMainWindow):
         self.filter_folder.setMinimumContentsLength(20)
         self.filter_folder.currentIndexChanged.connect(self._refresh_list)
         folder_row.addWidget(self.filter_folder, 1)
-        add_folder = QPushButton("+")
+        add_folder = apply_icon(QPushButton(), "plus", label="Criar pasta")
         add_folder.setFixedWidth(36)
         add_folder.setToolTip("Criar pasta")
         add_folder.clicked.connect(self._add_folder)
         folder_row.addWidget(add_folder)
+        self.remove_folder_button = apply_icon(QPushButton(), "minus", color="#ffbecf", label="Excluir pasta")
+        self.remove_folder_button.setObjectName("danger")
+        self.remove_folder_button.setFixedWidth(36)
+        self.remove_folder_button.setToolTip("Excluir a pasta selecionada (sem apagar comandos)")
+        self.remove_folder_button.clicked.connect(self._delete_folder)
+        folder_row.addWidget(self.remove_folder_button)
         s.addLayout(folder_row)
-        self.snippet_list = QListWidget()
+        self.snippet_list = ReorderableSnippetList()
         self.snippet_list.setSpacing(1)
+        self.snippet_list.setDefaultDropAction(Qt.MoveAction)
+        self.snippet_list.reordered.connect(self._reorder_snippets)
         self.snippet_list.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.snippet_list.setTextElideMode(Qt.ElideRight)
         self.snippet_list.currentItemChanged.connect(self._choose_snippet)
         s.addWidget(self.snippet_list, 1)
         backup = QHBoxLayout()
-        export = QPushButton("↑ Exportar")
+        export = apply_icon(QPushButton("Exportar"), "export")
         export.clicked.connect(self._export)
-        imported = QPushButton("↓ Importar")
+        imported = apply_icon(QPushButton("Importar"), "import")
         imported.clicked.connect(self._import)
         backup.addWidget(export)
         backup.addWidget(imported)
@@ -484,13 +550,15 @@ class AutoFillWindow(QMainWindow):
         self.right_layout.addWidget(self.stack)
         self._build_welcome_page()
         self._build_editor_page()
+        self._build_features_page()
         splitter.addWidget(right)
         splitter.setSizes([302, 990])
         splitter.setStretchFactor(0, 0)
         splitter.setStretchFactor(1, 1)
         self.setStatusBar(QStatusBar())
         self.statusBar().setSizeGripEnabled(False)
-        author = QLabel("Desenvolvido por Fabricio Matos  •  2026")
+        self._setup_undo_ui()
+        author = QLabel(f"Desenvolvido por Fabricio Matos  •  V{APP_VERSION}")
         author.setObjectName("developerCredit")
         self.statusBar().addPermanentWidget(author)
 
@@ -502,10 +570,13 @@ class AutoFillWindow(QMainWindow):
             return
         tray = QSystemTrayIcon(self.windowIcon(), self)
         tray.setToolTip("AURORA AutoFill")
-        menu = QMenu(self)
+        menu = AuroraMenu(self)
         self.tray_open_action = QAction("Abrir AURORA AutoFill", self)
         self.tray_open_action.triggered.connect(self._restore_from_tray)
         menu.addAction(self.tray_open_action)
+        tray_settings = QAction("Configurações", self)
+        tray_settings.triggered.connect(lambda: (self._restore_from_tray(), self._show_settings()))
+        menu.addAction(tray_settings)
         self.tray_toggle_action = QAction("Pausar atalhos", self)
         self.tray_toggle_action.triggered.connect(self._toggle_listener)
         menu.addAction(self.tray_toggle_action)
@@ -564,7 +635,7 @@ class AutoFillWindow(QMainWindow):
         sample_label = QLabel("TESTE SEUS ATALHOS")
         sample_label.setObjectName("sectionTitle")
         v.addWidget(sample_label)
-        sample_help = QLabel("Clique abaixo e experimente /bemvindo, /tutorial ou /datahora. Em instalações anteriores, use os atalhos cadastrados por você.")
+        sample_help = QLabel("Clique abaixo e experimente /bemvindo, /tutorial ou /datahora. Quem já utiliza o AURORA pode testar seus próprios atalhos.")
         sample_help.setWordWrap(True)
         v.addWidget(sample_help)
         self.test_box = QPlainTextEdit()
@@ -578,7 +649,7 @@ class AutoFillWindow(QMainWindow):
         v.addWidget(tip)
         buttons = QHBoxLayout()
         buttons.addStretch()
-        create = QPushButton("+ Criar meu primeiro comando")
+        create = apply_icon(QPushButton("Criar meu primeiro comando"), "plus", color="#09283b")
         create.setObjectName("primary")
         create.clicked.connect(self._new_snippet)
         buttons.addWidget(create)
@@ -599,7 +670,7 @@ class AutoFillWindow(QMainWindow):
         self.edit_heading = QLabel("Novo comando")
         self.edit_heading.setObjectName("heading")
         header.addWidget(self.edit_heading, 1)
-        home_btn = QPushButton("⌂ Início")
+        home_btn = apply_icon(QPushButton("Início"), "home")
         home_btn.clicked.connect(self._show_welcome)
         header.addWidget(home_btn)
         v.addLayout(header)
@@ -618,7 +689,7 @@ class AutoFillWindow(QMainWindow):
         shortcut_label.setObjectName("sectionTitle")
         shortcut_box.addWidget(shortcut_label)
         self.shortcut_input = QLineEdit()
-        self.shortcut_input.setPlaceholderText("/meuatalho")
+        self.shortcut_input.setPlaceholderText("/chamado")
         shortcut_box.addWidget(self.shortcut_input)
         fields.addLayout(shortcut_box, 1)
         folder_box = QVBoxLayout()
@@ -637,31 +708,6 @@ class AutoFillWindow(QMainWindow):
         content_label.setObjectName("sectionTitle")
         content_header.addWidget(content_label)
         content_header.addStretch()
-        zoom_caption = QLabel("Tamanho do texto")
-        zoom_caption.setObjectName("zoomCaption")
-        content_header.addWidget(zoom_caption)
-        self.text_zoom_slider = QSlider(Qt.Horizontal)
-        self.text_zoom_slider.setObjectName("auroraZoom")
-        self.text_zoom_slider.setRange(80, 120)
-        self.text_zoom_slider.setSingleStep(5)
-        self.text_zoom_slider.setPageStep(10)
-        self.text_zoom_slider.setTickInterval(10)
-        self.text_zoom_slider.setTickPosition(QSlider.TicksBelow)
-        self.text_zoom_slider.setFixedWidth(132)
-        self.text_zoom_slider.setAccessibleName("Tamanho do texto entre 80% e 120%")
-        self.text_zoom_slider.setToolTip("Ajusta somente o tamanho visual do editor e da pré-visualização.")
-        self.text_zoom_slider.setValue(self._text_zoom)
-        content_header.addWidget(self.text_zoom_slider)
-        self.text_zoom_value = QLabel(f"{self._text_zoom}%")
-        self.text_zoom_value.setObjectName("zoomPercent")
-        self.text_zoom_value.setMinimumWidth(55)
-        self.text_zoom_value.setAlignment(Qt.AlignCenter)
-        content_header.addWidget(self.text_zoom_value)
-        self.text_zoom_reset = QPushButton("100%")
-        self.text_zoom_reset.setObjectName("zoomReset")
-        self.text_zoom_reset.setToolTip("Restaurar tamanho padrão do texto")
-        self.text_zoom_reset.clicked.connect(lambda: self.text_zoom_slider.setValue(100))
-        content_header.addWidget(self.text_zoom_reset)
         v.addLayout(content_header)
         self.body_input = QTextEdit()
         self.body_input.setPlaceholderText("Escreva aqui o conteúdo que será inserido...")
@@ -670,7 +716,7 @@ class AutoFillWindow(QMainWindow):
         formatting_row.setSpacing(8)
         self.format_buttons = {}
         for title, tip, mode in [("B", "Negrito", "bold"), ("I", "Itálico", "italic"), ("U", "Sublinhado", "underline")]:
-            button = QPushButton(title)
+            button = apply_icon(QPushButton(), mode, label=tip)
             button.setToolTip(tip)
             button.setCheckable(True)
             button.setFixedWidth(40)
@@ -681,11 +727,14 @@ class AutoFillWindow(QMainWindow):
         guide.setObjectName("hint")
         formatting_row.addWidget(guide)
         formatting_row.addStretch()
-        self.token_button = QToolButton()
-        self.token_button.setText("+ Inserir comando dinâmico ▾")
+        self.token_button = AuroraMenuButton()
+        self.token_button.setText("Inserir comando dinâmico")
+        apply_icon(self.token_button, "plus")
+        self.token_button.setToolButtonStyle(Qt.ToolButtonTextBesideIcon)
         self.token_button.setPopupMode(QToolButton.InstantPopup)
         self.token_button.setMinimumWidth(238)
-        menu = QMenu(self.token_button)
+        menu = AuroraMenu(self.token_button)
+        menu.setObjectName("dynamicTokenMenu")
         for label, token in [
             ("Data atual", "{{data}}"), ("Hora atual", "{{hora}}"),
             ("Data e hora", "{{data_hora}}"), ("Área de transferência", "{{clipboard}}"),
@@ -698,32 +747,22 @@ class AutoFillWindow(QMainWindow):
         formatting_row.addWidget(self.token_button)
         v.addLayout(formatting_row)
         self.body_input.currentCharFormatChanged.connect(self._sync_format_buttons)
-        self.body_input.setMinimumHeight(178)
-        v.addWidget(self.body_input, 2)
+        self.body_input.setMinimumHeight(190)
+        v.addWidget(self.body_input, 3)
         preview_label = QLabel("PRÉ-VISUALIZAÇÃO")
         preview_label.setObjectName("sectionTitle")
         v.addWidget(preview_label)
         self.preview = QPlainTextEdit()
         self.preview.setReadOnly(True)
-        self.preview.setMinimumHeight(88)
-        self.preview.setMaximumHeight(125)
+        self.preview.setMinimumHeight(145)
         self.preview.setPlaceholderText("O resultado do modelo aparecerá aqui.")
-        v.addWidget(self.preview, 1)
-        # O zoom atua só na visualização e nunca muda HTML ou atalhos salvos.
-        self._editor_font_base = self.body_input.font().pointSizeF()
-        if self._editor_font_base <= 0:
-            self._editor_font_base = 10.0
-        self._preview_font_base = self.preview.font().pointSizeF()
-        if self._preview_font_base <= 0:
-            self._preview_font_base = 10.0
-        self.text_zoom_slider.valueChanged.connect(self._set_text_zoom)
-        self._set_text_zoom(self._text_zoom)
+        v.addWidget(self.preview, 2)
         tip = QLabel("{{cursor}} posiciona o ponto de digitação. Atalhos: Ctrl+N (novo) e Ctrl+S (salvar).")
         tip.setObjectName("hint")
         tip.setWordWrap(True)
         v.addWidget(tip)
         action_row = QHBoxLayout()
-        self.delete_button = QPushButton("Excluir")
+        self.delete_button = apply_icon(QPushButton("Excluir"), "trash", color="#ffbecf")
         self.delete_button.setObjectName("danger")
         self.delete_button.clicked.connect(self._delete)
         action_row.addWidget(self.delete_button)
@@ -731,7 +770,7 @@ class AutoFillWindow(QMainWindow):
         cancel_button = QPushButton("Cancelar")
         cancel_button.clicked.connect(self._show_welcome)
         action_row.addWidget(cancel_button)
-        save_button = QPushButton("✓ Salvar comando")
+        save_button = apply_icon(QPushButton("Salvar comando"), "save", color="#09283b")
         save_button.setObjectName("primary")
         save_button.clicked.connect(self._save)
         action_row.addWidget(save_button)
@@ -748,31 +787,6 @@ class AutoFillWindow(QMainWindow):
         self.body_input.textChanged.connect(self._mark_dirty)
         self.body_input.textChanged.connect(self._update_preview)
         self.editor_folder.currentIndexChanged.connect(self._mark_dirty)
-
-    def _set_text_zoom(self, percentage: int):
-        """Zoom apenas de leitura: não formata nem modifica o modelo."""
-        percentage = max(80, min(120, int(percentage)))
-        self._text_zoom = percentage
-        self.text_zoom_value.setText(f"{percentage}%")
-        for widget, base_points in ((self.body_input, self._editor_font_base),
-                                    (self.preview, self._preview_font_base)):
-            font = QFont(widget.font())
-            font.setPointSizeF(max(1.0, base_points * percentage / 100.0))
-            widget.setFont(font)
-        self.settings.setValue("editor/text_zoom", percentage)
-
-    def _html_for_storage(self) -> str:
-        """Serializa HTML no tamanho original, independente do zoom de leitura."""
-        current_font = QFont(self.body_input.font())
-        normal_font = QFont(current_font)
-        normal_font.setPointSizeF(self._editor_font_base)
-        if self._text_zoom != 100:
-            self.body_input.setFont(normal_font)
-        try:
-            return self.body_input.toHtml()
-        finally:
-            if self._text_zoom != 100:
-                self.body_input.setFont(current_font)
 
     def _apply_format(self, mode: str, active: bool):
         fmt = QTextCharFormat()
@@ -837,7 +851,29 @@ class AutoFillWindow(QMainWindow):
             if snippet.id == old_selected:
                 self.snippet_list.setCurrentItem(item)
         self.snippet_list.blockSignals(False)
+        can_sort = not self.search.text().strip()
+        self.snippet_list.setDragDropMode(
+            QAbstractItemView.InternalMove if can_sort else QAbstractItemView.NoDragDrop)
+        self.snippet_list.setToolTip(
+            "Arraste comandos para alterar a ordem" if can_sort
+            else "Limpe a busca para ordenar comandos")
+        self.remove_folder_button.setEnabled(folder_id is not None)
         self._update_listener_shortcuts()
+
+    def _reorder_snippets(self):
+        if self.search.text().strip():
+            self._refresh_list()
+            return
+        ordered_ids = [self.snippet_list.item(index).data(Qt.UserRole)
+                       for index in range(self.snippet_list.count())]
+        try:
+            self.store.reorder_snippets(self.filter_folder.currentData(), ordered_ids)
+        except ValueError as exc:
+            QMessageBox.warning(self, "Não foi possível ordenar", str(exc))
+            self._refresh_list()
+            return
+        self._refresh_list()
+        self.statusBar().showMessage("Ordem dos comandos atualizada.", 4000)
 
     def _update_listener_shortcuts(self):
         if hasattr(self, "hotkeys"):
@@ -915,8 +951,8 @@ class AutoFillWindow(QMainWindow):
                 self.editor_folder.currentData(),
                 self.title_input.text(), self.shortcut_input.text(),
                 self.body_input.toPlainText(), self.current_id,
-                rich_content=self._html_for_storage())
-        except ValueError as error:
+                rich_content=self.body_input.toHtml())
+        except (ValueError, sqlite3.Error, OSError) as error:
             QMessageBox.warning(self, "Não foi possível salvar", str(error))
             return
         self.current_id = new_id
@@ -924,6 +960,7 @@ class AutoFillWindow(QMainWindow):
         self._refresh_all()
         self._load_editor(self._get_snippet(new_id))
         self.statusBar().showMessage("Comando salvo com sucesso.", 5000)
+        self._play_confirmation()
 
     def _delete(self):
         if self.current_id is None:
@@ -931,12 +968,16 @@ class AutoFillWindow(QMainWindow):
         if QMessageBox.question(self, "Excluir comando", "Deseja realmente excluir este comando?",
                                 QMessageBox.Yes | QMessageBox.No, QMessageBox.No) != QMessageBox.Yes:
             return
-        self.store.delete(self.current_id)
+        try:
+            snapshot = self.store.delete_with_undo(self.current_id)
+        except Exception as exc:
+            QMessageBox.warning(self, "Não foi possível excluir", str(exc))
+            return
         self.dirty = False
         self.current_id = None
         self._refresh_all()
         self._show_welcome()
-        self.statusBar().showMessage("Comando excluído.", 5000)
+        self._offer_undo("snippet", snapshot, "Comando excluído")
 
     def _add_folder(self):
         name, accepted = QInputDialog.getText(self, "Nova pasta", "Nome da pasta:")
@@ -951,6 +992,40 @@ class AutoFillWindow(QMainWindow):
         idx = self.filter_folder.findData(folder_id)
         self.filter_folder.setCurrentIndex(idx)
         self.editor_folder.setCurrentIndex(self.editor_folder.findData(folder_id))
+
+    def _delete_folder(self):
+        folder_id = self.filter_folder.currentData()
+        if folder_id is None or not self._confirm_change():
+            return
+        folders = dict(self.store.folders())
+        name = folders.get(folder_id)
+        if name is None:
+            self._refresh_all()
+            return
+        count = len(self.store.snippets(folder_id))
+        others = [(fid, label) for fid, label in folders.items() if fid != folder_id]
+        destination = (next((label for _, label in others if label.casefold() == "meus atalhos"),
+                            others[0][1]) if others
+                       else ("Sem pasta" if name.casefold() == "meus atalhos" else "Meus atalhos"))
+        detail = (f"Os {count} comandos serão movidos para a pasta '{destination}'." if count
+                  else "A pasta está vazia.")
+        confirmation = QMessageBox.question(
+            self, "Excluir pasta",
+            f"Excluir a pasta '{name}'?\n\n{detail}\nNenhum comando será apagado.",
+            QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
+        if confirmation != QMessageBox.Yes:
+            return
+        try:
+            moved, target, snapshot = self.store.delete_folder_with_undo(folder_id)
+        except Exception as exc:
+            QMessageBox.warning(self, "Não foi possível excluir a pasta", str(exc))
+            return
+        self.dirty = False
+        self._refresh_all()
+        self._show_welcome()
+        self.statusBar().showMessage(
+            f"Pasta excluída. {moved} comando(s) preservado(s) em '{target}'.", 6000)
+        self._offer_undo("folder", snapshot, "Pasta excluída")
 
     def _export(self):
         path, _ = QFileDialog.getSaveFileName(self, "Exportar comandos", "autofill-backup.json", "JSON (*.json)")
@@ -969,13 +1044,14 @@ class AutoFillWindow(QMainWindow):
                 self._refresh_all()
                 QMessageBox.information(self, "Importação concluída",
                                         f"Comandos importados: {imported}\nIgnorados (duplicados ou inválidos): {skipped}")
-            except (ValueError, OSError, TypeError) as exc:
+            except (ValueError, OSError, TypeError, sqlite3.Error) as exc:
                 QMessageBox.warning(self, "Erro na importação", str(exc))
 
     def _toggle_listener(self):
         self._hotkeys_enabled = not self._hotkeys_enabled
         self.hotkeys.set_enabled(self._hotkeys_enabled)
-        self.listen_button.setText("● Atalhos ativos" if self._hotkeys_enabled else "○ Atalhos pausados")
+        self.listen_button.setText("Atalhos ativos" if self._hotkeys_enabled else "Atalhos pausados")
+        apply_icon(self.listen_button, "bolt" if self._hotkeys_enabled else "pause")
         if self.tray_toggle_action is not None:
             self.tray_toggle_action.setText("Pausar atalhos" if self._hotkeys_enabled else "Retomar atalhos")
         self.statusBar().showMessage("Expansão ativa." if self._hotkeys_enabled else "Expansão pausada.", 4000)
@@ -989,59 +1065,288 @@ class AutoFillWindow(QMainWindow):
                 clone.setData(fmt, original.data(fmt))
         return clone
 
-    def _expand_global(self, shortcut: str):
-        # O hook reconhece a soltura da última tecla; aguarda o widget de destino
-        # terminar o processamento do evento antes de apagar/colar.
-        if not self._hotkeys_enabled or self._clipboard_pending:
+    def _expand_global(self, candidate: ExpansionCandidate):
+        if not self._hotkeys_enabled or self._quitting or not self.hotkeys.is_current(candidate):
             return
         if self.isActiveWindow() and self.focusWidget() is not self.test_box:
             return
-        self._clipboard_pending = True
-        self.hotkeys.set_enabled(False)
-        QTimer.singleShot(75, lambda s=shortcut: self._perform_expansion(s))
+        if sys.platform == "win32" and not (candidate.context.window and candidate.context.control):
+            return
+        operation = self._expansion_operation
+        lease = self._clipboard_lease
+        if (operation and operation.stage in {"selected", "sent", "moving"}
+                or lease and not lease.consumed and self._owns_clipboard(lease)):
+            self._queued_candidate = candidate
+            return
+        if capture_focus() != candidate.context or not self.hotkeys.claim(candidate):
+            return
+        self._active_candidate = candidate
+        # Retained settling delay; correctness comes from revision/context/range checks.
+        QTimer.singleShot(75, lambda c=candidate: self._perform_expansion(c))
 
-    def _perform_expansion(self, shortcut: str):
-        clipboard = QApplication.clipboard()
-        original_mime = None
-        restore_later = False
+    def _candidate_valid(self, candidate):
+        operation = self._expansion_operation
+        already_sent = (operation is not None and operation.candidate is candidate
+                        and operation.stage in {"selected", "sent", "moving"})
+        # Never expire a sent paste mid-confirmation. Still reject a changed
+        # keyboard revision or actual focus change to protect the destination.
+        return (self._active_candidate is candidate and self._hotkeys_enabled and not self._quitting
+                and self.hotkeys.is_current(candidate, require_fresh=not already_sent)
+                and capture_focus() == candidate.context)
+
+    def _edit_snapshot(self, *, accessibility=False):
+        context = capture_focus()
+        if self.isActiveWindow() and self.focusWidget() is self.test_box:
+            cursor = self.test_box.textCursor()
+            return EditSnapshot(context, self.test_box.toPlainText(), cursor.selectionStart(), cursor.selectionEnd())
+        return capture_edit(context, accessibility=True) if accessibility else capture_edit(context)
+
+    def _owns_clipboard(self, lease):
+        mime = QApplication.clipboard().mimeData()
+        return bool(mime and mime.text() == lease.text
+                    and bytes(mime.data("application/x-aurora-expansion")) == lease.token
+                    and windows_clipboard_sequence() == lease.sequence)
+
+    def _set_caret(self, snapshot, offset):
+        if self.isActiveWindow() and self.focusWidget() is self.test_box:
+            if self._edit_snapshot() != snapshot:
+                raise ContextUnavailable("O campo mudou antes de posicionar o cursor.")
+            cursor = self.test_box.textCursor()
+            cursor.setPosition(offset)
+            self.test_box.setTextCursor(cursor)
+        else:
+            set_caret(snapshot, offset)
+
+    def _clipboard_source_text(self):
+        lease = self._clipboard_lease
+        if lease and lease.consumed and self._owns_clipboard(lease):
+            return lease.original.text()
+        return QApplication.clipboard().text()
+
+    def _perform_expansion(self, candidate: ExpansionCandidate):
+        if self._active_candidate is not candidate:
+            return
+        operation = None
         try:
-            snippet = next((s for s in self.store.snippets() if s.shortcut == shortcut), None)
+            if not self._candidate_valid(candidate):
+                raise ValueError("A digitação ou o destino mudou; expansão cancelada.")
+            shortcut = candidate.shortcut
+            snippet = next((s for s in self.store.snippets() if s.shortcut == shortcut.rstrip(" ")), None)
             if not snippet:
+                self._finish_expansion(None)
                 return
-            current_text = clipboard.text()
+            try:
+                before = self._edit_snapshot()
+            except ContextUnavailable:
+                if monotonic() - candidate.created < 0.85:
+                    QTimer.singleShot(10, lambda c=candidate: self._perform_expansion(c))
+                    return
+                raise
+            if before is not None and before.shortcut_range(shortcut) is None:
+                if monotonic() - candidate.created < 0.85:
+                    QTimer.singleShot(10, lambda c=candidate: self._perform_expansion(c))
+                    return
+                raise ValueError("O atalho não está no intervalo esperado; expansão cancelada.")
+            current_text = self._clipboard_source_text()
             rendered = render_snippet(snippet.content, current_text)
             if not rendered.text:
+                self._finish_expansion(None)
                 return
-            original_mime = self._clone_clipboard_mime()
-            payload = QMimeData()
-            payload.setText(rendered.text)
+            # NUL não pode ser transportado integralmente por CF_UNICODETEXT.
+            if "\x00" in rendered.text:
+                raise ValueError("O texto contém um caractere NUL e não pode ser colado.")
+            rendered.text.encode("utf-16-le")  # Rejeita pares substitutos inválidos antes de editar.
             # O Notepad lê CF_UNICODETEXT. HTML é opcional e só aparece quando
             # o modelo foi realmente formatado (Word/Outlook podem aproveitar).
             rich = bool(snippet.rich_content and has_rich_formatting(snippet.rich_content)
                         and "{{cursor}}" not in snippet.content)
-            if rich:
-                payload.setHtml(render_rich_html(snippet.rich_content, current_text))
-            self._clipboard_written = rendered.text
-            clipboard.setMimeData(payload)
-            restore_later = True
-            type_backspace_and_paste(len(shortcut), rendered.left_moves)
-            self.statusBar().showMessage(f"Expandido: {shortcut}", 3000)
-            self._play_confirmation()
+            suffix = rendered.text[-rendered.left_moves:] if rendered.left_moves else ""
+            if rendered.left_moves and before is None:
+                try:
+                    before = self._edit_snapshot(accessibility=True)
+                except ContextUnavailable:
+                    if monotonic() - candidate.created < 0.85:
+                        QTimer.singleShot(10, lambda c=candidate: self._perform_expansion(c))
+                        return
+                    raise
+                if before is None:
+                    raise ValueError("Este campo não permite confirmar o posicionamento do cursor.")
+                if before.shortcut_range(shortcut) is None:
+                    raise ValueError("O atalho não está no intervalo acessível esperado; expansão cancelada.")
+            operation = ExpansionOperation(candidate, before, rendered.text, cursor_steps(suffix),
+                                           rendered.text[:-rendered.left_moves] if rendered.left_moves else rendered.text,
+                                           render_rich_html(snippet.rich_content, current_text) if rich else "")
+            self._expansion_operation = operation
+            if not self._candidate_valid(candidate):
+                raise ValueError("O contexto mudou antes da seleção.")
+            self._submit_expansion(operation)
         except Exception as exc:
-            self.statusBar().showMessage(f"Não foi possível expandir: {exc}", 8000)
-        finally:
-            if restore_later and original_mime is not None:
-                QTimer.singleShot(1450, lambda mime=original_mime: self._restore_clipboard(mime))
-            else:
-                self._clipboard_pending = False
-                self.hotkeys.set_enabled(self._hotkeys_enabled)
+            self._finish_expansion(operation, f"Não foi possível expandir: {exc}")
 
-    def _restore_clipboard(self, original: QMimeData):
-        clipboard = QApplication.clipboard()
-        if clipboard.text() == self._clipboard_written:
-            clipboard.setMimeData(original)
+    def _submit_expansion(self, operation):
+        if self._expansion_operation is not operation:
+            return
+        try:
+            if not self._candidate_valid(operation.candidate):
+                raise ValueError("Atividade ou foco mudou; colagem cancelada.")
+            clipboard = QApplication.clipboard()
+            backup_sequence = windows_clipboard_sequence()
+            previous = self._clipboard_lease
+            original = (previous.original if previous and previous.consumed and self._owns_clipboard(previous)
+                        else self._clone_clipboard_mime())
+            from uuid import uuid4
+            token = uuid4().hex.encode("ascii")
+            payload = QMimeData()
+            payload.setText(operation.text)
+            payload.setData("application/x-aurora-expansion", token)
+            if operation.rich_html:
+                payload.setHtml(operation.rich_html)
+            if windows_clipboard_sequence() != backup_sequence:
+                raise ValueError("O clipboard mudou durante a preparação; colagem cancelada.")
+            clipboard.setMimeData(payload)
+            lease = ClipboardLease(operation.candidate.identifier, original, operation.text, token,
+                                   windows_clipboard_sequence())
+            operation.lease = self._clipboard_lease = lease
+            self._clipboard_pending = True
+            if not self._candidate_valid(operation.candidate) or not self._owns_clipboard(lease):
+                raise ValueError("Contexto ou clipboard mudou antes da colagem.")
+            if operation.before is not None:
+                snapshot = self._edit_snapshot(accessibility=bool(operation.before.identity))
+                if (snapshot is None or snapshot.context != operation.candidate.context
+                        or snapshot.identity != operation.before.identity
+                        or snapshot.text != operation.before.text
+                        or (snapshot.start, snapshot.end) != (operation.before.start, operation.before.end)
+                        or snapshot.shortcut_range(operation.candidate.shortcut) is None):
+                    raise ValueError("O intervalo mudou antes da colagem.")
+            # Recheck after clipboard and native queries, immediately before dispatch.
+            if not self._candidate_valid(operation.candidate) or not self._owns_clipboard(lease):
+                raise ValueError("Contexto ou clipboard mudou antes do envio.")
+            if operation.before is not None and operation.before.identity:
+                # WebView editors process keyboard selections asynchronously.
+                # Select and verify the exact shortcut through UI Automation
+                # before sending paste, rather than racing Shift+Left with Ctrl+V.
+                begin, end = operation.before.shortcut_range(operation.candidate.shortcut)
+                operation.stage = "selected"
+                select_text_range(operation.before, begin, end)
+                if not self._candidate_valid(operation.candidate) or not self._owns_clipboard(lease):
+                    raise ValueError("Contexto ou clipboard mudou após selecionar o atalho.")
+                operation.stage = "sent"
+                paste_clipboard()
+            else:
+                operation.stage = "sent"
+                replace_shortcut(cursor_steps(operation.candidate.shortcut))
+            operation.deadline = monotonic() + 1.5
+            QTimer.singleShot(10, lambda op=operation: self._confirm_expansion(op))
+        except Exception as exc:
+            self._finish_expansion(operation, f"Não foi possível expandir: {exc}")
+
+    @staticmethod
+    def _normal_text(text):
+        return text.replace("\r\n", "\n").replace("\r", "\n")
+
+    def _confirm_expansion(self, operation):
+        if self._expansion_operation is not operation:
+            return
+        try:
+            if not self._candidate_valid(operation.candidate):
+                raise ValueError("Contexto alterado após envio; resultado não confirmado.")
+            before = operation.before
+            if before is None:
+                self._finish_expansion(operation, "Expansão enviada; este campo não permite confirmar o resultado.")
+                return
+            snapshot = self._edit_snapshot(accessibility=bool(before.identity))
+            if snapshot is not None and snapshot.identity != before.identity:
+                raise ValueError("O campo de edição mudou; resultado não confirmado.")
+            begin, end = before.shortcut_range(operation.candidate.shortcut)
+            expected = self._normal_text(before.replace(begin, end, operation.text))
+            prefix = self._normal_text(utf16_slice(before.text, 0, begin) + operation.text)
+            if (snapshot is None or self._normal_text(snapshot.text) != expected or snapshot.start != snapshot.end
+                    or self._normal_text(utf16_slice(snapshot.text, 0, snapshot.start)) != prefix):
+                if monotonic() < operation.deadline:
+                    QTimer.singleShot(10, lambda op=operation: self._confirm_expansion(op))
+                    return
+                raise ValueError("Colagem não confirmada; nenhum reenvio será feito.")
+            operation.lease.consumed = True
+            if operation.left_moves:
+                caret_prefix = utf16_slice(before.text, 0, begin) + operation.cursor_prefix
+                self._set_caret(snapshot, prefix_offset(snapshot.text, caret_prefix))
+                operation.stage = "moving"
+                operation.deadline = monotonic() + 0.75
+                QTimer.singleShot(10, lambda op=operation: self._confirm_cursor(op))
+            else:
+                self._expansion_succeeded(operation)
+        except Exception as exc:
+            if (isinstance(exc, ContextUnavailable) and monotonic() < operation.deadline
+                    and self._candidate_valid(operation.candidate)):
+                QTimer.singleShot(10, lambda op=operation: self._confirm_expansion(op))
+            else:
+                self._finish_expansion(operation, f"Não foi possível expandir: {exc}")
+
+    def _confirm_cursor(self, operation):
+        if self._expansion_operation is not operation:
+            return
+        try:
+            self._check_cursor(operation)
+        except Exception as exc:
+            if (isinstance(exc, ContextUnavailable) and monotonic() < operation.deadline
+                    and self._candidate_valid(operation.candidate)):
+                QTimer.singleShot(10, lambda op=operation: self._confirm_cursor(op))
+            else:
+                self._finish_expansion(operation, f"Texto inserido; cursor não confirmado: {exc}")
+
+    def _check_cursor(self, operation):
+        if not self._candidate_valid(operation.candidate):
+            self._finish_expansion(operation, "Texto inserido; contexto mudou antes de confirmar o cursor.")
+            return
+        snapshot = self._edit_snapshot(accessibility=bool(operation.before.identity))
+        begin, end = operation.before.shortcut_range(operation.candidate.shortcut)
+        prefix = self._normal_text(utf16_slice(operation.before.text, 0, begin) + operation.cursor_prefix)
+        if (snapshot is not None and snapshot.start == snapshot.end
+                and snapshot.identity == operation.before.identity
+                and self._normal_text(snapshot.text) == self._normal_text(operation.before.replace(begin, end, operation.text))
+                and self._normal_text(utf16_slice(snapshot.text, 0, snapshot.start)) == prefix):
+            self._expansion_succeeded(operation)
+        elif monotonic() < operation.deadline:
+            QTimer.singleShot(10, lambda op=operation: self._confirm_cursor(op))
+        else:
+            self._finish_expansion(operation, "Texto inserido; posição do cursor não confirmada.")
+
+    def _expansion_succeeded(self, operation):
+        operation.stage = "confirmed"
+        self.statusBar().showMessage(f"Expandido: {operation.candidate.shortcut}", 3000)
+        self._play_confirmation()
+        self._finish_expansion(operation)
+
+    def _finish_expansion(self, operation, message=""):
+        if operation is not None and self._expansion_operation is not operation:
+            return
+        if message:
+            self.statusBar().showMessage(message, 8000)
+        if operation and operation.lease:
+            lease = operation.lease
+            delay = 0 if lease.consumed or operation.stage not in {"sent", "moving"} else 1450
+            QTimer.singleShot(delay, lambda saved=lease: self._restore_clipboard(saved))
+        self._active_candidate = None
+        self._expansion_operation = None
+        self._resume_queued_expansion()
+
+    def _resume_queued_expansion(self):
+        lease = self._clipboard_lease
+        if lease and not lease.consumed and self._owns_clipboard(lease):
+            return
+        candidate, self._queued_candidate = self._queued_candidate, None
+        if candidate is not None:
+            QTimer.singleShot(0, lambda c=candidate: self._expand_global(c))
+
+    def _restore_clipboard(self, lease: ClipboardLease):
+        if self._clipboard_lease is not lease:
+            return
+        if self._owns_clipboard(lease):
+            QApplication.clipboard().setMimeData(lease.original)
+        self._clipboard_lease = None
         self._clipboard_pending = False
-        self.hotkeys.set_enabled(self._hotkeys_enabled)
+        if not self._quitting:
+            self._resume_queued_expansion()
 
     def closeEvent(self, event):
         if not self._confirm_change():
@@ -1052,7 +1357,14 @@ class AutoFillWindow(QMainWindow):
             event.ignore()
             self._hide_to_tray()
             return
+        if not self._prepare_updates_shutdown():
+            event.ignore()
+            return
         self.hotkeys.stop()
+        if self._focus_monitor is not None:
+            self._focus_monitor.stop()
+        if self._clipboard_lease is not None:
+            self._restore_clipboard(self._clipboard_lease)
         if self.tray_icon is not None:
             self.tray_icon.hide()
         self.store.close()

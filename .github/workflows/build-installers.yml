@@ -1,48 +1,130 @@
 name: Compilar instaladores AURORA AutoFill
+run-name: Instaladores - ${{ github.ref_name }} - ${{ github.sha }}
 
 on:
   workflow_dispatch:
-  push:
-    branches: [main]
-    tags: ['v*']
   pull_request:
-    branches: [main]
+    branches: [main, dev/correcao-expansao-windows]
+  push:
+    branches: [main, dev/correcao-expansao-windows]
+    tags: ['v*']
 
 permissions:
   contents: read
 
+env:
+  PYTHONDONTWRITEBYTECODE: '1'
+
+concurrency:
+  group: aurora-installers-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
-  windows:
-    name: Windows - EXE (PyInstaller + Inno Setup)
+  version:
+    name: Identificar versão da compilação
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      tag: ${{ steps.version.outputs.tag }}
+      prerelease: ${{ steps.version.outputs.prerelease }}
+      bridge: ${{ steps.version.outputs.bridge }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Gerar versão única ou conferir tag estável
+        id: version
+        env:
+          REF_TYPE: ${{ github.ref_type }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          if [ "$REF_TYPE" = tag ]; then
+            version="$(python packaging/build_version.py --tag "$REF_NAME" --print-only)"
+            echo "prerelease=false" >> "$GITHUB_OUTPUT"
+          else
+            git ls-remote --tags origin > "$RUNNER_TEMP/aurora-tags.txt"
+            version="$(python packaging/build_version.py --tags-file "$RUNNER_TEMP/aurora-tags.txt" --commit "$GITHUB_SHA" --print-only)"
+            bridge="$(python packaging/build_version.py --version "$version" --bridge --print-only)"
+            echo "bridge=$bridge" >> "$GITHUB_OUTPUT"
+            echo "prerelease=true" >> "$GITHUB_OUTPUT"
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "tag=v$version" >> "$GITHUB_OUTPUT"
+
+  windows_bundle:
+    name: Windows - validar e compilar PyInstaller
+    needs: version
     runs-on: windows-latest
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-python@v5
         with:
           python-version: '3.13'
+      - name: Gravar versão e commit no aplicativo
+        run: python packaging/build_version.py --version '${{ needs.version.outputs.version }}' --commit '${{ github.sha }}'
       - name: Instalar dependências
         run: |
           python -m pip install --upgrade pip
           python -m pip install -r requirements.txt pyinstaller==6.16.0 "pillow>=10,<12"
-      - name: Aplicar logo transparente aos ícones e instalador
+      - name: Gerar PNG e ICO transparentes de forma reproduzível
         run: python scripts/build_branding.py
       - name: Testes automatizados de regressão
         env:
           QT_QPA_PLATFORM: offscreen
         run: python -m unittest discover -s tests -v
-      - name: Compilar aplicativo Windows
+      - name: Testar seleção e cursor com acessibilidade real do Windows
+        # Exercise Windows' real UIA range implementation, not just mocks.
+        # The smoke fixture owns its window and contains only synthetic text.
+        shell: pwsh
+        run: python packaging/smoke_accessibility.py
+      - name: Compilar aplicativo Windows com os recursos validados
         shell: pwsh
         run: |
-          python -m PyInstaller --noconfirm --clean --windowed --onedir --name "AURORA AutoFill" --icon "assets/aurora_icon.ico" --add-data "assets;assets" --collect-submodules pynput main.py
+          python -m PyInstaller --noconfirm --clean --windowed --onedir --name "AURORA AutoFill" --icon "assets/aurora_icon.ico" --add-data "assets;assets" --add-data "app/accessibility_worker.ps1;app" --collect-submodules pynput main.py
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Verificar recursos compilados
         shell: pwsh
         run: |
-          $root = 'dist/AURORA AutoFill'
-          if (!(Test-Path "$root/AURORA AutoFill.exe")) { throw 'EXE ausente' }
-          if (!(Test-Path "$root/_internal/assets/aurora_banner.jpg")) { throw 'Banner ausente' }
-          if (!(Test-Path "$root/_internal/assets/command_click.wav")) { throw 'Som ausente' }
+          Set-Content -LiteralPath 'dist/AURORA AutoFill/SOURCE-COMMIT.txt' -Value '${{ github.sha }}' -Encoding utf8NoBOM
+          python packaging/verify_bundle.py --platform windows --report windows-bundle-report.json
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Testar EXE e preservacao de dados em perfil temporario
+        shell: pwsh
+        run: |
+          python packaging/smoke_frozen.py --exe 'dist/AURORA AutoFill/AURORA AutoFill.exe'
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python packaging/verify_bundle.py --platform windows --report windows-bundle-report.json
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Compartilhar bundle PyInstaller validado
+        uses: actions/upload-artifact@v4
+        with:
+          name: AURORA-AutoFill-Windows-Bundle-${{ github.run_number }}
+          path: dist/AURORA AutoFill/
+          if-no-files-found: error
+          retention-days: 7
+          compression-level: 0
+
+  windows:
+    name: Windows - instalador EXE (Inno Setup)
+    needs: [version, windows_bundle]
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Gravar versao centralizada
+        run: python packaging/build_version.py --version '${{ needs.version.outputs.version }}' --commit '${{ github.sha }}'
+      - name: Reutilizar bundle PyInstaller validado
+        uses: actions/download-artifact@v4
+        with:
+          name: AURORA-AutoFill-Windows-Bundle-${{ github.run_number }}
+          path: dist/AURORA AutoFill
+      - name: Usar no instalador o mesmo ícone embutido no executável
+        shell: pwsh
+        run: Copy-Item 'dist/AURORA AutoFill/_internal/assets/aurora_icon.ico' 'assets/aurora_icon.ico' -Force
       - name: Preparar Inno Setup
         shell: pwsh
         run: |
@@ -52,36 +134,118 @@ jobs:
       - name: Criar instalador Windows
         shell: pwsh
         run: |
+          $env:AURORA_VERSION = (python -c "from app.version import APP_VERSION; print(APP_VERSION)").Trim()
+          $env:AURORA_WINDOWS_VERSION = (python -c "from app.version import WINDOWS_VERSION; print(WINDOWS_VERSION)").Trim()
+          if ($LASTEXITCODE -ne 0 -or !$env:AURORA_VERSION) { throw 'Versão do app indisponível' }
+          if ('${{ github.ref_type }}' -eq 'tag' -and '${{ github.ref_name }}' -ne "v$env:AURORA_VERSION") { throw 'A tag não corresponde à versão do aplicativo' }
           $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
           & $iscc "packaging/windows/AURORA-AutoFill.iss"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Testar instalação silenciosa e reabertura em perfil descartável
+        shell: pwsh
+        run: |
+          python packaging/smoke_installer.py --installer 'installer-win/AURORA-AutoFill-v${{ needs.version.outputs.version }}-Windows-Setup.exe'
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Registrar origem e checksum Windows
+        shell: pwsh
+        run: |
+          Copy-Item -LiteralPath 'dist/AURORA AutoFill/SOURCE-COMMIT.txt' -Destination 'SOURCE-COMMIT.txt'
+          Get-FileHash -Algorithm SHA256 (Get-ChildItem installer-win -File -Filter '*.exe' | Select-Object -ExpandProperty FullName) | ForEach-Object {
+            '{0}  {1}' -f $_.Hash.ToLowerInvariant(), (Split-Path $_.Path -Leaf)
+          } | Set-Content -LiteralPath 'SHA256SUMS-Windows.txt' -Encoding ascii
       - uses: actions/upload-artifact@v4
         with:
-          name: AURORA-AutoFill-v0.5.3-Windows-Setup
-          path: installer-win/*.exe
+          name: AURORA-AutoFill-Windows-${{ github.run_number }}
+          path: |
+            installer-win/*.exe
+            SOURCE-COMMIT.txt
+            SHA256SUMS-Windows.txt
           if-no-files-found: error
+          retention-days: 30
+          compression-level: 0
 
-  linux:
-    name: Linux - DEB + portátil (PyInstaller)
-    runs-on: ubuntu-24.04
-    timeout-minutes: 30
+  msi:
+    name: Windows - MSI (WiX, instalacao independente)
+    needs: [version, windows_bundle]
+    runs-on: windows-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: '3.13'
+      - name: Usar mesma versao e origem do aplicativo EXE
+        run: python packaging/build_version.py --version '${{ needs.version.outputs.version }}' --commit '${{ github.sha }}'
+      - name: Reutilizar aplicativo Windows ja compilado e aprovado
+        uses: actions/download-artifact@v4
+        with:
+          name: AURORA-AutoFill-Windows-Bundle-${{ github.run_number }}
+          path: dist/AURORA AutoFill
+      - name: Usar os mesmos ícones do executável no empacotamento MSI
+        shell: pwsh
+        run: |
+          foreach ($name in @('aurora_icon.ico','aurora_icon.png','aurora_icon_256.png')) {
+            Copy-Item "dist/AURORA AutoFill/_internal/assets/$name" "assets/$name" -Force
+          }
+      - name: Verificar bundle compartilhado
+        shell: pwsh
+        run: |
+          if (!(Test-Path 'dist/AURORA AutoFill/AURORA AutoFill.exe')) { throw 'EXE ausente no bundle baixado' }
+          if (!(Test-Path 'dist/AURORA AutoFill/SOURCE-COMMIT.txt')) { throw 'Arquivo de procedencia ausente no bundle' }
+          python packaging/verify_bundle.py --platform windows --dist 'dist/AURORA AutoFill'
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Criar instalador MSI com WiX
+        shell: pwsh
+        run: |
+          ./packaging/windows/build_msi.ps1
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Instalar e desinstalar MSI no runner Windows
+        shell: pwsh
+        run: |
+          python packaging/windows/smoke_msi.py --msi 'installer-win/AURORA-AutoFill-v${{ needs.version.outputs.version }}-Windows-x64.msi'
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Registrar checksum do MSI
+        shell: pwsh
+        run: |
+          Get-FileHash -Algorithm SHA256 installer-win/*.msi | ForEach-Object {
+            '{0}  {1}' -f $_.Hash.ToLowerInvariant(), (Split-Path $_.Path -Leaf)
+          } | Set-Content -LiteralPath 'SHA256SUMS-MSI.txt' -Encoding ascii
+      - uses: actions/upload-artifact@v4
+        with:
+          name: AURORA-AutoFill-Windows-MSI-${{ github.run_number }}
+          path: |
+            installer-win/*.msi
+            SHA256SUMS-MSI.txt
+          if-no-files-found: error
+          retention-days: 30
+          compression-level: 0
+
+  linux:
+    name: Linux - DEB + portátil (PyInstaller)
+    needs: version
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Gravar versão e commit no aplicativo
+        run: python packaging/build_version.py --version '${{ needs.version.outputs.version }}' --commit '${{ github.sha }}'
       - name: Bibliotecas Qt/X11 do sistema
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
             libxcb-cursor0 libxkbcommon-x11-0 libxcb-xinerama0 libxcb-shape0 \
             libxcb-keysyms1 libxcb-image0 libxcb-render-util0 \
-            libxcb-icccm4 libx11-xcb1 libegl1 libopengl0 xvfb xauth
+            libxcb-icccm4 libx11-xcb1 libegl1 libopengl0 fonts-dejavu-core xvfb xauth
       - name: Instalar dependências Python
         run: |
           python -m pip install --upgrade pip
           python -m pip install -r requirements.txt pyinstaller==6.16.0 "pillow>=10,<12"
-      - name: Aplicar logo transparente aos ícones e instalador
+      - name: Gerar PNG e ICO transparentes de forma reproduzível
         run: python scripts/build_branding.py
       - name: Testes (Qt offscreen)
         env:
@@ -97,26 +261,134 @@ jobs:
             --collect-submodules pynput main.py
       - name: Verificar recursos empacotados
         run: |
-          test -x 'dist/AURORA AutoFill/AURORA AutoFill'
-          test -f 'dist/AURORA AutoFill/_internal/assets/aurora_banner.jpg'
-          test -f 'dist/AURORA AutoFill/_internal/assets/command_click.wav'
+          printf '%s\n' "$GITHUB_SHA" > 'dist/AURORA AutoFill/SOURCE-COMMIT.txt'
+          python packaging/verify_bundle.py --platform linux --report linux-bundle-report.json
       - name: Testar EXE Linux sem monitor físico
-        env:
-          QT_QPA_PLATFORM: offscreen
-          AURORA_AUTOFILL_SMOKE_TEST: '1'
-        run: timeout 25s 'dist/AURORA AutoFill/AURORA AutoFill'
+        run: python packaging/smoke_frozen.py --exe 'dist/AURORA AutoFill/AURORA AutoFill'
       - name: Testar interface Linux sob X11 virtual
-        env:
-          AURORA_AUTOFILL_SMOKE_TEST: '1'
-        run: xvfb-run -a -s '-screen 0 1366x768x24' timeout 25s 'dist/AURORA AutoFill/AURORA AutoFill'
+        run: xvfb-run -a -s '-screen 0 1366x768x24' python packaging/smoke_frozen.py --exe 'dist/AURORA AutoFill/AURORA AutoFill' --qt-platform xcb
+      - name: Definir versão centralizada
+        run: |
+          echo "AURORA_VERSION=$(python -c 'from app.version import APP_VERSION;print(APP_VERSION)')" >> "$GITHUB_ENV"
       - name: Criar instalador Linux DEB
-        run: python packaging/linux/build_deb_frozen.py --out AURORA-AutoFill-v0.5.3-Linux-amd64.deb
+        run: python packaging/linux/build_deb_frozen.py --out "AURORA-AutoFill-v${AURORA_VERSION}-Linux-amd64.deb"
       - name: Criar pacote Linux portátil
-        run: tar -czf AURORA-AutoFill-v0.5.3-Linux-portable-amd64.tar.gz -C dist 'AURORA AutoFill'
+        run: tar -czf "AURORA-AutoFill-v${AURORA_VERSION}-Linux-portable-amd64.tar.gz" -C dist 'AURORA AutoFill'
+      - name: Verificar conteudo do DEB e registrar checksums
+        run: |
+          stage="$RUNNER_TEMP/aurora-deb-check"
+          dpkg-deb --info AURORA-AutoFill-v${AURORA_VERSION}-Linux-amd64.deb
+          dpkg-deb --extract AURORA-AutoFill-v${AURORA_VERSION}-Linux-amd64.deb "$stage"
+          python packaging/verify_bundle.py --platform linux --dist "$stage/opt/aurora-autofill"
+          test -x "$stage/usr/bin/aurora-autofill"
+          test -f "$stage/usr/share/applications/aurora-autofill.desktop"
+          test -f "$stage/usr/share/icons/hicolor/256x256/apps/aurora-autofill.png"
+          cp 'dist/AURORA AutoFill/SOURCE-COMMIT.txt' SOURCE-COMMIT.txt
+          sha256sum AURORA-AutoFill-v${AURORA_VERSION}-Linux-amd64.deb AURORA-AutoFill-v${AURORA_VERSION}-Linux-portable-amd64.tar.gz > SHA256SUMS-Linux.txt
       - uses: actions/upload-artifact@v4
         with:
-          name: AURORA-AutoFill-v0.5.3-Linux
+          name: AURORA-AutoFill-Linux-${{ github.run_number }}
           path: |
-            AURORA-AutoFill-v0.5.3-Linux-amd64.deb
-            AURORA-AutoFill-v0.5.3-Linux-portable-amd64.tar.gz
+            AURORA-AutoFill-v*-Linux-amd64.deb
+            AURORA-AutoFill-v*-Linux-portable-amd64.tar.gz
+            linux-bundle-report.json
+            SOURCE-COMMIT.txt
+            SHA256SUMS-Linux.txt
           if-no-files-found: error
+          retention-days: 30
+          compression-level: 0
+
+  release:
+    name: Publicar instaladores aprovados nos testes
+    if: github.event_name != 'pull_request'
+    needs: [version, windows, msi, linux]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/download-artifact@v4
+        with:
+          name: AURORA-AutoFill-Windows-${{ github.run_number }}
+          path: release-assets/windows
+      - uses: actions/download-artifact@v4
+        with:
+          name: AURORA-AutoFill-Linux-${{ github.run_number }}
+          path: release-assets/linux
+      - uses: actions/download-artifact@v4
+        with:
+          name: AURORA-AutoFill-Windows-MSI-${{ github.run_number }}
+          path: release-assets/msi
+      - name: Consolidar checksums EXE e MSI
+        shell: bash
+        run: |
+          cat release-assets/msi/SHA256SUMS-MSI.txt >> release-assets/windows/SHA256SUMS-Windows.txt
+          rm release-assets/msi/SHA256SUMS-MSI.txt
+      - name: Organizar instaladores e conferir checksums dos artifacts
+        env:
+          RELEASE_VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          python packaging/prepare_release_assets.py --version "$RELEASE_VERSION"
+          if [ '${{ needs.version.outputs.prerelease }}' = true ]; then
+            python packaging/prepare_release_assets.py --version "$RELEASE_VERSION" --bridge
+          fi
+      - name: Publicar instaladores e checksums no GitHub Releases
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ needs.version.outputs.tag }}
+          RELEASE_VERSION: ${{ needs.version.outputs.version }}
+          IS_PRERELEASE: ${{ needs.version.outputs.prerelease }}
+          BRIDGE_VERSION: ${{ needs.version.outputs.bridge }}
+        run: |
+          printf 'Compilação %s do AURORA AutoFill.\n\nCommit: %s\n\nWindows e Linux passaram nos testes automatizados e na verificação dos aplicativos empacotados.\n\n' "$RELEASE_VERSION" "$GITHUB_SHA" > RELEASE-NOTES.md
+          if [ "$IS_PRERELEASE" = true ]; then
+            printf 'Versão de teste no formato BASE-DDMMAA: a data indica o dia da atualização no horário de Brasília. No AURORA, use Configurações > Verificar atualizações, com Receber versões de teste ativado.\n\n' >> RELEASE-NOTES.md
+            printf 'A v0.6.1-dev.22.1 encontra o mesmo instalador pela publicação de transição v%s. Depois de instalar, a janela e o instalador mostram v%s. O atualizador novo reconhece os dois nomes como a mesma atualização.\n\n' "$BRIDGE_VERSION" "$RELEASE_VERSION" >> RELEASE-NOTES.md
+            if ! git rev-parse "$RELEASE_TAG" > /dev/null 2>&1; then
+              git tag "$RELEASE_TAG" "$GITHUB_SHA"
+              git push origin "refs/tags/$RELEASE_TAG"
+            fi
+            flags=(--verify-tag --prerelease --latest=false)
+          else
+            flags=(--verify-tag)
+          fi
+          printf 'Faça um backup antes de testar. O aplicativo cria outro backup antes de instalar atualizações. Os checksums SHA256 acompanham os instaladores.\n' >> RELEASE-NOTES.md
+          if ! gh release view "$RELEASE_TAG" --json id > /dev/null 2>&1; then
+            gh release create "$RELEASE_TAG" \
+              release-publish/* \
+              --draft --title "AURORA AutoFill v$RELEASE_VERSION" \
+              --notes-file RELEASE-NOTES.md "${flags[@]}"
+          fi
+          test "$(gh release view "$RELEASE_TAG" --json assets --jq '.assets | length')" -eq 6
+          if [ "$IS_PRERELEASE" = true ]; then
+            gh release edit "$RELEASE_TAG" --draft=false --latest=false
+          else
+            gh release edit "$RELEASE_TAG" --draft=false --latest
+          fi
+          if [ "$IS_PRERELEASE" = true ]; then
+            bridge_tag="v$BRIDGE_VERSION"
+            if ! git rev-parse "$bridge_tag" > /dev/null 2>&1; then
+              git tag "$bridge_tag" "$GITHUB_SHA"
+              git push origin "refs/tags/$bridge_tag"
+            fi
+            printf 'Publicação de transição para o atualizador da v0.6.1-dev.22.1.\n\nInstala o AURORA AutoFill v%s. Os arquivos são idênticos aos da [publicação com data](https://github.com/fabriciomatosqa/AURORA-AutoFill/releases/tag/v%s); somente os nomes dos downloads e os manifestos mudam para compatibilidade.\n\nO programa novo reconhece as duas publicações como a mesma versão e não oferece uma reinstalação.\n' "$RELEASE_VERSION" "$RELEASE_VERSION" > BRIDGE-NOTES.md
+            if ! gh release view "$bridge_tag" --json id > /dev/null 2>&1; then
+              gh release create "$bridge_tag" release-bridge/* --draft --verify-tag \
+                --prerelease --latest=false --title "Transição para AURORA AutoFill v$RELEASE_VERSION" \
+                --notes-file BRIDGE-NOTES.md
+            fi
+            test "$(gh release view "$bridge_tag" --json assets --jq '.assets | length')" -eq 6
+            gh release edit "$bridge_tag" --draft=false --latest=false
+          fi
+      - name: Verificar descoberta e download pelo atualizador público
+        env:
+          RELEASE_VERSION: ${{ needs.version.outputs.version }}
+        run: python packaging/check_published_update.py --version "$RELEASE_VERSION"
+      - name: Verificar atualização com o código da versão instalada dev.22.1
+        if: needs.version.outputs.prerelease == 'true'
+        env:
+          RELEASE_VERSION: ${{ needs.version.outputs.version }}
+          BRIDGE_VERSION: ${{ needs.version.outputs.bridge }}
+        run: python packaging/check_legacy_update.py --version "$BRIDGE_VERSION" --display-version "$RELEASE_VERSION"

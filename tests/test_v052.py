@@ -32,9 +32,9 @@ class ReleaseSynchronisationTests(unittest.TestCase):
         listener._on_release(keys[0])
         self.assertEqual(received, [])
         listener._on_release(keys[-1])
-        self.assertEqual(received, ['/oi'])
+        self.assertEqual([c.shortcut for c in received], ['/oi'])
         listener._on_release(keys[-1])
-        self.assertEqual(received, ['/oi'])
+        self.assertEqual([c.shortcut for c in received], ['/oi'])
 
     def test_disabled_cancels_pending_shortcut(self):
         listener = GlobalHotkeyListener(lambda _: self.fail('não pode expandir'))
@@ -47,62 +47,38 @@ class ReleaseSynchronisationTests(unittest.TestCase):
 
 
 class ClipboardPasteTests(unittest.TestCase):
-    def test_windows_paste_uses_backspace_and_ctrl_v_not_unicode_scancodes(self):
+    def test_windows_paste_selects_shortcut_before_ctrl_v(self):
         sent = []
         class Stub:
             def __call__(self, count, records, size):
                 sent.extend((records[i].u.ki.wVk, records[i].u.ki.dwFlags)
                             for i in range(count))
                 return count
-        api = SimpleNamespace(SendInput=Stub())
+        api = SimpleNamespace(SendInput=Stub(), GetAsyncKeyState=lambda vk: 0)
         with patch.object(ctypes, 'windll', SimpleNamespace(user32=api), create=True), \
              patch('time.sleep', return_value=None):
             _send_windows_paste(3, 2)
-        self.assertEqual([x for x in sent[:6]],
-                         [(8, 0), (8, 2)] * 3)
-        self.assertEqual(sent[6:10], [(0x11, 0), (0x56, 0), (0x56, 2), (0x11, 2)])
-        self.assertEqual(sent[10:], [(0x25, 0), (0x25, 2)] * 2)
+        self.assertEqual(sent[:8], [(0x10, 0)] + [(0x25, 1), (0x25, 3)] * 3 + [(0x10, 2)])
+        self.assertEqual(sent[8:12], [(0x11, 0), (0x56, 0), (0x56, 2), (0x11, 2)])
+        self.assertEqual(sent[12:], [(0x25, 1), (0x25, 3)] * 2)
         # Não emite evento Unicode 0x0004 usado pela estratégia antiga.
         self.assertFalse(any(flag & 0x0004 for _, flag in sent))
 
     def test_plain_text_uses_clipboard_and_preserves_previous_content(self):
-        os.environ.setdefault('QT_QPA_PLATFORM', 'offscreen')
-        try:
-            from PySide6.QtWidgets import QApplication
-            from app.ui import AutoFillWindow
-        except ImportError:
-            self.skipTest('PySide6 indisponível')
-        app = qt_app()
-        with tempfile.TemporaryDirectory() as tmp, \
-             patch('app.ui.application_db_path', return_value=Path(tmp) / 'test.db'), \
-             patch('app.ui.GlobalHotkeyListener.start', return_value=(False, 'Teste')):
-            win = AutoFillWindow()
-            try:
-                win._hotkeys_enabled = True
-                win.hotkeys.set_enabled(True)
-                QApplication.clipboard().setText('Minha cópia original')
-                original = win._clone_clipboard_mime()
-                win._clipboard_pending = True
-                with patch('app.ui.type_backspace_and_paste') as paste, \
-                     patch('app.ui.QTimer.singleShot') as timer, \
-                     patch.object(win, '_play_confirmation') as play:
-                    win._perform_expansion('/bemvindo')
-                    paste.assert_called_once_with(len('/bemvindo'), 0)
-                    play.assert_called_once()
-                    mime = QApplication.clipboard().mimeData()
-                    self.assertTrue(mime.text().startswith('Olá!'))
-                    self.assertFalse(mime.hasHtml())
-                    self.assertTrue(win._clipboard_pending)
-                    self.assertEqual(timer.call_count, 1)
-                    # Executa a restauração agora, sem timers pendentes no shutdown.
-                    timer.call_args.args[1]()
-                    self.assertEqual(QApplication.clipboard().text(), 'Minha cópia original')
-                    self.assertFalse(win._clipboard_pending)
-            finally:
-                win._quitting = True
-                win.close()
-                QApplication.clipboard().clear()
-        app.processEvents()
+        from engine_fixture import EngineFixture
+        with EngineFixture() as engine:
+            engine.clipboard.setText('Minha cópia original')
+            engine.type('/ola')
+            engine.until(75)
+            mime = engine.clipboard.mimeData()
+            self.assertTrue(mime.text().startswith('Olá!'))
+            self.assertFalse(mime.hasHtml())
+            self.assertTrue(engine.host._clipboard_pending)
+            engine.drain()
+            engine.replace.assert_called_once_with(len('/ola'))
+            engine.host._play_confirmation.assert_called_once()
+            self.assertEqual(engine.clipboard.text(), 'Minha cópia original')
+            self.assertFalse(engine.host._clipboard_pending)
 
 
 class BannerTests(unittest.TestCase):
@@ -125,8 +101,12 @@ class BannerTests(unittest.TestCase):
         path = Path(__file__).resolve().parents[1] / 'assets' / 'command_click.wav'
         with wave.open(str(path), 'rb') as wav:
             self.assertEqual(wav.getnchannels(), 1)
+            # Gota original PCM16, com cauda curta e taxa de áudio padrão.
             self.assertEqual(wav.getframerate(), 44100)
-            self.assertLess(wav.getnframes() / wav.getframerate(), 0.10)
+            self.assertEqual(wav.getsampwidth(), 2)
+            duration = wav.getnframes() / wav.getframerate()
+            self.assertGreater(duration, 0.15)
+            self.assertLess(duration, 0.50)
 
 
 if __name__ == '__main__':

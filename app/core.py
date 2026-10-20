@@ -2,6 +2,9 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+
+from .data_paths import application_db_path
+from .welcome import initial_snippets
 from datetime import datetime
 from pathlib import Path
 import json
@@ -9,18 +12,10 @@ import os
 import re
 import sqlite3
 import sys
+import tempfile
 
 SHORTCUT_PATTERN = re.compile(r"^/[^\s/]{1,30}$")
 VARIABLE_PATTERN = re.compile(r"\{\{([a-zA-Z_]+)\}\}")
-
-
-# Exemplos de apresentação para instalações verdadeiramente novas.
-WELCOME_SNIPPETS: tuple[tuple[str, str, str], ...] = (
-    ("Boas-vindas", "/bemvindo", "Olá! 👋 Seja muito bem-vindo ao AURORA AutoFill!\n\nEstamos felizes em ter você por aqui! ✨\n\nCom o AURORA AutoFill, suas tarefas do dia a dia ficarão mais simples, rápidas e práticas.\n\nImagine escrever textos inteiros digitando apenas algumas letras. É exatamente isso que o AURORA AutoFill faz por você!\n\nMenos digitação, mais produtividade e mais tempo para o que realmente importa! 🚀"),
-    ("Atalhos e pastas", "/tutorial", "✨ Você sabia que pode escrever textos completos usando apenas pequenos atalhos?\n\nCom o AURORA AutoFill, é muito fácil!\n\n⌨️ Como funcionam os atalhos?\n\nImagine que você cadastrou o atalho /ola com a mensagem:\n\n\"Olá! Tudo bem com você? Espero que esteja tendo um ótimo dia!\"\n\nAgora, sempre que você digitar /ola em um campo de texto compatível, o AURORA AutoFill poderá substituí-lo automaticamente pela mensagem completa.\n\nVocê pode criar quantos atalhos precisar, personalizar suas mensagens e editar tudo quando quiser!\n\n📁 Organize seus textos com pastas!\n\nPara facilitar ainda mais sua rotina, o AURORA AutoFill permite criar pastas para organizar seus atalhos por assunto, categoria ou preferência.\n\nPor exemplo:\n• 📁 Pessoal — mensagens para amigos e familiares.\n• 📁 Estudos — anotações e textos utilizados nos estudos.\n• 📁 Dia a dia — mensagens e informações que você utiliza frequentemente.\n\nAssim como esta pasta Conheça o AURORA, você pode criar suas próprias pastas e manter tudo organizado e fácil de encontrar!\n\n💡 Uma dica especial: comece criando alguns atalhos para as mensagens que você mais digita. Aos poucos, você perceberá quanto tempo consegue economizar!\n\n🚀 Você cria uma vez, organiza do seu jeito e ganha tempo todos os dias!"),
-    ("Data e hora automáticas", "/datahora", "📅 Que tal deixar o AURORA AutoFill cuidar da data e da hora para você?\n\nAlém de expandir textos, o AURORA AutoFill permite utilizar informações dinâmicas, como a data e a hora atuais.\n\nAssim, você não precisa atualizar essas informações manualmente toda vez que utilizar um texto.\n\nPor exemplo:\n\n📅 Data: {{data}}\n🕒 Hora: {{hora}}\n\nAo utilizar este atalho, o AURORA AutoFill preenche a data e a hora correspondentes ao momento da utilização. Você também pode usar {{data_hora}} em seus próprios textos.\n\n✨ Pequenos recursos que fazem uma grande diferença na sua rotina!"),
-    ("Agradecimento e motivação", "/obrigado", "💜 Obrigado por escolher o AURORA AutoFill!\n\nÉ uma alegria saber que nosso programa fará parte do seu dia a dia.\n\nO AURORA AutoFill foi criado com um propósito simples: facilitar sua vida, economizar seu tempo e tornar suas atividades mais práticas.\n\nLembre-se: produtividade não significa fazer mais coisas o tempo todo, mas encontrar maneiras inteligentes de fazer o que realmente importa.\n\nCada segundo economizado é uma oportunidade de dedicar mais tempo a você, aos seus sonhos e às pessoas que ama.\n\n🌌 Que o AURORA AutoFill seja uma pequena ferramenta para grandes conquistas!\n\nObrigado por fazer parte dessa jornada! 🚀"),
-)
 
 
 @dataclass(frozen=True)
@@ -40,7 +35,7 @@ class RenderResult:
 
 
 def validate_shortcut(shortcut: str) -> None:
-    if not SHORTCUT_PATTERN.fullmatch(shortcut):
+    if not isinstance(shortcut, str) or not SHORTCUT_PATTERN.fullmatch(shortcut):
         raise ValueError("O atalho deve começar com / e ter de 1 a 30 caracteres, sem espaços nem outras barras.")
 
 
@@ -78,20 +73,12 @@ def render_snippet(template: str, clipboard_text: str = "", now: datetime | None
     return RenderResult("".join(result), 0 if cursor_pos is None else total_length - cursor_pos)
 
 
-def application_db_path() -> Path:
-    if sys.platform == "win32":
-        root = Path(os.environ.get("APPDATA", str(Path.home() / "AppData" / "Roaming")))
-    else:
-        root = Path(os.environ.get("XDG_DATA_HOME", str(Path.home() / ".local" / "share")))
-    return root / "AutoFillStudio" / "snippets.sqlite3"
-
-
 class SnippetStore:
     def __init__(self, db_path: str | Path):
         path = Path(db_path)
-        # Se o banco já existia (mesmo vazio), nunca recrie exemplos após atualização,
-        # exclusão de pastas ou restauração de backup.
-        self._new_database = not path.exists()
+        # Um banco já existente, inclusive vazio, não deve receber exemplos de
+        # novo após uma atualização, exclusão ou restauração de backup.
+        self._fresh_database = not path.exists()
         path.parent.mkdir(parents=True, exist_ok=True)
         self.connection = sqlite3.connect(str(path))
         self.connection.row_factory = sqlite3.Row
@@ -116,6 +103,9 @@ class SnippetStore:
         columns = {row[1] for row in self.connection.execute("PRAGMA table_info(snippets)")}
         if "rich_content" not in columns:
             self.connection.execute("ALTER TABLE snippets ADD COLUMN rich_content TEXT NOT NULL DEFAULT ''")
+        # A migração mantém a ordem antiga (id DESC) para posições iguais.
+        if "sort_order" not in columns:
+            self.connection.execute("ALTER TABLE snippets ADD COLUMN sort_order INTEGER NOT NULL DEFAULT 0")
         self.connection.commit()
 
     def folders(self) -> list[tuple[int, str]]:
@@ -123,12 +113,57 @@ class SnippetStore:
             "SELECT id, name FROM folders ORDER BY name COLLATE NOCASE")]
 
     def create_folder(self, name: str) -> int:
+        if not isinstance(name, str):
+            raise ValueError("Informe o nome da pasta.")
         name = name.strip()
         if not name:
             raise ValueError("Informe o nome da pasta.")
         with self.connection:
             cursor = self.connection.execute("INSERT INTO folders(name) VALUES (?)", (name,))
         return int(cursor.lastrowid)
+
+    def delete_folder(self, folder_id: int) -> tuple[int, str]:
+        """Apaga somente a pasta; preserva seus comandos em outra pasta."""
+        with self.connection:
+            existing = self.connection.execute(
+                "SELECT name FROM folders WHERE id=?", (folder_id,)).fetchone()
+            if existing is None:
+                raise ValueError("Esta pasta não existe mais.")
+            alternatives = self.connection.execute(
+                "SELECT id, name FROM folders WHERE id<>? ORDER BY name COLLATE NOCASE",
+                (folder_id,)).fetchall()
+            if alternatives:
+                target = next((row for row in alternatives if row["name"].casefold() == "meus atalhos"),
+                              alternatives[0])
+                target_id, target_name = int(target["id"]), str(target["name"])
+            else:
+                target_name = "Sem pasta" if existing["name"].casefold() == "meus atalhos" else "Meus atalhos"
+                target_id = int(self.connection.execute(
+                    "INSERT INTO folders(name) VALUES (?)", (target_name,)).lastrowid)
+            count = int(self.connection.execute(
+                "SELECT COUNT(*) FROM snippets WHERE folder_id=?", (folder_id,)).fetchone()[0])
+            self.connection.execute("UPDATE snippets SET folder_id=? WHERE folder_id=?",
+                                    (target_id, folder_id))
+            self.connection.execute("DELETE FROM folders WHERE id=?", (folder_id,))
+        return count, target_name
+
+    def reorder_snippets(self, folder_id: int | None, ordered_ids: list[int]) -> None:
+        """Persiste drag-and-drop sem mover comandos entre pastas."""
+        with self.connection:
+            rows = self.connection.execute(
+                "SELECT id, folder_id FROM snippets ORDER BY sort_order ASC, id DESC").fetchall()
+            all_ids = [int(row["id"]) for row in rows]
+            positions = [index for index, row in enumerate(rows)
+                         if folder_id is None or row["folder_id"] == folder_id]
+            allowed = {all_ids[index] for index in positions}
+            if (len(ordered_ids) != len(positions) or len(set(ordered_ids)) != len(ordered_ids)
+                    or set(ordered_ids) != allowed):
+                raise ValueError("A lista de comandos mudou. Atualize antes de reorganizar.")
+            for index, snippet_id in zip(positions, ordered_ids):
+                all_ids[index] = snippet_id
+            self.connection.executemany(
+                "UPDATE snippets SET sort_order=? WHERE id=?",
+                ((index, snippet_id) for index, snippet_id in enumerate(all_ids)))
 
     def snippets(self, folder_id: int | None = None, query: str = "") -> list[Snippet]:
         sql = "SELECT id, folder_id, title, shortcut, content, rich_content FROM snippets WHERE 1=1"
@@ -139,11 +174,13 @@ class SnippetStore:
         if query:
             sql += " AND (title LIKE ? OR shortcut LIKE ? OR content LIKE ?)"
             params.extend([f"%{query}%"] * 3)
-        sql += " ORDER BY id DESC"
+        sql += " ORDER BY sort_order ASC, id DESC"
         return [Snippet(**dict(row)) for row in self.connection.execute(sql, params)]
 
     def save(self, folder_id: int, title: str, shortcut: str, content: str,
              snippet_id: int | None = None, rich_content: str = "") -> int:
+        if not all(isinstance(value, str) for value in (title, shortcut, content, rich_content)):
+            raise ValueError("Título, atalho e conteúdo devem ser textos.")
         title = title.strip()
         shortcut = shortcut.strip()
         if not title:
@@ -154,13 +191,17 @@ class SnippetStore:
         try:
             with self.connection:
                 if snippet_id is None:
+                    position = self.connection.execute(
+                        "SELECT COALESCE(MIN(sort_order), 0) - 1 FROM snippets").fetchone()[0]
                     cur = self.connection.execute(
-                        "INSERT INTO snippets(folder_id, title, shortcut, content, rich_content) VALUES (?,?,?,?,?)",
-                        (folder_id, title, shortcut, content, rich_content))
+                        "INSERT INTO snippets(folder_id, title, shortcut, content, rich_content, sort_order) VALUES (?,?,?,?,?,?)",
+                        (folder_id, title, shortcut, content, rich_content, position))
                     return int(cur.lastrowid)
-                self.connection.execute(
+                updated = self.connection.execute(
                     "UPDATE snippets SET folder_id=?, title=?, shortcut=?, content=?, rich_content=?, updated_at=CURRENT_TIMESTAMP WHERE id=?",
                     (folder_id, title, shortcut, content, rich_content, snippet_id))
+                if updated.rowcount != 1:
+                    raise ValueError("Este comando não existe mais. Atualize a lista antes de salvar.")
                 return snippet_id
         except sqlite3.IntegrityError as error:
             raise ValueError("Esse atalho já existe ou a pasta é inválida.") from error
@@ -168,6 +209,71 @@ class SnippetStore:
     def delete(self, snippet_id: int) -> None:
         with self.connection:
             self.connection.execute("DELETE FROM snippets WHERE id=?", (snippet_id,))
+
+    def delete_with_undo(self, snippet_id: int) -> dict:
+        """Remove a snippet while preserving all columns for a 10-second undo."""
+        with self.connection:
+            row = self.connection.execute(
+                "SELECT * FROM snippets WHERE id=?", (snippet_id,)).fetchone()
+            if row is None:
+                raise ValueError("Comando não encontrado.")
+            snapshot = dict(row)
+            folder = self.connection.execute("SELECT name FROM folders WHERE id=?",
+                                             (row["folder_id"],)).fetchone()
+            snapshot["_folder_name"] = folder[0] if folder else "Comandos recuperados"
+            self.connection.execute("DELETE FROM snippets WHERE id=?", (snippet_id,))
+        return snapshot
+
+    def restore_deleted_snippet(self, snapshot: dict) -> None:
+        columns = ("id", "folder_id", "title", "shortcut", "content", "rich_content",
+                   "sort_order", "created_at", "updated_at")
+        with self.connection:
+            values = dict(snapshot)
+            if not self.connection.execute("SELECT 1 FROM folders WHERE id=?",
+                                           (values["folder_id"],)).fetchone():
+                name = snapshot.get("_folder_name", "Comandos recuperados")
+                existing = self.connection.execute(
+                    "SELECT id FROM folders WHERE name=? COLLATE NOCASE", (name,)).fetchone()
+                if existing:
+                    values["folder_id"] = existing[0]
+                else:
+                    self.connection.execute("INSERT INTO folders(id, name) VALUES (?, ?)",
+                                            (values["folder_id"], name))
+            self.connection.execute(
+                f"INSERT INTO snippets({','.join(columns)}) VALUES ({','.join('?' for _ in columns)})",
+                tuple(values[key] for key in columns))
+
+    def delete_folder_with_undo(self, folder_id: int) -> tuple[int, str, dict]:
+        """Keep the original ID and moved-snippet IDs for a safe short-term undo."""
+        folder = self.connection.execute(
+            "SELECT name FROM folders WHERE id=?", (folder_id,)).fetchone()
+        if folder is None:
+            raise ValueError("Pasta não encontrada.")
+        old_folders = {folder_id for folder_id, _ in self.folders()}
+        snippet_ids = [item.id for item in self.snippets(folder_id)]
+        name = str(folder["name"])
+        count, destination = self.delete_folder(folder_id)
+        destination_id = next(fid for fid, label in self.folders() if label == destination)
+        return count, destination, {
+            "id": folder_id, "name": name, "snippet_ids": snippet_ids,
+            "destination_id": destination_id,
+            "created_destination": destination_id not in old_folders,
+        }
+
+    def restore_deleted_folder(self, snapshot: dict) -> None:
+        with self.connection:
+            self.connection.execute(
+                "INSERT INTO folders(id, name) VALUES (?, ?)",
+                (snapshot["id"], snapshot["name"]))
+            for snippet_id in snapshot["snippet_ids"]:
+                self.connection.execute(
+                    "UPDATE snippets SET folder_id=? WHERE id=? AND folder_id=?",
+                    (snapshot["id"], snippet_id, snapshot["destination_id"]))
+            if snapshot["created_destination"]:
+                self.connection.execute(
+                    "DELETE FROM folders WHERE id=? AND NOT EXISTS "
+                    "(SELECT 1 FROM snippets WHERE folder_id=?)",
+                    (snapshot["destination_id"], snapshot["destination_id"]))
 
     def export_json(self, destination: str | Path) -> None:
         folders = self.folders()
@@ -179,7 +285,20 @@ class SnippetStore:
             "snippets": [{"folder": mapping[s.folder_id], "title": s.title,
                           "shortcut": s.shortcut, "content": s.content, "rich_content": s.rich_content} for s in contents],
         }
-        Path(destination).write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+        destination = Path(destination)
+        temporary = None
+        try:
+            with tempfile.NamedTemporaryFile("w", encoding="utf-8", dir=destination.parent,
+                                             prefix=".aurora-export-", suffix=".tmp",
+                                             delete=False) as output:
+                temporary = Path(output.name)
+                json.dump(payload, output, ensure_ascii=False, indent=2)
+                output.flush()
+                os.fsync(output.fileno())
+            os.replace(temporary, destination)
+        finally:
+            if temporary is not None:
+                temporary.unlink(missing_ok=True)
 
     def import_json(self, source: str | Path) -> tuple[int, int]:
         payload = json.loads(Path(source).read_text(encoding="utf-8"))
@@ -188,42 +307,79 @@ class SnippetStore:
         items = payload.get("snippets")
         if not isinstance(items, list) or len(items) > 20000:
             raise ValueError("Lista de comandos inválida ou grande demais.")
-        folder_map = {name.casefold(): folder_id for folder_id, name in self.folders()}
+        folders = payload.get("folders", [])
+        if (not isinstance(folders, list) or len(folders) > 20000
+                or any(not isinstance(name, str) or not name.strip() for name in folders)):
+            raise ValueError("Lista de pastas inválida ou grande demais.")
+        # Match SQLite NOCASE (ASCII), preserving distinct accented names that
+        # may coexist in a profile, e.g. 'Área' and 'área'.
+        translation = str.maketrans("ABCDEFGHIJKLMNOPQRSTUVWXYZ", "abcdefghijklmnopqrstuvwxyz")
+        folder_map = {name.translate(translation): folder_id for folder_id, name in self.folders()}
         imported = skipped = 0
-        for item in items:
-            if not isinstance(item, dict):
-                skipped += 1
-                continue
-            folder_name = item.get("folder")
-            if not isinstance(folder_name, str) or not folder_name.strip():
-                skipped += 1
-                continue
-            try:
-                if folder_name.casefold() not in folder_map:
-                    folder_map[folder_name.casefold()] = self.create_folder(folder_name)
-                self.save(folder_map[folder_name.casefold()], item["title"], item["shortcut"], item["content"],
-                          rich_content=str(item.get("rich_content") or ""))
-                imported += 1
-            except (ValueError, KeyError, TypeError, sqlite3.IntegrityError):
-                skipped += 1
+        with self.connection:
+            def ensure_folder(name):
+                normalized = name.strip()
+                key = normalized.translate(translation)
+                if key not in folder_map:
+                    folder_map[key] = int(self.connection.execute(
+                        "INSERT INTO folders(name) VALUES (?)", (normalized,)).lastrowid)
+                return folder_map[key]
+
+            # Include empty folders too; they are part of the exported profile.
+            for name in folders:
+                ensure_folder(name)
+            position = int(self.connection.execute(
+                "SELECT COALESCE(MAX(sort_order), -1) + 1 FROM snippets").fetchone()[0])
+            for item in items:
+                if not isinstance(item, dict):
+                    skipped += 1
+                    continue
+                folder_name = item.get("folder")
+                values = [item.get(key) for key in ("title", "shortcut", "content")]
+                rich_content = item.get("rich_content") or ""
+                if (not isinstance(folder_name, str) or not folder_name.strip()
+                        or not all(isinstance(value, str) for value in [*values, rich_content])):
+                    skipped += 1
+                    continue
+                title, shortcut, content = values
+                try:
+                    if not title.strip() or not content.strip():
+                        raise ValueError("Comando vazio.")
+                    validate_shortcut(shortcut.strip())
+                    # Skip a duplicate before creating an otherwise unused folder.
+                    if self.connection.execute(
+                            "SELECT 1 FROM snippets WHERE shortcut=? COLLATE NOCASE",
+                            (shortcut.strip(),)).fetchone():
+                        skipped += 1
+                        continue
+                    folder_id = ensure_folder(folder_name)
+                    self.connection.execute(
+                        "INSERT INTO snippets(folder_id, title, shortcut, content, rich_content, sort_order) "
+                        "VALUES (?, ?, ?, ?, ?, ?)",
+                        (folder_id, title.strip(), shortcut.strip(), content, rich_content, position))
+                    imported += 1
+                    position += 1
+                except (ValueError, sqlite3.IntegrityError):
+                    skipped += 1
         return imported, skipped
 
     def seed_if_empty(self) -> None:
-        """Cria a apresentação somente na primeira abertura de um banco novo."""
-        if not self._new_database or self.folders() or self.snippets():
+        """Introduz o AURORA apenas quando o banco realmente acaba de nascer."""
+        if not self._fresh_database or self.folders() or self.snippets():
             return
-        # Uma transação evita que uma falha grave deixe parte dos exemplos gravados.
+        # A operação é atômica: nunca disponibiliza quatro modelos incompletos.
         with self.connection:
             folder = self.connection.execute(
                 "INSERT INTO folders(name) VALUES (?)", ("Conheça o AURORA",)
             ).lastrowid
-            for title, shortcut, body in WELCOME_SNIPPETS:
+            for position, (title, shortcut, content, rich_content) in enumerate(initial_snippets()):
                 validate_shortcut(shortcut)
                 self.connection.execute(
-                    "INSERT INTO snippets(folder_id, title, shortcut, content) VALUES (?,?,?,?)",
-                    (folder, title, shortcut, body),
+                    "INSERT INTO snippets(folder_id, title, shortcut, content, rich_content, sort_order) "
+                    "VALUES (?, ?, ?, ?, ?, ?)",
+                    (folder, title, shortcut, content, rich_content, position),
                 )
-        self._new_database = False
+        self._fresh_database = False
 
     def close(self) -> None:
         self.connection.close()

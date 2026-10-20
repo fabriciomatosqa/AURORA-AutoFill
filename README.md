@@ -1,20 +1,50 @@
-# AURORA AutoFill — referência funcional v0.6.1 (19/10/2026)
-
-> **Referência aprovada visualmente pelo usuário:** execução [GitHub Actions #39292588074](https://github.com/fabriciomatosqa/AURORA-AutoFill/actions/runs/39292588074), com seis jobs concluídos com sucesso. Código exato: [`1e451261ddf2a3fc0f060aaefe42dfaf328b77ae`](https://github.com/fabriciomatosqa/AURORA-AutoFill/tree/1e451261ddf2a3fc0f060aaefe42dfaf328b77ae), na branch [`dev/correcao-expansao-windows`](https://github.com/fabriciomatosqa/AURORA-AutoFill/tree/dev/correcao-expansao-windows). Na captura do usuário, a janela mostra **V0.6.1-191026**.
->
-> **ATENÇÃO — branches divergentes:** este README preserva a documentação do código funcional acima, **mas o código da branch `main` ainda vem da linha v0.5.x e NÃO corresponde aos recursos v0.6.1 descritos abaixo**. O commit funcional tem alterações importantes de interface, expansão, configurações, backups, atualizações, testes e empacotamento que não estão na `main`. **Não use a `main` atual para gerar o instalador de referência.** Para continuar a evolução, primeiro alinhe o código com o commit funcional por um processo revisado. Esta alteração de README **não** migra, restaura ou altera nenhum arquivo executável.
->
-> **Recuperação segura:** `git switch dev/correcao-expansao-windows` e `git rev-parse HEAD` devem indicar `1e451261ddf2a3fc0f060aaefe42dfaf328b77ae` enquanto a branch permanecer inalterada; para fixar a versão independentemente de futuras alterações, utilize `git checkout 1e451261ddf2a3fc0f060aaefe42dfaf328b77ae` (HEAD destacado) ou crie uma branch de recuperação a partir desse commit. Não faça `git reset --hard` nem force push sem revisar os dados a preservar.
-
----
-
-## Documentação original da versão funcional
-
+# AURORA AutoFill
 
 **Expansão inteligente de textos • Mais tempo para você**  
 Desenvolvido por Fabricio Matos
 
 Expansor de textos desktop para Windows e Linux, criado em Python/PySide6. Organize comandos em pastas, escreva um atalho como `/resposta` e insira o texto em outros aplicativos. Os comandos, a formatação e as preferências ficam neste computador; a expansão não exige conta ou conexão com a internet.
+
+## Retomada da base aprovada em 19/10/2026
+
+Esta linha de desenvolvimento parte **exclusivamente** do commit funcional
+[`1e451261ddf2a3fc0f060aaefe42dfaf328b77ae`](https://github.com/fabriciomatosqa/AURORA-AutoFill/tree/1e451261ddf2a3fc0f060aaefe42dfaf328b77ae)
+(AURORA AutoFill **v0.6.1-191026**, [compilação aprovada #39292588074](https://github.com/fabriciomatosqa/AURORA-AutoFill/actions/runs/39292588074)).
+Não substitua essa base pelo código antigo v0.5.x da `main` de outubro; ela não possui o mesmo atualizador, backups, recursos de expansão, controles de preferências e instaladores MSI.
+
+### Exemplos iniciais: Conheça o AURORA
+
+Somente quando não há banco de dados anterior, o aplicativo cria a pasta **Conheça o AURORA** com quatro comandos editáveis:
+
+| Atalho | Apresentação |
+| --- | --- |
+| `/bemvindo` | Mensagem de boas-vindas e produtividade |
+| `/tutorial` | Como criar atalhos e organizar textos em pastas |
+| `/datahora` | Data/hora automáticas usando `{{data}}`, `{{hora}}` e `{{data_hora}}` |
+| `/obrigado` | Agradecimento e motivação |
+
+Os exemplos antigos `/ola`, `/agora`, `/chamado`, `/resposta` e `/colar` **não são mais cadastrados automaticamente em instalações novas**. O uso de `/ola` no tutorial é hipotético: o usuário poderá criar esse comando se desejar. Os quatro textos mantêm ênfase visual quando o programa de destino aceita HTML; a expansão em texto simples continua compatível.
+
+Em instalações existentes, **nenhum comando pessoal é excluído nem substituído**. Os exemplos nunca são recriados após exclusão, restauração de backup ou atualização. Para testar o comportamento de primeira instalação, utilize um perfil temporário isolado; não apague dados pessoais.
+
+### Pasta de dados AuroraAutoFill e migração sem perda
+
+A pasta de dados passou a se chamar **AuroraAutoFill**:
+
+- Windows: `%APPDATA%\\AuroraAutoFill`
+- Linux: `~/.local/share/AuroraAutoFill` (ou `$XDG_DATA_HOME/AuroraAutoFill`)
+
+Quando a pasta nova **não existe** e há uma pasta legada `AutoFillStudio`, o aplicativo renomeia a pasta antiga inteira **antes** de abrir o banco. Isso preserva `snippets.sqlite3`, `settings.json`, backups, pastas extras e arquivos auxiliares, sem conversão destrutiva.
+
+Se ambas as pastas já existirem, o aplicativo mantém ambas intactas e utiliza **AuroraAutoFill**: revise os perfis antes de excluir a antiga. Se não for possível migrar por permissões ou arquivos abertos, o aplicativo interrompe a abertura em vez de criar um banco vazio por engano. Nunca exclua os dados originais para forçar uma atualização.
+
+O identificador da instalação Windows, a localização do executável e o formato dos arquivos de backup **não mudaram**; o JSON legado `AutoFillStudioBackup` continua aceito por compatibilidade.
+
+### Nova marca transparente
+
+A logo triangular transparente foi aplicada ao **cabeçalho, ícone da janela, bandeja, executável Windows, instalador Inno Setup, pacote MSI e aplicativo Linux**. Os arquivos PNG e ICO são derivados de uma versão otimizada da imagem enviada, com transparência RGBA. O GitHub Actions regenera os ícones antes da compilação e usa, no instalador, o mesmo ícone do executável validado.
+
+Para compilar manualmente, prepare os ícones primeiro com `python -m pip install pillow` e `python scripts/build_branding.py`. O conteúdo do banco não muda ao atualizar a identidade visual.
 
 ## Instalar e atualizar
 
@@ -23,7 +53,7 @@ Baixe os instaladores na página oficial de [GitHub Releases](https://github.com
 **Receber versões de teste** vem ativado nas compilações de desenvolvimento. Para acompanhar somente versões estáveis, desmarque essa opção nas configurações; sua escolha fica salva.
 
 - **Windows (.exe):** baixe `AURORA-AutoFill-v<versão>-Windows-Setup.exe` (Inno Setup, sem privilégios de administrador). É o formato atual e permite atualização automática pelo AURORA.
-- **Windows (.msi):** baixe `AURORA-AutoFill-v<versão>-Windows-x64.msi` (WiX Toolset, Windows x64). O MSI usa a **mesma compilação PyInstaller** e é publicado junto com o EXE, com SHA-256 no manifesto Windows. Instala em `%LOCALAPPDATA%\\Programs\\AURORA AutoFill MSI` (sem exigir administrador), separado do Inno Setup, com registro de desinstalação e atalho no menu Iniciar. **Prefira somente um formato instalado por vez**: antes de trocar o EXE pelo MSI, desinstale o programa antigo após fazer backup. Os dados ficam em `%APPDATA%\\AutoFillStudio` e não são removidos com a desinstalação.
+- **Windows (.msi):** baixe `AURORA-AutoFill-v<versão>-Windows-x64.msi` (WiX Toolset, Windows x64). O MSI usa a **mesma compilação PyInstaller** e é publicado junto com o EXE, com SHA-256 no manifesto Windows. Instala em `%LOCALAPPDATA%\\Programs\\AURORA AutoFill MSI` (sem exigir administrador), separado do Inno Setup, com registro de desinstalação e atalho no menu Iniciar. **Prefira somente um formato instalado por vez**: antes de trocar o EXE pelo MSI, desinstale o programa antigo após fazer backup. Os dados ficam em `%APPDATA%\\AuroraAutoFill` e não são removidos com a desinstalação.
 - **Atualizações da instalação MSI:** a tela de atualizações abre o GitHub Releases para baixar o **próximo MSI**; ela não executa o instalador EXE/Inno. A automação de atualização silenciosa existente continua exclusiva da instalação EXE. Para instalar/atualizar via linha de comando: `msiexec /i AURORA-AutoFill-vVERSAO-Windows-x64.msi /qn /norestart`.
 - **Ubuntu 24.04 amd64:** baixe o `.deb` e abra no gerenciador de pacotes, ou use `sudo apt install ./arquivo.deb`. Há também um `.tar.gz` portátil.
 
@@ -63,7 +93,7 @@ Os arquivos ficam em:
 
 | Dados | Windows | Linux |
 | --- | --- | --- |
-| Pasta de dados | `%APPDATA%\AutoFillStudio` | `~/.local/share/AutoFillStudio` |
+| Pasta de dados | `%APPDATA%\AuroraAutoFill` | `~/.local/share/AuroraAutoFill` |
 | Banco | `snippets.sqlite3` | `snippets.sqlite3` |
 | Preferências | `settings.json` | `settings.json` |
 | Backups completos | Subpasta `backups` | Subpasta `backups` |
