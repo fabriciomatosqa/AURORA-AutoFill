@@ -62,7 +62,7 @@ def main():
         env = dict(os.environ, APPDATA=str(profile), QT_QPA_PLATFORM='offscreen',
                    AURORA_AUTOFILL_SMOKE_TEST='1', TEMP=str(setup_temporary),
                    TMP=str(setup_temporary))
-        database = profile / 'AutoFillStudio' / 'snippets.sqlite3'
+        database = profile / 'AuroraAutoFill' / 'snippets.sqlite3'
 
         def read_log(log):
             content = log.read_bytes()
@@ -136,7 +136,7 @@ def main():
             # Exact invocation used by 0.6.1-161026. The same installer skips
             # its choice/finish pages and runs automatically, without relaunch.
             run(['/NORESTART'])
-            wait_for_profile(legacy_profile / 'AutoFillStudio' / 'snippets.sqlite3')
+            wait_for_profile(legacy_profile / 'AuroraAutoFill' / 'snippets.sqlite3')
             legacy_logs = '\n'.join(read_log(log) for log in setup_temporary.glob('Setup Log*.txt'))
             if ('AURORA: legacy updater detected; automatic update in existing setup.' not in legacy_logs
                     or 'AURORA: legacy automatic update completed.' not in legacy_logs):
