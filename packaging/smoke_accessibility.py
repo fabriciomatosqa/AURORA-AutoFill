@@ -31,7 +31,7 @@ $form.Add_Shown({
     [Console]::WriteLine((@{ window = $form.Handle.ToInt64(); control = $edit.Handle.ToInt64() } | ConvertTo-Json -Compress))
 })
 $timer = New-Object System.Windows.Forms.Timer
-$timer.Interval = 15000
+$timer.Interval = 60000
 $timer.Add_Tick({ $form.Close() })
 $timer.Start()
 [System.Windows.Forms.Application]::Run($form)
@@ -42,7 +42,8 @@ def main():
     if sys.platform != 'win32':
         raise SystemExit('This smoke test requires Windows')
     from app.accessibility_context import (capture_accessible, select_accessible,
-                                           warm_accessibility, stop_accessibility)
+                                           warm_accessibility, stop_accessibility,
+                                           AccessibilityUnavailable)
     from app.expansion import FocusContext, utf16_length, utf16_slice
     from app.windows_context import capture_focus
     powershell = Path(os.environ['SystemRoot']) / 'System32/WindowsPowerShell/v1.0/powershell.exe'
@@ -52,15 +53,53 @@ def main():
                                creationflags=subprocess.CREATE_NO_WINDOW)
     lines = queue.Queue()
     Thread(target=lambda: lines.put(fixture.stdout.readline()), daemon=True).start()
+
+    def select_verified_with_retry(previous, start, end):
+        """Retry only cold UIA transport delays against the SAME synthetic field.
+
+        A request can time out after a selection reached the target. Re-read the
+        actual selection and identity before considering the test successful.
+        Never retry if any unrelated mutation occurred; do not weaken the
+        stale-selection rejection checked below.
+        """
+        deadline = time.monotonic() + 9
+        while True:
+            try:
+                return select_accessible(previous, start, end)
+            except AccessibilityUnavailable as exc:
+                if time.monotonic() >= deadline:
+                    raise
+                try:
+                    actual = capture_accessible(previous.context)
+                except AccessibilityUnavailable:
+                    time.sleep(.1)
+                    continue
+                if (actual is None or actual.context != previous.context
+                        or actual.identity != previous.identity
+                        or actual.text != previous.text):
+                    raise AssertionError('Synthetic UIA document changed during retry') from exc
+                if (actual.start, actual.end) == (start, end):
+                    return actual
+                if (actual.start, actual.end) != (previous.start, previous.end):
+                    raise AssertionError('Synthetic UIA selection changed unexpectedly') from exc
+                previous = actual
+                time.sleep(.1)
+
     try:
         warm_accessibility()
-        handles = json.loads(lines.get(timeout=10))
+        try:
+            handles = json.loads(lines.get(timeout=20))
+        except queue.Empty as exc:
+            raise RuntimeError('Synthetic Windows editor did not start within 20 seconds') from exc
+        if not isinstance(handles, dict) or not all(isinstance(handles.get(k), int)
+                                                     for k in ('window', 'control')):
+            raise RuntimeError('Synthetic editor returned invalid HWND values')
         context = FocusContext(handles['window'], handles['control'])
         api = ctypes.windll.user32
         api.SetForegroundWindow.argtypes = [wintypes.HWND]
         api.SetForegroundWindow(context.window)
         # Wait only for our synthetic editor and the cold bridge handshake.
-        deadline = time.monotonic() + 6
+        deadline = time.monotonic() + 12
         snapshot = None
         while time.monotonic() < deadline:
             if capture_focus() == context:
@@ -74,7 +113,7 @@ def main():
         if snapshot is None or snapshot.shortcut_range('/diag') is None:
             raise RuntimeError('Synthetic editor did not expose a usable UIA snapshot')
         begin, end = snapshot.shortcut_range('/diag')
-        selected = select_accessible(snapshot, begin, end)
+        selected = select_verified_with_retry(snapshot, begin, end)
         assert utf16_slice(selected.text, selected.start, selected.end) == '/diag'
         # Check beginning, multiline/emoji prefix, and document end. The actual
         # worker must map each prefix and collapse the native selection exactly.
@@ -84,7 +123,7 @@ def main():
         last_caret = utf16_length(snapshot.text.rstrip('\r\n'))
         for offset in (0, begin, last_caret, begin):
             try:
-                current = select_accessible(current, offset, offset)
+                current = select_verified_with_retry(current, offset, offset)
             except ValueError:
                 actual = capture_accessible(context)
                 print('Synthetic selection mismatch:', offset,
