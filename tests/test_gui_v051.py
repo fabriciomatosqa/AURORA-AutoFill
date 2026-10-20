@@ -42,6 +42,25 @@ class InterfaceSmokeTests(unittest.TestCase):
                         self.assertNotIn('Versão', credit[0].text())
                         self.assertGreaterEqual(win.filter_folder.count(), 2)
                         self.assertFalse(win.windowIcon().isNull())
+                        from app.icons import icon
+                        self.assertFalse(icon('image').isNull())
+                        win._new_snippet()
+                        from PySide6.QtGui import QImage
+                        from PySide6.QtCore import Qt
+                        screenshot = QImage(80, 40, QImage.Format_ARGB32)
+                        screenshot.fill(Qt.cyan)
+                        win.body_input.setPlainText('Texto antes\\n')
+                        self.assertTrue(win.body_input.insert_image(screenshot))
+                        win.body_input.insertPlainText('\\nTexto depois')
+                        win._prepare_copy_menu()
+                        self.assertTrue(any('imagem única' in action.text().lower()
+                                            for action in win.copy_content_menu.actions()))
+                        win._copy_content_part('composite')
+                        copy = app.clipboard().mimeData()
+                        self.assertTrue(copy.hasImage())
+                        self.assertFalse(copy.hasText())
+                        self.assertFalse(copy.hasHtml())
+                        win.dirty = False
                         win.filter_folder.showPopup()
                         app.processEvents()
                         menu = win.filter_folder._folder_menu
