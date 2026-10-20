@@ -1,12 +1,16 @@
 """Verify the actual public update path after publishing both installers."""
 from pathlib import Path
 import argparse
+import os
 import sys
 import tempfile
 import time
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from app import updates
 from app.updates import download_verified_installer, is_newer, latest_release
+from github_api_auth import authenticate_release_metadata
 
 
 def verify_public_update(version):
@@ -32,6 +36,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--version", required=True)
     args = parser.parse_args()
+    authenticate_release_metadata(updates, os.environ.get('AURORA_CI_GITHUB_TOKEN'))
     verify_public_update(args.version)
 
 
