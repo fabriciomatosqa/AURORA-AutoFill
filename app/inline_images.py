@@ -9,10 +9,10 @@ from __future__ import annotations
 import base64
 import binascii
 import re
-from html import unescape
+from html.parser import HTMLParser
 
 from PySide6.QtCore import QBuffer, QByteArray, QIODevice, QUrl, Signal, Qt
-from PySide6.QtGui import QImage, QPixmap, QTextCursor, QTextDocument, QTextImageFormat
+from PySide6.QtGui import QImage, QImageReader, QPixmap, QTextCursor, QTextDocument, QTextImageFormat
 from PySide6.QtWidgets import QTextEdit
 
 MAX_IMAGE_BYTES = 2 * 1024 * 1024
@@ -20,9 +20,8 @@ MAX_TOTAL_IMAGE_BYTES = 10 * 1024 * 1024
 MAX_IMAGES = 12
 MAX_DIMENSION = 1400
 DISPLAY_WIDTH = 580
-DATA_IMAGE_PATTERN = re.compile(
-    r'<img\b[^>]*?\bsrc\s*=\s*([\x22\x27])(.*?)\1', re.IGNORECASE | re.DOTALL
-)
+MAX_IMAGE_PIXELS = 16_000_000
+MAX_TOTAL_IMAGE_PIXELS = 16_000_000
 DATA_URL_PATTERN = re.compile(
     r'^data:image/(png|jpeg);base64,([A-Za-z0-9+/=\s]+)$', re.IGNORECASE
 )
@@ -30,7 +29,20 @@ DATA_URL_PATTERN = re.compile(
 
 def image_sources(html: str) -> list[str]:
     """Recolhe fontes <img> — inclusive para rejeitar fontes externas."""
-    return [unescape(match.group(2)) for match in DATA_IMAGE_PATTERN.finditer(html or "")]
+    class Images(HTMLParser):
+        def __init__(self):
+            super().__init__(convert_charrefs=True)
+            self.sources = []
+
+        def handle_starttag(self, tag, attrs):
+            if tag == "img":
+                values = [value for key, value in attrs if key == "src"]
+                # Missing/duplicate sources are invalid, including unquoted URLs.
+                self.sources.append((values[0] or "") if len(values) == 1 else "")
+
+    parser = Images()
+    parser.feed(html or "")
+    return parser.sources
 
 
 def contains_inline_images(html: str) -> bool:
@@ -55,8 +67,18 @@ def decode_embedded_image(source: str) -> QImage:
         raise ValueError("Imagem incorporada inválida.") from exc
     if not data or len(data) > MAX_IMAGE_BYTES:
         raise ValueError("Uma imagem ultrapassa o limite de 2 MB.")
-    # Qt identifica o formato pela assinatura do arquivo; evitar a sobrecarga com formato.
-    image = QImage.fromData(data)
+    buffer = QBuffer()
+    buffer.setData(data)
+    buffer.open(QIODevice.ReadOnly)
+    reader = QImageReader(buffer)
+    size = reader.size()
+    # Check metadata BEFORE allocating a potentially huge decoded bitmap.
+    if (not size.isValid() or size.width() > 8192 or size.height() > 8192
+            or size.width() * size.height() > MAX_IMAGE_PIXELS):
+        raise ValueError("Imagem muito grande para exibição.")
+    if bytes(reader.format()).lower() not in (b"png", b"jpeg", b"jpg"):
+        raise ValueError("Somente imagens PNG/JPEG incorporadas são permitidas.")
+    image = reader.read()
     if image.isNull():
         raise ValueError("O arquivo da imagem não pôde ser decodificado.")
     if image.width() > 8192 or image.height() > 8192:
@@ -69,13 +91,17 @@ def validate_inline_html(html: str) -> None:
     sources = image_sources(html)
     if len(sources) > MAX_IMAGES:
         raise ValueError("Um comando permite até 12 imagens.")
-    total = 0
+    total = pixels = 0
     for source in sources:
         image = decode_embedded_image(source)
         # Base64 payload size is checked above; count decoded bytes here.
-        total += (len(re.sub(r"\s+", "", source.split(",", 1)[1])) * 3) // 4
+        encoded = re.sub(r"\s+", "", source.split(",", 1)[1])
+        total += len(encoded) * 3 // 4 - (len(encoded) - len(encoded.rstrip("=")))
+        pixels += image.width() * image.height()
         if total > MAX_TOTAL_IMAGE_BYTES:
             raise ValueError("As imagens do comando ultrapassam 10 MB.")
+        if pixels > MAX_TOTAL_IMAGE_PIXELS:
+            raise ValueError("As imagens do comando ultrapassam 16 milhões de pixels.")
 
 
 def add_inline_resources(document: QTextDocument, html: str) -> None:
@@ -113,9 +139,39 @@ def _encode_image(image: QImage) -> tuple[str, QImage]:
     raise ValueError("Esta imagem não pode ser compactada ao limite de 2 MB.")
 
 
+def read_image_file(path: str) -> QImage:
+    """Inspect dimensions before decoding files chosen in the image picker."""
+    reader = QImageReader(path)
+    size = reader.size()
+    if (not size.isValid() or size.width() > 8192 or size.height() > 8192
+            or size.width() * size.height() > MAX_IMAGE_PIXELS):
+        raise ValueError("Imagem inválida ou muito grande para exibição.")
+    image = reader.read()
+    if image.isNull():
+        raise ValueError("Não foi possível abrir esse arquivo de imagem.")
+    return image
+
+
+class EmbeddedImageDocument(QTextDocument):
+    """Never let Qt fetch image files/URLs or decode an unchecked document."""
+    images_allowed = True
+
+    def loadResource(self, resource_type, name):
+        if resource_type == QTextDocument.ImageResource:
+            try:
+                return decode_embedded_image(name.toString()) if self.images_allowed else QImage()
+            except ValueError:
+                return QImage()
+        return super().loadResource(resource_type, name)
+
+
 class AuroraImageEditor(QTextEdit):
     """QTextEdit com inserção de screenshots e imagens sem caminhos externos."""
     imageRejected = Signal(str)
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setDocument(EmbeddedImageDocument(self))
 
     def insert_image(self, image: QImage | QPixmap) -> bool:
         try:
@@ -144,17 +200,17 @@ class AuroraImageEditor(QTextEdit):
             return False
 
     def insertFromMimeData(self, source) -> None:
-        if source.hasImage():
-            self.insert_image(source.imageData())
-            return
+        # HTML carries the complete sequence. An image flavor may be only a
+        # preview; preferring it would silently discard surrounding paragraphs.
         if source.hasHtml() and "<img" in source.html().lower():
             try:
                 validate_inline_html(source.html())
-                # Previne a adição de imagens externas ou excessivas.
-                current = len(image_sources(self.toHtml()))
-                incoming = len(image_sources(source.html()))
-                if current + incoming > MAX_IMAGES:
-                    raise ValueError("O comando permite até 12 imagens.")
+                combined = self.document().clone()
+                cursor = QTextCursor(combined)
+                cursor.setPosition(self.textCursor().selectionStart())
+                cursor.setPosition(self.textCursor().selectionEnd(), QTextCursor.KeepAnchor)
+                cursor.insertHtml(source.html())
+                validate_inline_html(combined.toHtml())
                 add_inline_resources(self.document(), source.html())
                 super().insertFromMimeData(source)
             except ValueError as exc:
@@ -162,9 +218,22 @@ class AuroraImageEditor(QTextEdit):
                 if source.hasText():
                     self.textCursor().insertText(source.text())
             return
+        if source.hasImage():
+            self.insert_image(source.imageData())
+            return
         super().insertFromMimeData(source)
 
     def setHtml(self, html: str) -> None:
+        try:
+            validate_inline_html(html)
+        except ValueError as exc:
+            # Old/imported invalid snippets remain editable and their saved
+            # HTML is untouched, but no image resource is loaded.
+            self.document().images_allowed = False
+            super().setHtml(html)
+            self.imageRejected.emit(str(exc))
+            return
+        self.document().images_allowed = True
         super().setHtml(html)
         add_inline_resources(self.document(), html)
         self.document().markContentsDirty(0, self.document().characterCount())

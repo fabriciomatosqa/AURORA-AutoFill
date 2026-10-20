@@ -86,3 +86,8 @@ class ExpansionOperation:
     stage: str = "prepared"
     deadline: float = 0
     lease: ClipboardLease | None = None
+    document_text: str = ""
+    document_cursor_prefix: str = ""
+    image_count: int = 0
+    image_only: bool = False
+    images_confirmed: bool = False
