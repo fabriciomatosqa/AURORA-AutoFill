@@ -91,3 +91,5 @@ class ExpansionOperation:
     image_count: int = 0
     image_only: bool = False
     images_confirmed: bool = False
+    bitmap_mode: bool = False
+    feedback_played: bool = False
