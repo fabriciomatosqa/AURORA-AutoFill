@@ -88,6 +88,12 @@ class EngineFixture:
         self.temp = tempfile.TemporaryDirectory()
         self.store = SnippetStore(Path(self.temp.name) / 'test.db')
         self.store.seed_if_empty()
+        # O /ola não é mais um modelo padrão. Testes legados criam o seu
+        # próprio comando para validar os mesmos contratos do motor antigo,
+        # sem depender dos modelos de primeira instalação.
+        test_folder = self.store.folders()[0][0]
+        self.store.save(test_folder, "Saudação para testes", "/ola",
+                        "Olá! Tudo bem? Posso ajudar em alguma coisa?")
         self.listener = hotkeys.GlobalHotkeyListener(self.emit)
         self.listener.update_shortcuts([s.shortcut for s in self.store.snippets()])
         self.host = SimpleNamespace(
