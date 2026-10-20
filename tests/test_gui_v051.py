@@ -93,6 +93,9 @@ class InterfaceSmokeTests(unittest.TestCase):
                             win.filter_folder._folder_menu.grab().save(str(evidence / 'folder-menu.png'))
                             win.filter_folder._folder_menu.hide()
                     finally:
+                        # Solta o PNG do QClipboard antes de desmontar o QApplication;
+                        # no Qt offscreen o payload nativo pode causar falha no exit.
+                        app.clipboard().clear()
                         win._quitting = True
                         win.close()
                         win.deleteLater()
