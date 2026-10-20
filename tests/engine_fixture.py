@@ -101,13 +101,14 @@ class EngineFixture:
             _hotkeys_enabled=True, _quitting=False, _clipboard_pending=False,
             _active_candidate=None, _expansion_operation=None, _queued_candidate=None,
             _clipboard_lease=None, isActiveWindow=lambda: False, focusWidget=lambda: None,
+            _clipboard_revision=0,
             statusBar=lambda: self.status, _play_confirmation=Mock(),
             listen_button=Mock(), tray_toggle_action=None)
         for name, value in ui.AutoFillWindow.__dict__.items():
             if name in {'_clone_clipboard_mime', '_normal_text'}:
                 setattr(self.host, name, value.__func__)
             elif name.startswith(('_expand', '_expansion_succeeded', '_candidate', '_edit_snapshot', '_owns_clipboard',
-                                  '_clipboard_source', '_perform_expansion', '_submit_expansion',
+                                  '_clipboard_', '_perform_expansion', '_submit_expansion',
                                   '_confirm_', '_check_cursor', '_set_caret', '_finish_', '_resume_', '_restore_', '_toggle_listener')):
                 setattr(self.host, name, MethodType(value, self.host))
 

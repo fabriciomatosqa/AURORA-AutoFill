@@ -54,11 +54,17 @@ No editor de comandos, o botão **🖼 Inserir imagem** permite escolher uma fot
 
 - As imagens são convertidas em PNG, dimensionadas para facilitar a visualização e **incorporadas ao próprio HTML do comando** (`rich_content`) em vez de depender de links ou pastas externas.
 - **Os backups completos e a exportação JSON preservam as imagens**, porque elas permanecem junto com os dados do comando.
-- Por segurança e desempenho, cada imagem incorporada fica limitada a **2 MB**, cada comando a **12 imagens** e o conjunto a **10 MB**. O programa reduz a resolução quando necessário.
-- A pré-visualização mostra o texto formatado com as imagens. Ao digitar o atalho, o AURORA envia HTML enriquecido ao aplicativo de destino.
-- **Compatibilidade de colagem:** a inserção das imagens depende de o destino aceitar HTML com imagens incorporadas (`data:`). Algumas caixas de mensagem, navegadores e programas podem remover ou rejeitar esse tipo de imagem. Em campos que aceitam somente texto, aparece a indicação `[Imagem]` na posição correspondente. O aplicativo não consegue garantir que todos os destinos aceitem figuras pelo mesmo atalho.
+- Por segurança e desempenho, cada imagem incorporada fica limitada a **2 MB**, cada comando a **12 imagens**, **10 MB** e **16 milhões de pixels decodificados** no conjunto. As dimensões são verificadas antes da decodificação. Novas inserções são reduzidas a até 1400 pixels por lado.
+- A pré-visualização e a **área de testes** recebem texto formatado, imagens intercaladas e variáveis, incluindo `{{cursor}}`. A substituição na área de testes usa o intervalo exato do atalho, diretamente no editor.
+- **Conteúdo misto:** o clipboard oferece HTML com imagens incorporadas e texto alternativo com avisos numerados, como `[Imagem 1: cole separadamente pelo AURORA]`. A ordem permanece no HTML; o aplicativo de destino decide se aceita as imagens. Não oferecemos a primeira imagem como se ela representasse toda a mensagem.
+- **Imagem isolada:** além de HTML e texto alternativo, o clipboard oferece PNG e imagem nativa. No Windows, Qt disponibiliza CF_HTML e bitmap DIB/DIBV5. Um leitor em outro processo valida esses formatos na CI Windows.
+- **Se a imagem não aparecer:** abra o comando e use **Copiar para outro aplicativo → Copiar imagem 1**, retorne ao campo desejado e pressione **Ctrl+V**. Repita para cada imagem. O mesmo menu permite **Copiar texto sem imagens**. Essas cópias são explícitas e ficam no clipboard para colagem manual.
+- **ChatGPT e Teams:** as capturas da versão anterior mostram apenas texto alternativo. A nova versão não afirma suporte comprovado nesses aplicativos: podem rejeitar imagens do HTML ou recebê-las separadamente como anexos, fora da posição original. Confirme a imagem no destino antes de enviar. O AURORA não envia mensagens nem automatiza anexos por coordenadas.
+- **Campos somente texto** não podem representar imagens. O aviso numerado preserva a posição sem fingir que a figura foi transferida. Na expansão com imagens, um destino sem intervalo de edição verificável é recusado antes de selecionar/apagar o atalho; use a cópia manual. Isso inclui a expansão global com imagens em Linux, onde ainda não existe um provedor de seleção verificável. O editor, a área de testes, a cópia manual e os atalhos de texto permanecem disponíveis.
 
 Os comandos anteriores continuam compatíveis e não precisam ser modificados. Imagens copiadas de páginas da internet que dependam de URLs externas não são importadas automaticamente; salve a imagem localmente ou use uma captura para evitar referências quebradas.
+
+O SQLite, `rich_content`, o texto alternativo já salvo (`[Imagem]`), JSON e ZIP de backup mantêm seus formatos. A conversão para os novos avisos ocorre apenas na preparação da expansão. Consulte o [diagnóstico, evidências e roteiro de validação](docs/expansao-imagens.md).
 
 ## Instalar e atualizar
 

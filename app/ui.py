@@ -2,12 +2,13 @@
 from __future__ import annotations
 
 from pathlib import Path
+from datetime import datetime
 import sys
 import sqlite3
 
 from PySide6.QtCore import QObject, Qt, QMimeData, QTimer, Signal, QPoint, QRectF, QRect, QSize, QTextBoundaryFinder
 from PySide6.QtGui import (QAction, QColor, QFont, QFontMetricsF, QIcon, QKeySequence, QPalette,
-                           QShortcut, QTextCharFormat, QPainter, QPainterPath, QLinearGradient, QPen, QPixmap)
+                           QShortcut, QTextCharFormat, QTextCursor, QPainter, QPainterPath, QLinearGradient, QPen, QPixmap)
 from PySide6.QtWidgets import (
     QApplication, QAbstractItemView, QComboBox, QFileDialog, QFrame, QHBoxLayout, QInputDialog,
     QLabel, QLineEdit, QListView, QListWidget, QListWidgetItem, QMainWindow, QMenu, QMessageBox,
@@ -25,7 +26,8 @@ from .features import AuroraFeaturesMixin
 from .version import APP_VERSION
 from .icons import apply_icon
 from .branding import brand_webp_bytes
-from .inline_images import AuroraImageEditor, contains_inline_images, plain_text_fallback, validate_inline_html
+from .inline_images import AuroraImageEditor, contains_inline_images, plain_text_fallback, validate_inline_html, image_sources, read_image_file
+from .clipboard_content import clone_mime, expansion_mime, image_mime, prepare_mixed_content
 
 
 def cursor_steps(text: str) -> int:
@@ -376,6 +378,8 @@ class AutoFillWindow(AuroraFeaturesMixin, QMainWindow):
         self.dirty = False
         self._loading = False
         self._clipboard_pending = False
+        self._clipboard_revision = 0
+        QApplication.clipboard().dataChanged.connect(self._clipboard_changed)
         self._hotkeys_enabled = True
         self._clipboard_clone: QMimeData | None = None
         self._clipboard_written = ""
@@ -639,11 +643,17 @@ class AutoFillWindow(AuroraFeaturesMixin, QMainWindow):
         sample_help = QLabel("Clique abaixo e experimente /bemvindo, /tutorial ou /datahora. Quem já utiliza o AURORA pode testar seus próprios atalhos.")
         sample_help.setWordWrap(True)
         v.addWidget(sample_help)
-        self.test_box = QPlainTextEdit()
+        self.test_box = AuroraImageEditor()
+        self.test_box.imageRejected.connect(
+            lambda message: self.statusBar().showMessage(message, 8000))
         self.test_box.setPlaceholderText("Digite seus atalhos aqui para experimentar...")
         self.test_box.setMinimumHeight(150)
         self.test_box.setMaximumHeight(200)
         v.addWidget(self.test_box)
+        compatibility = QLabel("Este teste aceita texto e imagens. A compatibilidade em outros aplicativos pode variar.")
+        compatibility.setObjectName("hint")
+        compatibility.setWordWrap(True)
+        v.addWidget(compatibility)
         tip = QLabel("💡 Variáveis disponíveis: {{data}}, {{hora}}, {{data_hora}}, {{clipboard}}, {{cursor}}")
         tip.setObjectName("hint")
         tip.setWordWrap(True)
@@ -730,11 +740,14 @@ class AutoFillWindow(AuroraFeaturesMixin, QMainWindow):
         guide.setObjectName("hint")
         formatting_row.addWidget(guide)
         formatting_row.addStretch()
+        v.addLayout(formatting_row)
+        image_tools_row = QHBoxLayout()
+        image_tools_row.setSpacing(8)
         self.insert_image_button = QPushButton("🖼 Inserir imagem")
         self.insert_image_button.setToolTip(
             "Insira PNG ou JPG entre parágrafos, ou cole um print com Ctrl+V.")
         self.insert_image_button.clicked.connect(self._insert_image_file)
-        formatting_row.addWidget(self.insert_image_button)
+        image_tools_row.addWidget(self.insert_image_button)
         self.token_button = AuroraMenuButton()
         self.token_button.setText("Inserir comando dinâmico")
         apply_icon(self.token_button, "plus")
@@ -752,11 +765,26 @@ class AutoFillWindow(AuroraFeaturesMixin, QMainWindow):
             action.triggered.connect(lambda checked=False, t=token: self.body_input.insertPlainText(t))
             menu.addAction(action)
         self.token_button.setMenu(menu)
-        formatting_row.addWidget(self.token_button)
-        v.addLayout(formatting_row)
+        image_tools_row.addWidget(self.token_button)
+        image_tools_row.addStretch()
+        v.addLayout(image_tools_row)
         self.body_input.currentCharFormatChanged.connect(self._sync_format_buttons)
         self.body_input.setMinimumHeight(190)
         v.addWidget(self.body_input, 3)
+        copy_row = QHBoxLayout()
+        self.copy_content_button = AuroraMenuButton()
+        self.copy_content_button.setText("Copiar para outro aplicativo")
+        self.copy_content_button.setPopupMode(QToolButton.InstantPopup)
+        self.copy_content_menu = AuroraMenu(self.copy_content_button)
+        self.copy_content_menu.aboutToShow.connect(self._prepare_copy_menu)
+        self.copy_content_button.setMenu(self.copy_content_menu)
+        copy_row.addWidget(self.copy_content_button)
+        copy_hint = QLabel("Se a imagem não aparecer no destino, copie cada imagem por este menu e cole com Ctrl+V.\n"
+                          "ChatGPT e Teams podem recebê-la como anexo, fora da posição original do texto.")
+        copy_hint.setObjectName("hint")
+        copy_hint.setWordWrap(True)
+        copy_row.addWidget(copy_hint, 1)
+        v.addLayout(copy_row)
         preview_label = QLabel("PRÉ-VISUALIZAÇÃO")
         preview_label.setObjectName("sectionTitle")
         v.addWidget(preview_label)
@@ -796,16 +824,47 @@ class AutoFillWindow(AuroraFeaturesMixin, QMainWindow):
         self.body_input.textChanged.connect(self._update_preview)
         self.editor_folder.currentIndexChanged.connect(self._mark_dirty)
 
+    def _prepare_copy_menu(self):
+        self.copy_content_menu.clear()
+        action = self.copy_content_menu.addAction("Copiar texto sem imagens")
+        action.triggered.connect(lambda: self._copy_content_part(None))
+        for index, _ in enumerate(image_sources(self.body_input.toHtml())):
+            action = self.copy_content_menu.addAction(f"Copiar imagem {index + 1}")
+            action.triggered.connect(lambda checked=False, i=index: self._copy_content_part(i))
+
+    def _copy_content_part(self, index):
+        try:
+            if self._expansion_operation is not None:
+                raise ValueError("Aguarde a expansão terminar antes de copiar.")
+            html = self.body_input.toHtml()
+            if index is None:
+                text = self.body_input.toPlainText().replace("\ufffc", "")
+                payload = QMimeData()
+                payload.setText(render_snippet(text, self._clipboard_source_text()).text)
+                message = "Texto copiado sem imagens. Cole no destino com Ctrl+V."
+            else:
+                payload = image_mime(image_sources(html)[index])
+                message = f"Imagem {index + 1} copiada. Cole no destino com Ctrl+V; o aplicativo pode criar um anexo."
+            # This is an explicit user copy. A pending restoration must never
+            # overwrite it, even on platforms without a clipboard sequence.
+            self._clipboard_lease = None
+            self._clipboard_pending = False
+            QApplication.clipboard().setMimeData(payload)
+            self.statusBar().showMessage(message, 10000)
+        except (ValueError, IndexError) as exc:
+            self.statusBar().showMessage(str(exc), 8000)
+
     def _insert_image_file(self):
         path, _ = QFileDialog.getOpenFileName(
             self, "Inserir foto ou print", "",
             "Imagens (*.png *.jpg *.jpeg *.webp *.bmp);;Todos os arquivos (*)")
         if not path:
             return
-        image = QPixmap(path)
-        if image.isNull():
+        try:
+            image = read_image_file(path)
+        except ValueError as exc:
             QMessageBox.warning(self, "Imagem inválida",
-                                "Não foi possível abrir esse arquivo de imagem.")
+                                str(exc))
             return
         if self.body_input.insert_image(image):
             self.body_input.setFocus()
@@ -1092,12 +1151,14 @@ class AutoFillWindow(AuroraFeaturesMixin, QMainWindow):
 
     @staticmethod
     def _clone_clipboard_mime() -> QMimeData:
-        original = QApplication.clipboard().mimeData()
-        clone = QMimeData()
-        if original:
-            for fmt in original.formats():
-                clone.setData(fmt, original.data(fmt))
-        return clone
+        return clone_mime(QApplication.clipboard().mimeData())
+
+    def _clipboard_changed(self):
+        self._clipboard_revision += 1
+
+    def _clipboard_sequence(self):
+        native = windows_clipboard_sequence()
+        return native if native is not None else self._clipboard_revision
 
     def _expand_global(self, candidate: ExpansionCandidate):
         if not self._hotkeys_enabled or self._quitting or not self.hotkeys.is_current(candidate):
@@ -1139,7 +1200,7 @@ class AutoFillWindow(AuroraFeaturesMixin, QMainWindow):
         mime = QApplication.clipboard().mimeData()
         return bool(mime and mime.text() == lease.text
                     and bytes(mime.data("application/x-aurora-expansion")) == lease.token
-                    and windows_clipboard_sequence() == lease.sequence)
+                    and self._clipboard_sequence() == lease.sequence)
 
     def _set_caret(self, snapshot, offset):
         if self.isActiveWindow() and self.focusWidget() is self.test_box:
@@ -1182,7 +1243,8 @@ class AutoFillWindow(AuroraFeaturesMixin, QMainWindow):
                     return
                 raise ValueError("O atalho não está no intervalo esperado; expansão cancelada.")
             current_text = self._clipboard_source_text()
-            rendered = render_snippet(snippet.content, current_text)
+            now = datetime.now()
+            rendered = render_snippet(snippet.content, current_text, now)
             if not rendered.text:
                 self._finish_expansion(None)
                 return
@@ -1209,8 +1271,24 @@ class AutoFillWindow(AuroraFeaturesMixin, QMainWindow):
                     raise ValueError("O atalho não está no intervalo acessível esperado; expansão cancelada.")
             operation = ExpansionOperation(candidate, before, rendered.text, cursor_steps(suffix),
                                            rendered.text[:-rendered.left_moves] if rendered.left_moves else rendered.text,
-                                           render_rich_html(snippet.rich_content, current_text) if rich else "")
+                                           render_rich_html(snippet.rich_content, current_text, now) if rich else "")
             self._expansion_operation = operation
+            if image_sources(snippet.rich_content):
+                mixed = prepare_mixed_content(snippet.rich_content, current_text, now)
+                operation.text, operation.rich_html = mixed.text, mixed.html
+                operation.document_text = mixed.document_text
+                operation.cursor_prefix = mixed.cursor_prefix
+                operation.document_cursor_prefix = mixed.document_cursor_prefix
+                operation.left_moves = mixed.left_moves
+                operation.image_count, operation.image_only = mixed.image_count, mixed.image_only
+                if "\x00" in operation.text:
+                    raise ValueError("O texto contém um caractere NUL e não pode ser colado.")
+                operation.text.encode("utf-16-le")
+                if before is None:
+                    before = self._edit_snapshot(accessibility=True)
+                    if before is None or before.shortcut_range(shortcut) is None:
+                        raise ValueError("Não é possível verificar o atalho neste campo. Use o menu Copiar para outro aplicativo.")
+                    operation.before = before
             if not self._candidate_valid(candidate):
                 raise ValueError("O contexto mudou antes da seleção.")
             self._submit_expansion(operation)
@@ -1224,22 +1302,19 @@ class AutoFillWindow(AuroraFeaturesMixin, QMainWindow):
             if not self._candidate_valid(operation.candidate):
                 raise ValueError("Atividade ou foco mudou; colagem cancelada.")
             clipboard = QApplication.clipboard()
-            backup_sequence = windows_clipboard_sequence()
+            backup_sequence = self._clipboard_sequence()
             previous = self._clipboard_lease
             original = (previous.original if previous and previous.consumed and self._owns_clipboard(previous)
                         else self._clone_clipboard_mime())
             from uuid import uuid4
             token = uuid4().hex.encode("ascii")
-            payload = QMimeData()
-            payload.setText(operation.text)
+            payload = expansion_mime(operation.text, operation.rich_html, image_only=operation.image_only)
             payload.setData("application/x-aurora-expansion", token)
-            if operation.rich_html:
-                payload.setHtml(operation.rich_html)
-            if windows_clipboard_sequence() != backup_sequence:
+            if self._clipboard_sequence() != backup_sequence:
                 raise ValueError("O clipboard mudou durante a preparação; colagem cancelada.")
             clipboard.setMimeData(payload)
             lease = ClipboardLease(operation.candidate.identifier, original, operation.text, token,
-                                   windows_clipboard_sequence())
+                                   self._clipboard_sequence())
             operation.lease = self._clipboard_lease = lease
             self._clipboard_pending = True
             if not self._candidate_valid(operation.candidate) or not self._owns_clipboard(lease):
@@ -1255,7 +1330,17 @@ class AutoFillWindow(AuroraFeaturesMixin, QMainWindow):
             # Recheck after clipboard and native queries, immediately before dispatch.
             if not self._candidate_valid(operation.candidate) or not self._owns_clipboard(lease):
                 raise ValueError("Contexto ou clipboard mudou antes do envio.")
-            if operation.before is not None and operation.before.identity:
+            if self.isActiveWindow() and self.focusWidget() is self.test_box:
+                # Own editor: replace the verified range through Qt. This also
+                # avoids a race between simulated selection and browser paste.
+                begin, end = operation.before.shortcut_range(operation.candidate.shortcut)
+                cursor = self.test_box.textCursor()
+                cursor.setPosition(begin)
+                cursor.setPosition(end, QTextCursor.KeepAnchor)
+                self.test_box.setTextCursor(cursor)
+                operation.stage = "sent"
+                self.test_box.insertFromMimeData(payload)
+            elif operation.before is not None and (operation.before.identity or operation.image_count):
                 # WebView editors process keyboard selections asynchronously.
                 # Select and verify the exact shortcut through UI Automation
                 # before sending paste, rather than racing Shift+Left with Ctrl+V.
@@ -1294,6 +1379,16 @@ class AutoFillWindow(AuroraFeaturesMixin, QMainWindow):
             begin, end = before.shortcut_range(operation.candidate.shortcut)
             expected = self._normal_text(before.replace(begin, end, operation.text))
             prefix = self._normal_text(utf16_slice(before.text, 0, begin) + operation.text)
+            if operation.image_count and snapshot is not None:
+                rich_expected = self._normal_text(before.replace(begin, end, operation.document_text))
+                if self._normal_text(snapshot.text) == rich_expected:
+                    expected = rich_expected
+                    prefix = self._normal_text(utf16_slice(before.text, 0, begin) + operation.document_text)
+                    # The test editor can confirm image resources. External
+                    # accessibility text alone cannot prove a rendered image.
+                    operation.images_confirmed = (self.isActiveWindow() and self.focusWidget() is self.test_box)
+                    operation.text = operation.document_text
+                    operation.cursor_prefix = operation.document_cursor_prefix
             if (snapshot is None or self._normal_text(snapshot.text) != expected or snapshot.start != snapshot.end
                     or self._normal_text(utf16_slice(snapshot.text, 0, snapshot.start)) != prefix):
                 if monotonic() < operation.deadline:
@@ -1347,7 +1442,10 @@ class AutoFillWindow(AuroraFeaturesMixin, QMainWindow):
 
     def _expansion_succeeded(self, operation):
         operation.stage = "confirmed"
-        self.statusBar().showMessage(f"Expandido: {operation.candidate.shortcut}", 3000)
+        message = f"Expandido: {operation.candidate.shortcut}"
+        if operation.image_count and not operation.images_confirmed:
+            message += " · Imagens não verificadas no destino. Se necessário, use Copiar para outro aplicativo no editor."
+        self.statusBar().showMessage(message, 10000 if operation.image_count else 3000)
         self._play_confirmation()
         self._finish_expansion(operation)
 
@@ -1358,7 +1456,8 @@ class AutoFillWindow(AuroraFeaturesMixin, QMainWindow):
             self.statusBar().showMessage(message, 8000)
         if operation and operation.lease:
             lease = operation.lease
-            delay = 0 if lease.consumed or operation.stage not in {"sent", "moving"} else 1450
+            sent = operation.stage in {"sent", "moving", "confirmed"}
+            delay = 1450 if sent and (operation.image_count or not lease.consumed) else 0
             QTimer.singleShot(delay, lambda saved=lease: self._restore_clipboard(saved))
         self._active_candidate = None
         self._expansion_operation = None
