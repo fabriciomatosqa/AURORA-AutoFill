@@ -20,6 +20,7 @@ from .core import Snippet, SnippetStore, application_db_path, render_snippet
 from .hotkeys import GlobalHotkeyListener, replace_shortcut, paste_clipboard
 from .expansion import ClipboardLease, EditSnapshot, ExpansionCandidate, ExpansionOperation, utf16_slice, prefix_offset
 from .windows_context import ContextUnavailable, FocusMonitor, capture_focus, capture_edit, set_caret, select_text_range
+from .accessibility_context import warm_accessibility
 from time import monotonic
 from .formatting import has_rich_formatting, render_rich_html
 from .features import AuroraFeaturesMixin
@@ -424,6 +425,10 @@ class AutoFillWindow(AuroraFeaturesMixin, QMainWindow):
         started, message = self.hotkeys.start()
         self._hotkeys_enabled = started
         self._focus_monitor = FocusMonitor(self.hotkeys.invalidate) if started else None
+        # Inicialização em segundo plano: evita o cold-start do PowerShell/UIA
+        # justamente quando o usuário digita o primeiro atalho no navegador.
+        if started:
+            warm_accessibility()
         self.listen_button.setText("Atalhos ativos" if started else "Atalhos indisponíveis")
         apply_icon(self.listen_button, "bolt" if started else "pause")
         self.listen_button.setEnabled(started)
@@ -744,7 +749,8 @@ class AutoFillWindow(AuroraFeaturesMixin, QMainWindow):
         v.addLayout(formatting_row)
         image_tools_row = QHBoxLayout()
         image_tools_row.setSpacing(8)
-        self.insert_image_button = QPushButton("🖼 Inserir imagem")
+        self.insert_image_button = apply_icon(QPushButton("Inserir imagem"), "image",
+                                              label="Inserir imagem no comando")
         self.insert_image_button.setToolTip(
             "Insira PNG ou JPG entre parágrafos, ou cole um print com Ctrl+V.")
         self.insert_image_button.clicked.connect(self._insert_image_file)
@@ -827,6 +833,10 @@ class AutoFillWindow(AuroraFeaturesMixin, QMainWindow):
 
     def _prepare_copy_menu(self):
         self.copy_content_menu.clear()
+        if image_sources(self.body_input.toHtml()):
+            composite = self.copy_content_menu.addAction("Copiar mensagem como imagem única (Teams)")
+            composite.triggered.connect(lambda: self._copy_content_part("composite"))
+            self.copy_content_menu.addSeparator()
         action = self.copy_content_menu.addAction("Copiar texto sem imagens")
         action.triggered.connect(lambda: self._copy_content_part(None))
         for index, _ in enumerate(image_sources(self.body_input.toHtml())):
@@ -838,7 +848,12 @@ class AutoFillWindow(AuroraFeaturesMixin, QMainWindow):
             if self._expansion_operation is not None:
                 raise ValueError("Aguarde a expansão terminar antes de copiar.")
             html = self.body_input.toHtml()
-            if index is None:
+            if index == "composite":
+                rendered_html = render_rich_html(html, self._clipboard_source_text())
+                payload = message_as_image_mime(rendered_html)
+                message = ("Mensagem copiada como PNG. Volte ao Teams e cole com Ctrl+V. "
+                           "Confira se ele criou uma imagem antes de enviar.")
+            elif index is None:
                 text = self.body_input.toPlainText().replace("\ufffc", "")
                 payload = QMimeData()
                 payload.setText(render_snippet(text, self._clipboard_source_text()).text)
@@ -1177,8 +1192,9 @@ class AutoFillWindow(AuroraFeaturesMixin, QMainWindow):
         if capture_focus() != candidate.context or not self.hotkeys.claim(candidate):
             return
         self._active_candidate = candidate
-        # Retained settling delay; correctness comes from revision/context/range checks.
-        QTimer.singleShot(75, lambda c=candidate: self._perform_expansion(c))
+        # Aguarda a última tecla chegar ao destino sem bloquear a GUI.
+        # Revisão/foco/intervalo ainda são validados antes de qualquer colagem.
+        QTimer.singleShot(45, lambda c=candidate: self._perform_expansion(c))
 
     def _candidate_valid(self, candidate):
         operation = self._expansion_operation
@@ -1328,7 +1344,14 @@ class AutoFillWindow(AuroraFeaturesMixin, QMainWindow):
             self._clipboard_pending = True
             if not self._candidate_valid(operation.candidate) or not self._owns_clipboard(lease):
                 raise ValueError("Contexto ou clipboard mudou antes da colagem.")
-            if operation.before is not None:
+            # Quando o destino é UIA, select_text_range() verifica de forma
+            # atômica texto, identidade, cursor e seleção antes de enviar Ctrl+V.
+            # Evitar um snapshot UIA idêntico antes dessa seleção: em navegadores
+            # ele causa mais um round-trip caro ao processo de acessibilidade.
+            verified_selection = (not (self.isActiveWindow() and self.focusWidget() is self.test_box)
+                                  and operation.before is not None
+                                  and bool(operation.before.identity or operation.image_count))
+            if operation.before is not None and not verified_selection:
                 snapshot = self._edit_snapshot(accessibility=bool(operation.before.identity))
                 if (snapshot is None or snapshot.context != operation.candidate.context
                         or snapshot.identity != operation.before.identity
@@ -1349,7 +1372,7 @@ class AutoFillWindow(AuroraFeaturesMixin, QMainWindow):
                 self.test_box.setTextCursor(cursor)
                 operation.stage = "sent"
                 self.test_box.insertFromMimeData(payload)
-            elif operation.before is not None and (operation.before.identity or operation.image_count):
+            elif verified_selection:
                 # WebView editors process keyboard selections asynchronously.
                 # Select and verify the exact shortcut through UI Automation
                 # before sending paste, rather than racing Shift+Left with Ctrl+V.
