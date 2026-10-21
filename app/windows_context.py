@@ -11,7 +11,7 @@ import sys
 from ctypes import wintypes
 
 from .expansion import EditSnapshot, FocusContext
-from .accessibility_context import (AccessibilityUnavailable, capture_accessible,
+from .accessibility_context import (AccessibilityUnavailable, SELECTION_SUBMITTED, capture_accessible,
                                     select_accessible, warm_accessibility, stop_accessibility)
 
 MAX_TEXT_UNITS = 65534  # EM_GETSEL's packed return cannot represent larger ranges.
@@ -127,6 +127,12 @@ def select_text_range(snapshot: EditSnapshot, start: int, end: int) -> EditSnaps
         except OSError as exc:
             raise ContextUnavailable(str(exc)) from exc
         result = capture_edit(snapshot.context)
+    if result is SELECTION_SUBMITTED:
+        # ACK não equivale a seleção confirmada: quem chamou deverá ler
+        # o campo após estabilização e conferir texto, foco e intervalo.
+        if capture_focus() != snapshot.context:
+            raise ContextUnavailable('O foco mudou após solicitar a seleção.')
+        return result
     if (capture_focus() != snapshot.context or result is None or result.text != snapshot.text
             or result.identity != snapshot.identity or (result.start, result.end) != (start, end)):
         raise ContextUnavailable('O campo não confirmou a posição solicitada.')
