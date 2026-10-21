@@ -49,6 +49,30 @@ class RecognitionTests(unittest.TestCase):
         listener._on_release(shift)
         self.assertEqual([c.shortcut for c in received], ['/OI'])
 
+    def test_typo_backspace_correction_expands_immediately(self):
+        matcher = ShortcutMatcher(['/bomdia'])
+        for ch in '/bomdiq':
+            self.assertIsNone(matcher.feed(ch))
+        self.assertIsNone(matcher.feed(None, 'backspace'))
+        self.assertEqual(matcher.feed('a'), '/bomdia')
+
+    def test_long_prefix_and_correction_are_not_premature(self):
+        matcher = ShortcutMatcher(['/bom', '/bomdia'])
+        for ch in '/bomdiq':
+            self.assertIsNone(matcher.feed(ch))
+        self.assertIsNone(matcher.feed(None, 'backspace'))
+        self.assertEqual(matcher.feed('a'), '/bomdia')
+        matcher.clear()
+        for ch in '/bom':
+            self.assertIsNone(matcher.feed(ch))
+        self.assertEqual(matcher.feed(' ', 'space'), '/bom ')
+
+    def test_lookup_with_thousands_of_shortcuts_and_mixed_case(self):
+        matcher = ShortcutMatcher([f'/comando{i}' for i in range(5000)] + ['/bomdia'])
+        for ch in '/BOMDI':
+            self.assertIsNone(matcher.feed(ch))
+        self.assertEqual(matcher.feed('A'), '/BOMDIA')
+
     def test_ctrl_combination_does_not_match(self):
         received = []
         listener = GlobalHotkeyListener(received.append)
