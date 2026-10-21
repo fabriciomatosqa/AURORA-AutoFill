@@ -129,7 +129,7 @@ class ClipboardAndUnicodeTests(EngineTestCase):
     def test_changed_windows_sequence_prevents_restoration(self):
         # Mesmo texto e token não bastam se o Windows registrou outra cópia.
         self.engine.type('/ola')
-        self.engine.until(45)
+        self.engine.until(20)
         self.clipboard.sequence += 1
         self.engine.drain()
         self.assertTrue(self.clipboard.text().startswith('Olá!'))
