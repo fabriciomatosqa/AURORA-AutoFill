@@ -16,7 +16,7 @@ class IndexedShortcutTests(unittest.TestCase):
                 folder = store.create_folder("Atalhos ilustrados")
                 filler = "<html><body>" + "a" * 180000 + "</body></html>"
                 for i in range(50):
-                    store.save(folder, f"Exemplo {i}", f"/ex{i}", "Exemplo", rich_content=filler)
+                    store.save(folder, f"Exemplo {i}", f"/ex{i:03d}", "Exemplo", rich_content=filler)
                 store.save(folder, "Resposta", "/rapido", "Conteúdo correto", rich_content="")
                 with patch.object(store, "snippets",
                                   side_effect=AssertionError("Não pode listar todo o banco")):
