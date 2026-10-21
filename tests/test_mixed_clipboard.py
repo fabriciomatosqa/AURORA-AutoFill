@@ -48,7 +48,8 @@ class MixedClipboardTests(unittest.TestCase):
         self.assertEqual(mixed.image_count, 2)
         self.assertFalse(mixed.image_only)
         self.assertIn("font-weight:700", mixed.html)
-        self.assertIn("Imagem 2: cole separadamente", mixed.text)
+        self.assertNotIn("[Imagem", mixed.text)
+        self.assertEqual(mixed.text, "Antes 😀 20/10/2026\n\nDepois 1\n\nDepois 2")
         self.assertNotIn("[Imagem]", mixed.text)
         self.assertEqual(editor.toHtml(), saved)
         self.assertEqual(image_sources(mixed.html), image_sources(saved))
@@ -69,7 +70,7 @@ class MixedClipboardTests(unittest.TestCase):
         self.assertTrue(payload.hasImage() and payload.hasHtml() and payload.hasText())
         self.assertEqual(payload.imageData().width(), 24)
         self.assertTrue(bytes(payload.data("image/png")).startswith(b"\x89PNG\r\n\x1a\n"))
-        self.assertIn("cole separadamente", payload.text())
+        self.assertEqual(payload.text(), "")
 
     def test_rich_editor_preserves_mixed_html_even_when_bitmap_flavor_is_present(self):
         mixed = self.prepared(self.mixed())
@@ -84,7 +85,7 @@ class MixedClipboardTests(unittest.TestCase):
             self.assertIsInstance(resource, QImage)
             self.assertFalse(resource.isNull())
 
-    def test_plain_destination_gets_explicit_notice_and_all_surrounding_text(self):
+    def test_plain_destination_gets_editable_text_without_fake_image_markers(self):
         mixed = self.prepared(self.mixed())
         destination = QPlainTextEdit()
         destination.insertFromMimeData(expansion_mime(mixed.text, mixed.html))
@@ -231,7 +232,8 @@ class MixedClipboardTests(unittest.TestCase):
             engine.type("/mixed")
             engine.drain()
             self.assertNotIn("/mixed", engine.field.text)
-            self.assertIn("Imagem 2: cole separadamente", engine.field.text)
+            self.assertNotIn("[Imagem", engine.field.text)
+            self.assertIn("Depois 2", engine.field.text)
             engine.replace.assert_not_called()
             engine.selection.assert_called_once()
             self.assertTrue(engine.clipboard.mimeData().hasImage())
