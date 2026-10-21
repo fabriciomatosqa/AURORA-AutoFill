@@ -73,6 +73,131 @@ class RecognitionTests(unittest.TestCase):
             self.assertIsNone(matcher.feed(ch))
         self.assertEqual(matcher.feed('A'), '/BOMDIA')
 
+    def test_one_character_shortcut_without_overlap_fires_on_keyup(self):
+        received = []
+        listener = GlobalHotkeyListener(received.append)
+        listener.update_shortcuts(['/1'])
+        for character in '/1':
+            listener._on_press(key(character))
+            listener._on_release(key(character))
+        self.assertEqual([c.shortcut for c in received], ['/1'])
+
+    def test_one_character_prefix_fires_after_quiet_period(self):
+        from app.expansion import FocusContext
+        received, timers = [], []
+        class ManualTimer:
+            def __init__(self, delay, callback):
+                self.delay, self.callback = delay, callback
+                self.cancelled = False
+                timers.append(self)
+            def start(self):
+                pass
+            def cancel(self):
+                self.cancelled = True
+            def fire(self):
+                self.callback()
+        listener = GlobalHotkeyListener(received.append)
+        listener.update_shortcuts(['/1', '/10', '/11'])
+        with patch('app.hotkeys.Timer', ManualTimer), \
+             patch('app.hotkeys.capture_focus', return_value=FocusContext(101, 1)):
+            for character in '/1':
+                listener._on_press(key(character))
+                listener._on_release(key(character))
+            self.assertEqual(received, [])
+            self.assertEqual(len(timers), 1)
+            self.assertLessEqual(timers[0].delay, 0.25)
+            timers[0].fire()
+            self.assertEqual([c.shortcut for c in received], ['/1'])
+            timers[0].fire()  # callback duplicado não executa novamente
+            self.assertEqual(len(received), 1)
+
+    def test_typing_longer_shortcut_cancels_short_prefix(self):
+        from app.expansion import FocusContext
+        received, timers = [], []
+        class ManualTimer:
+            def __init__(self, delay, callback):
+                self.callback, self.cancelled = callback, False
+                timers.append(self)
+            def start(self):
+                pass
+            def cancel(self):
+                self.cancelled = True
+            def fire(self):
+                self.callback()
+        listener = GlobalHotkeyListener(received.append)
+        listener.update_shortcuts(['/1', '/10'])
+        with patch('app.hotkeys.Timer', ManualTimer), \
+             patch('app.hotkeys.capture_focus', return_value=FocusContext(101, 1)):
+            for character in '/10':
+                listener._on_press(key(character))
+                listener._on_release(key(character))
+            self.assertTrue(timers[0].cancelled)
+            self.assertEqual([c.shortcut for c in received], ['/10'])
+            timers[0].fire()  # timer antigo não pode colar /1
+            self.assertEqual([c.shortcut for c in received], ['/10'])
+
+    def test_short_prefix_backspace_and_new_input_are_safe(self):
+        from app.expansion import FocusContext
+        received, timers = [], []
+        class ManualTimer:
+            def __init__(self, delay, callback):
+                self.callback, self.cancelled = callback, False
+                timers.append(self)
+            def start(self):
+                pass
+            def cancel(self):
+                self.cancelled = True
+            def fire(self):
+                self.callback()
+        listener = GlobalHotkeyListener(received.append)
+        listener.update_shortcuts(['/1', '/10'])
+        with patch('app.hotkeys.Timer', ManualTimer), \
+             patch('app.hotkeys.capture_focus', return_value=FocusContext(101, 1)):
+            for character in '/1x':
+                listener._on_press(key(character))
+                listener._on_release(key(character))
+            self.assertTrue(timers[0].cancelled)
+            timers[0].fire()
+            self.assertEqual(received, [])
+            backspace = key(name='backspace')
+            listener._on_press(backspace)
+            listener._on_release(backspace)
+            self.assertEqual(len(timers), 2)
+            timers[-1].fire()
+            self.assertEqual([c.shortcut for c in received], ['/1'])
+
+    def test_pending_shortcut_is_invalidated_on_focus_or_pause(self):
+        from app.expansion import FocusContext
+        received, timers = [], []
+        class ManualTimer:
+            def __init__(self, delay, callback):
+                self.callback, self.cancelled = callback, False
+                timers.append(self)
+            def start(self):
+                pass
+            def cancel(self):
+                self.cancelled = True
+            def fire(self):
+                self.callback()
+        listener = GlobalHotkeyListener(received.append)
+        listener.update_shortcuts(['/1', '/10'])
+        with patch('app.hotkeys.Timer', ManualTimer), \
+             patch('app.hotkeys.capture_focus', return_value=FocusContext(101, 1)):
+            for character in '/1':
+                listener._on_press(key(character))
+                listener._on_release(key(character))
+            listener.invalidate()
+            self.assertTrue(timers[0].cancelled)
+            timers[0].fire()
+            self.assertEqual(received, [])
+            for character in '/1':
+                listener._on_press(key(character))
+                listener._on_release(key(character))
+            listener.set_enabled(False)
+            self.assertTrue(timers[1].cancelled)
+            timers[1].fire()
+            self.assertEqual(received, [])
+
     def test_ctrl_combination_does_not_match(self):
         received = []
         listener = GlobalHotkeyListener(received.append)
