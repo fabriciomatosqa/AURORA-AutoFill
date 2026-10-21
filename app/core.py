@@ -29,6 +29,24 @@ class Snippet:
 
 
 @dataclass(frozen=True)
+class ShortcutConflict:
+    """Comando que torna uma nova abreviação ambígua, mesmo em outra pasta."""
+    id: int
+    shortcut: str
+    title: str
+    folder: str
+
+
+def shortcut_conflict_message(shortcut: str, conflict: ShortcutConflict) -> str:
+    return (
+        f"O atalho {shortcut} conflita com {conflict.shortcut}, já utilizado "
+        f"pelo comando «{conflict.title}» na pasta «{conflict.folder}». "
+        "Escolha um atalho diferente, que não seja igual nem comece "
+        "com outro atalho (e vice-versa)."
+    )
+
+
+@dataclass(frozen=True)
 class RenderResult:
     text: str
     left_moves: int = 0
@@ -193,6 +211,27 @@ class SnippetStore:
         ).fetchone()
         return Snippet(**dict(row)) if row else None
 
+    def shortcut_conflict(self, shortcut: str, excluding_id: int | None = None) -> ShortcutConflict | None:
+        """Compara só metadados, sem carregar HTML/base64 ou conteúdo de snippets.
+
+        Conflito se um atalho é prefixo do outro, inclusive igual (sem distinção
+        de maiúsculas/minúsculas) e mesmo que pertençam a pastas diferentes.
+        Ignora o registro atual ao editar o próprio atalho.
+        """
+        needle = shortcut.casefold()
+        rows = self.connection.execute(
+            "SELECT s.id, s.shortcut, s.title, f.name AS folder "
+            "FROM snippets AS s JOIN folders AS f ON f.id = s.folder_id"
+        )
+        for row in rows:
+            if excluding_id is not None and int(row["id"]) == excluding_id:
+                continue
+            existing = str(row["shortcut"]).casefold()
+            if needle.startswith(existing) or existing.startswith(needle):
+                return ShortcutConflict(
+                    int(row["id"]), str(row["shortcut"]), str(row["title"]), str(row["folder"]))
+        return None
+
     def save(self, folder_id: int, title: str, shortcut: str, content: str,
              snippet_id: int | None = None, rich_content: str = "") -> int:
         if not all(isinstance(value, str) for value in (title, shortcut, content, rich_content)):
@@ -206,6 +245,11 @@ class SnippetStore:
             raise ValueError("Informe o texto do comando.")
         try:
             with self.connection:
+                # Segunda validação obrigatória no banco, mesmo que a interface
+                # já tenha desativado Salvar. Vale também para edições e scripts.
+                conflict = self.shortcut_conflict(shortcut, excluding_id=snippet_id)
+                if conflict is not None:
+                    raise ValueError(shortcut_conflict_message(shortcut, conflict))
                 if snippet_id is None:
                     position = self.connection.execute(
                         "SELECT COALESCE(MIN(sort_order), 0) - 1 FROM snippets").fetchone()[0]
@@ -332,6 +376,22 @@ class SnippetStore:
         translation = str.maketrans("ABCDEFGHIJKLMNOPQRSTUVWXYZ", "abcdefghijklmnopqrstuvwxyz")
         folder_map = {name.translate(translation): folder_id for folder_id, name in self.folders()}
         imported = skipped = 0
+        # Backup JSON pode conter milhares de comandos e imagens incorporadas.
+        # A validação de importação usa somente as chaves dos atalhos: O(n * L)
+        # em vez de reler todos os registros para cada novo item.
+        shortcuts = {
+            str(row[0]).casefold() for row in
+            self.connection.execute("SELECT shortcut FROM snippets")
+        }
+        prefixes = {
+            key[:length]
+            for key in shortcuts for length in range(2, len(key))
+        }
+
+        def is_conflicting(key: str) -> bool:
+            return (key in shortcuts or key in prefixes
+                    or any(key[:length] in shortcuts for length in range(2, len(key))))
+
         with self.connection:
             def ensure_folder(name):
                 normalized = name.strip()
@@ -362,10 +422,10 @@ class SnippetStore:
                     if not title.strip() or not content.strip():
                         raise ValueError("Comando vazio.")
                     validate_shortcut(shortcut.strip())
-                    # Skip a duplicate before creating an otherwise unused folder.
-                    if self.connection.execute(
-                            "SELECT 1 FROM snippets WHERE shortcut=? COLLATE NOCASE",
-                            (shortcut.strip(),)).fetchone():
+                    # Atalhos idênticos e prefixos sobrepostos são ignorados sem
+                    # criar pastas vazias nem alterar dados já cadastrados.
+                    key = shortcut.strip().casefold()
+                    if is_conflicting(key):
                         skipped += 1
                         continue
                     folder_id = ensure_folder(folder_name)
@@ -375,6 +435,8 @@ class SnippetStore:
                         (folder_id, title.strip(), shortcut.strip(), content, rich_content, position))
                     imported += 1
                     position += 1
+                    shortcuts.add(key)
+                    prefixes.update(key[:length] for length in range(2, len(key)))
                 except (ValueError, sqlite3.IntegrityError):
                     skipped += 1
         return imported, skipped
