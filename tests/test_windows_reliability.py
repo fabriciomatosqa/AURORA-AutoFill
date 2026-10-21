@@ -297,7 +297,15 @@ class ClipboardAndUnicodeTests(EngineTestCase):
         self.engine.move.assert_not_called()
 
     def test_confirming_space_is_selected_with_shortcut(self):
-        self.engine.save('/olax', 'Outro')
+        # O cadastro novo bloqueia /ola + /olax. Este teste valida a
+        # compatibilidade com um par legado já salvo por versões anteriores.
+        folder = self.win.store.folders()[0][0]
+        with self.win.store.connection:
+            self.win.store.connection.execute(
+                "INSERT INTO snippets(folder_id,title,shortcut,content) VALUES (?,?,?,?)",
+                (folder, 'Legado', '/olax', 'Outro'))
+        self.engine.listener.update_shortcuts(
+            [s.shortcut for s in self.win.store.snippets()])
         self.expand('/ola ').assert_called_once_with(5)
 
     def test_changed_foreground_aborts_before_clipboard_write(self):
