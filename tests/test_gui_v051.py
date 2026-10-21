@@ -42,10 +42,14 @@ class InterfaceSmokeTests(unittest.TestCase):
                     win._load_editor(win._get_snippet(existing))
                     self.assertEqual(win.shortcut_feedback.text(), '')
                     self.assertTrue(win.save_button.isEnabled())
+                    # Ao alterar /2 para /23, o próprio registro é excluído
+                    # da checagem, portanto não há conflito por si só.
                     win.shortcut_input.setText('/23')
+                    self.assertTrue(win.save_button.isEnabled())
+                    win.store.save(folder, 'Colaborador', '/cadcolaborador', 'Outra mensagem')
+                    win.shortcut_input.setText('/cad')
                     self.assertFalse(win.save_button.isEnabled())
-                    # Ao editar o próprio comando, seu ID é ignorado, mas
-                    # outro registro com prefixo conflitante seria bloqueado.
+                    self.assertIn('/cadcolaborador', win.shortcut_feedback.text())
                     win.shortcut_input.setText('/2')
                     self.assertTrue(win.save_button.isEnabled())
                 finally:
