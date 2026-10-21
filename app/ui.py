@@ -16,7 +16,8 @@ from PySide6.QtWidgets import (
     QTextEdit, QStatusBar, QToolButton, QVBoxLayout, QWidget,
 )
 
-from .core import Snippet, SnippetStore, application_db_path, render_snippet
+from .core import (Snippet, SnippetStore, application_db_path,
+                   render_snippet, validate_shortcut)
 from .hotkeys import GlobalHotkeyListener, replace_shortcut, paste_clipboard
 from .expansion import ClipboardLease, EditSnapshot, ExpansionCandidate, ExpansionOperation, utf16_slice, prefix_offset
 from .windows_context import ContextUnavailable, FocusMonitor, capture_focus, capture_edit, set_caret, select_text_range
@@ -73,6 +74,7 @@ QLabel#brandAccent { font-size: 30px; font-weight: 760; color: #79ead8; }
 QLabel#topCaption { color: #d2eafa; font-size: 11px; font-weight: 600; }
 QWidget#sidebar { background: #0f1d31; border-right: 1px solid #24445f; }
 QLabel#sectionTitle { color: #91e1d6; font-size: 12px; font-weight: 750; letter-spacing: .6px; }
+QLabel#shortcutConflict { color: #ffc0c8; font-size: 12px; font-weight: 600; }
 QLabel#heading { color: #f3f9ff; font-size: 24px; font-weight: 760; }
 QLabel#subheading { color: #b8cde0; font-size: 13px; }
 QLabel#hint { color: #a8bfd2; font-size: 12px; }
@@ -709,6 +711,13 @@ class AutoFillWindow(AuroraFeaturesMixin, QMainWindow):
         self.shortcut_input = QLineEdit()
         self.shortcut_input.setPlaceholderText("/chamado")
         shortcut_box.addWidget(self.shortcut_input)
+        # Aviso em tempo real: explica o comando/pasta conflitante antes de
+        # tentar salvar. Não bloqueia a digitação nem abre pop-ups a cada tecla.
+        self.shortcut_feedback = QLabel("")
+        self.shortcut_feedback.setObjectName("shortcutConflict")
+        self.shortcut_feedback.setWordWrap(True)
+        self.shortcut_feedback.hide()
+        shortcut_box.addWidget(self.shortcut_feedback)
         fields.addLayout(shortcut_box, 1)
         folder_box = QVBoxLayout()
         folder_label = QLabel("Pasta")
@@ -814,10 +823,10 @@ class AutoFillWindow(AuroraFeaturesMixin, QMainWindow):
         cancel_button = QPushButton("Cancelar")
         cancel_button.clicked.connect(self._show_welcome)
         action_row.addWidget(cancel_button)
-        save_button = apply_icon(QPushButton("Salvar comando"), "save", color="#09283b")
-        save_button.setObjectName("primary")
-        save_button.clicked.connect(self._save)
-        action_row.addWidget(save_button)
+        self.save_button = apply_icon(QPushButton("Salvar comando"), "save", color="#09283b")
+        self.save_button.setObjectName("primary")
+        self.save_button.clicked.connect(self._save)
+        action_row.addWidget(self.save_button)
         v.addLayout(action_row)
         self.editor_scroll = QScrollArea()
         self.editor_scroll.setObjectName("editorScroll")
@@ -828,6 +837,7 @@ class AutoFillWindow(AuroraFeaturesMixin, QMainWindow):
         self.stack.addWidget(self.editor_scroll)
         self.title_input.textChanged.connect(self._mark_dirty)
         self.shortcut_input.textChanged.connect(self._mark_dirty)
+        self.shortcut_input.textChanged.connect(self._update_shortcut_feedback)
         self.body_input.textChanged.connect(self._mark_dirty)
         self.body_input.textChanged.connect(self._update_preview)
         self.editor_folder.currentIndexChanged.connect(self._mark_dirty)
@@ -1068,6 +1078,7 @@ class AutoFillWindow(AuroraFeaturesMixin, QMainWindow):
         self.editor_scroll.verticalScrollBar().setValue(0)
         if snippet is None:
             self.title_input.setFocus()
+        self._update_shortcut_feedback()
         self._update_preview()
 
     def _new_snippet(self):
@@ -1087,6 +1098,28 @@ class AutoFillWindow(AuroraFeaturesMixin, QMainWindow):
         self.snippet_list.clearSelection()
         self.snippet_list.blockSignals(False)
         self.stack.setCurrentIndex(0)
+
+    def _update_shortcut_feedback(self, *_):
+        """Indica o conflito assim que digitado; desativa Salvar antes do clique."""
+        shortcut = self.shortcut_input.text().strip()
+        message = ""
+        if shortcut not in {"", "/"}:
+            try:
+                validate_shortcut(shortcut)
+            except ValueError as exc:
+                message = str(exc)
+            else:
+                conflict = self.store.shortcut_conflict(shortcut, excluding_id=self.current_id)
+                if conflict is not None:
+                    message = (
+                        f"Conflito: {shortcut} é igual ou se sobrepõe a "
+                        f"{conflict.shortcut} — «{conflict.title}» "
+                        f"(pasta «{conflict.folder}»). Escolha outro atalho."
+                    )
+        self.shortcut_feedback.setText(message)
+        self.shortcut_feedback.setVisible(bool(message))
+        self.shortcut_input.setToolTip(message or "Atalho único, sem prefixos sobrepostos.")
+        self.save_button.setEnabled(bool(shortcut) and shortcut != "/" and not message)
 
     def _validated_editor_html(self) -> str:
         html = self.body_input.toHtml()
