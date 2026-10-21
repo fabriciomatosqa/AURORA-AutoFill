@@ -47,12 +47,66 @@ class ExpansionTransactionTests(EngineTestCase):
         with patch('app.ui.capture_edit', side_effect=accessible_snapshot):
             self.engine.type('/web')
             self.engine.until(20)
+            self.assertEqual(self.engine.field.text, '/web')
+            self.engine.until(45)
             self.assertEqual(self.engine.field.text, 'Conteúdo pronto')
-            # Captura inicial + validação executada pela própria seleção UIA.
-            # A leitura redundante que causava mais latência não deve existir.
-            self.assertEqual(len(calls), 2)
+            # Captura + seleção UIA + confirmação da seleção estabilizada,
+            # antes de enviar Ctrl+V ao editor WebView.
+            self.assertEqual(len(calls), 3)
             self.engine.drain()
             self.assertEqual(self.clipboard.text(), 'original')
+
+    def test_webview_paste_waits_for_verified_selection_to_settle(self):
+        from app.expansion import EditSnapshot
+        with EngineFixture() as e:
+            e.save('/teams', 'Resposta')
+            def snapshot(context, *, accessibility=False):
+                snap = e.snapshot(context)
+                return EditSnapshot(context, snap.text, snap.start, snap.end,
+                                    ('renderer', 'teams', 'document'))
+            with patch('app.ui.capture_edit', side_effect=snapshot):
+                e.type('/teams')
+                e.until(20)
+                self.assertEqual(e.field.text, '/teams')
+                self.assertEqual(e.api_calls, 0)
+                self.assertEqual((e.field.anchor, e.field.caret), (0, 6))
+                e.until(44)
+                self.assertEqual(e.api_calls, 0)
+                e.until(45)
+                self.assertEqual(e.field.text, 'Resposta')
+                self.assertEqual(e.api_calls, 1)
+                e.drain()
+                self.assertEqual(e.clipboard.text(), 'original')
+
+    def test_webview_selection_changed_before_paste_is_not_overwritten(self):
+        from app.expansion import EditSnapshot
+        with EngineFixture() as e:
+            e.save('/teams', 'Resposta')
+            def snapshot(context, *, accessibility=False):
+                snap = e.snapshot(context)
+                return EditSnapshot(context, snap.text, snap.start, snap.end,
+                                    ('renderer', 'teams', 'document'))
+            with patch('app.ui.capture_edit', side_effect=snapshot):
+                e.type('/teams')
+                e.until(20)
+                # O editor perde a seleção ao exibir o menu de comandos /.
+                e.field.anchor = e.field.caret = 0
+                e.drain()
+            self.assertEqual(e.field.text, '/teams')
+            self.assertEqual(e.api_calls, 0)
+            e.host._play_confirmation.assert_not_called()
+            self.assertEqual(e.clipboard.text(), 'original')
+
+    def test_webview_unsupported_accessibility_never_injects_shift_left(self):
+        with EngineFixture() as e:
+            e.readable = False
+            e.save('/teams', 'Resposta')
+            with patch('app.ui.capture_edit', return_value=None):
+                e.type('/teams')
+                e.drain()
+            self.assertEqual(e.field.text, '/teams')
+            self.assertEqual(e.api_calls, 0)
+            self.assertEqual(e.clipboard.text(), 'original')
 
     def test_rejected_uia_paste_restores_the_unmodified_shortcut_caret(self):
         from app.expansion import EditSnapshot
@@ -412,11 +466,12 @@ class ExpansionTransactionTests(EngineTestCase):
                     self.assertEqual(e.replace.call_count, 2)
                     self.assertEqual(e.host._play_confirmation.call_count, 1)
 
-    def test_unknown_control_reports_unconfirmed_and_cursor_refuses_before_edit(self):
+    def test_unknown_control_refuses_blind_selection_and_preserves_shortcut(self):
         self.engine.readable = False
         self.expand()
-        # O som indica que o Ctrl+V foi acionado, não que o browser confirmou.
-        self.win._play_confirmation.assert_called_once()
+        self.assertEqual(self.engine.field.text, '/ola')
+        self.engine.replace.assert_not_called()
+        self.win._play_confirmation.assert_not_called()
         self.assertEqual(self.clipboard.text(), 'original')
         with EngineFixture() as e:
             e.readable = False
