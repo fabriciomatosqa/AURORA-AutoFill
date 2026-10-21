@@ -29,7 +29,8 @@ from .icons import apply_icon
 from .branding import brand_webp_bytes
 from .inline_images import AuroraImageEditor, contains_inline_images, plain_text_fallback, validate_inline_html, image_sources, read_image_file
 from .clipboard_content import (clone_mime, expansion_mime, image_mime,
-                                message_as_image_mime, prepare_mixed_content)
+                                ordered_clipboard_parts, clipboard_part_mime,
+                                prepare_mixed_content)
 
 
 def cursor_steps(text: str) -> int:
@@ -833,41 +834,81 @@ class AutoFillWindow(AuroraFeaturesMixin, QMainWindow):
 
     def _prepare_copy_menu(self):
         self.copy_content_menu.clear()
-        if image_sources(self.body_input.toHtml()):
-            composite = self.copy_content_menu.addAction("Copiar mensagem como imagem única (Teams)")
-            composite.triggered.connect(lambda: self._copy_content_part("composite"))
+        html = self.body_input.toHtml()
+        sources = image_sources(html)
+        complete = self.copy_content_menu.addAction("Copiar todo o texto (sem imagens)")
+        complete.triggered.connect(lambda: self._copy_content_part(None))
+        if sources:
             self.copy_content_menu.addSeparator()
-        action = self.copy_content_menu.addAction("Copiar texto sem imagens")
-        action.triggered.connect(lambda: self._copy_content_part(None))
-        for index, _ in enumerate(image_sources(self.body_input.toHtml())):
-            action = self.copy_content_menu.addAction(f"Copiar imagem {index + 1}")
-            action.triggered.connect(lambda checked=False, i=index: self._copy_content_part(i))
+            heading = self.copy_content_menu.addAction(
+                "Para Teams: copie e cole cada parte na ordem")
+            heading.setEnabled(False)
+            next_part = self.copy_content_menu.addAction(
+                "Copiar próxima parte (texto ou imagem)")
+            next_part.triggered.connect(
+                lambda: self._copy_content_part(("next", None)))
+            self.copy_content_menu.addSeparator()
+            try:
+                parts = ordered_clipboard_parts(html)
+            except ValueError:
+                parts = ()
+            images = text_parts = 0
+            for index, part in enumerate(parts):
+                if part.kind == "image":
+                    images += 1
+                    title = f"{index + 1}. Copiar imagem {images}"
+                else:
+                    text_parts += 1
+                    title = f"{index + 1}. Copiar trecho de texto {text_parts}"
+                action = self.copy_content_menu.addAction(title)
+                action.triggered.connect(
+                    lambda checked=False, position=index:
+                    self._copy_content_part(("part", position)))
 
     def _copy_content_part(self, index):
         try:
             if self._expansion_operation is not None:
                 raise ValueError("Aguarde a expansão terminar antes de copiar.")
             html = self.body_input.toHtml()
-            if index == "composite":
-                rendered_html = render_rich_html(html, self._clipboard_source_text())
-                payload = message_as_image_mime(rendered_html)
-                message = ("Mensagem copiada como PNG. Volte ao Teams e cole com Ctrl+V. "
-                           "Confira se ele criou uma imagem antes de enviar.")
+            if isinstance(index, tuple):
+                kind, position = index
+                parts = ordered_clipboard_parts(
+                    html, self._clipboard_source_text(), datetime.now())
+                if not parts:
+                    raise ValueError("Não há conteúdo para copiar.")
+                current_document = getattr(self, "_copy_sequence_html", None)
+                if current_document != html:
+                    self._copy_sequence_html = html
+                    self._copy_sequence_index = 0
+                if kind == "next":
+                    position = self._copy_sequence_index
+                    if position >= len(parts):
+                        position = 0
+                if not isinstance(position, int) or not 0 <= position < len(parts):
+                    raise ValueError("Parte solicitada não existe neste comando.")
+                part = parts[position]
+                payload = clipboard_part_mime(part)
+                self._copy_sequence_index = position + 1
+                description = "Imagem" if part.kind == "image" else "Texto editável"
+                message = (f"Parte {position + 1}/{len(parts)} — {description} copiado. "
+                           "Cole no Teams com Ctrl+V e depois copie a próxima parte. "
+                           "Confirme a imagem antes de enviar.")
             elif index is None:
                 text = self.body_input.toPlainText().replace("\ufffc", "")
                 payload = QMimeData()
                 payload.setText(render_snippet(text, self._clipboard_source_text()).text)
-                message = "Texto copiado sem imagens. Cole no destino com Ctrl+V."
+                message = ("Texto editável copiado, sem as imagens. "
+                           "Para preservar a ordem, use as partes no menu.")
             else:
                 payload = image_mime(image_sources(html)[index])
-                message = f"Imagem {index + 1} copiada. Cole no destino com Ctrl+V; o aplicativo pode criar um anexo."
-            # This is an explicit user copy. A pending restoration must never
-            # overwrite it, even on platforms without a clipboard sequence.
+                message = (f"Imagem {index + 1} copiada como PNG/bitmap. "
+                           "Cole no Teams com Ctrl+V e confira o anexo.")
+            # Explicit user copy must outlive automatic clipboard restoration.
             self._clipboard_lease = None
             self._clipboard_pending = False
             QApplication.clipboard().setMimeData(payload)
             self.statusBar().showMessage(message, 10000)
-        except (ValueError, IndexError) as exc:
+        except (ValueError, IndexError, TypeError) as exc:
             self.statusBar().showMessage(str(exc), 8000)
 
     def _insert_image_file(self):
@@ -1298,12 +1339,6 @@ class AutoFillWindow(AuroraFeaturesMixin, QMainWindow):
                 operation.document_cursor_prefix = mixed.document_cursor_prefix
                 operation.left_moves = mixed.left_moves
                 operation.image_count, operation.image_only = mixed.image_count, mixed.image_only
-                # Modo opcional para mensageiros que aceitam capturas como
-                # anexos, mas rejeitam <img> dentro do HTML.
-                internal_test = self.isActiveWindow() and self.focusWidget() is self.test_box
-                operation.bitmap_mode = bool(
-                    getattr(self, "preferences", {}).get("images_as_single_picture", False)
-                    and not internal_test)
                 if "\x00" in operation.text:
                     raise ValueError("O texto contém um caractere NUL e não pode ser colado.")
                 operation.text.encode("utf-16-le")
@@ -1331,9 +1366,8 @@ class AutoFillWindow(AuroraFeaturesMixin, QMainWindow):
                         else self._clone_clipboard_mime())
             from uuid import uuid4
             token = uuid4().hex.encode("ascii")
-            payload = (message_as_image_mime(operation.rich_html) if operation.bitmap_mode
-                       else expansion_mime(operation.text, operation.rich_html,
-                                           image_only=operation.image_only))
+            payload = expansion_mime(operation.text, operation.rich_html,
+                                     image_only=operation.image_only)
             payload.setData("application/x-aurora-expansion", token)
             if self._clipboard_sequence() != backup_sequence:
                 raise ValueError("O clipboard mudou durante a preparação; colagem cancelada.")
@@ -1393,14 +1427,6 @@ class AutoFillWindow(AuroraFeaturesMixin, QMainWindow):
                     or operation.before.identity):
                 operation.feedback_played = True
                 self._play_confirmation()
-            if operation.bitmap_mode:
-                # O destino recebe um PNG nativo. UIA não pode comprovar se
-                # um mensageiro criou o anexo; não repetir Ctrl+V.
-                lease.consumed = True
-                self._finish_expansion(
-                    operation, "Imagem única enviada para colagem. Confira o anexo "
-                               "no Teams antes de enviar a mensagem.")
-                return
             operation.deadline = monotonic() + 1.5
             QTimer.singleShot(10, lambda op=operation: self._confirm_expansion(op))
         except Exception as exc:
@@ -1506,8 +1532,7 @@ class AutoFillWindow(AuroraFeaturesMixin, QMainWindow):
         if operation and operation.lease:
             lease = operation.lease
             sent = operation.stage in {"sent", "moving", "confirmed"}
-            delay = (3500 if sent and operation.bitmap_mode else
-                     1450 if sent and (operation.image_count or not lease.consumed) else 0)
+            delay = 1450 if sent and (operation.image_count or not lease.consumed) else 0
             QTimer.singleShot(delay, lambda saved=lease: self._restore_clipboard(saved))
         self._active_candidate = None
         self._expansion_operation = None

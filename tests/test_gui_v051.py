@@ -53,13 +53,11 @@ class InterfaceSmokeTests(unittest.TestCase):
                         self.assertTrue(win.body_input.insert_image(screenshot))
                         win.body_input.insertPlainText('\\nTexto depois')
                         win._prepare_copy_menu()
-                        self.assertTrue(any('imagem única' in action.text().lower()
-                                            for action in win.copy_content_menu.actions()))
-                        win._copy_content_part('composite')
-                        copy = app.clipboard().mimeData()
-                        self.assertTrue(copy.hasImage())
-                        self.assertFalse(copy.hasText())
-                        self.assertFalse(copy.hasHtml())
+                        labels = [action.text().lower() for action in
+                                  win.copy_content_menu.actions()]
+                        self.assertFalse(any('imagem única' in label for label in labels))
+                        self.assertTrue(any('copiar trecho de texto' in label for label in labels))
+                        self.assertTrue(any('copiar imagem 1' in label for label in labels))
                         win.dirty = False
                         win.filter_folder.showPopup()
                         app.processEvents()

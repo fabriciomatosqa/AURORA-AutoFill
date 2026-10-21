@@ -15,13 +15,13 @@ Nenhum arquivo de `sources/`, dado pessoal, formato de backup ou esquema SQLite 
 
 ## Implementação
 
-`clipboard_content.py` prepara, sem alterar os dados salvos, duas representações do mesmo conteúdo: HTML com imagens em ordem e texto com avisos numerados. Usa o texto do documento rico para acompanhar U+FFFC, variáveis, emojis e `{{cursor}}`. A data/hora da expansão é única para as representações.
+`clipboard_content.py` prepara, sem alterar os dados salvos, duas representações do mesmo conteúdo: HTML com imagens em ordem e texto simples editável, sem marcadores artificiais de imagem. Usa o texto do documento rico para acompanhar U+FFFC, variáveis, emojis e `{{cursor}}`. A data/hora da expansão é única para as representações.
 
 Conteúdo misto não oferece um bitmap da primeira figura: isso permitiria que um destino descartasse o restante da mensagem ao escolher a representação de imagem. Somente uma imagem isolada oferece também `image/png` e `setImageData`. Qt faz a conversão nativa para CF_HTML e DIB/DIBV5; não mantemos uma implementação paralela de offsets CF_HTML nem fabricamos handles CF_BITMAP. PNG é um formato registrado no Windows; `image/png` é o MIME oferecido por Qt.
 
 A área de testes usa `AuroraImageEditor`. O motor substitui o intervalo validado diretamente pelo Qt, sem injetar seleção e Ctrl+V no próprio processo. A confirmação aceita o documento rico ou a representação textual explícita, e não confunde confirmação de texto via acessibilidade com comprovação de que uma figura apareceu em um aplicativo externo.
 
-O menu **Copiar para outro aplicativo** fornece texto sem imagens e cada imagem individual em ordem, como PNG/bitmap. A cópia manual permanece no clipboard. Não automatizamos uma sequência texto–anexo–texto: não existe confirmação genérica de conclusão de upload, de foco ou de posição de um anexo nos destinos. Não usamos coordenadas, não enviamos mensagens, não contornamos políticas do destino e não fazemos novas tentativas depois de uma colagem incerta.
+O menu **Copiar para outro aplicativo** oferece cada trecho de texto e cada imagem como uma parte separada, na ordem original. A ação **Copiar próxima parte** avança pela sequência; o texto é enviado em text/plain editável e as imagens em PNG/bitmap nativo. A opção de converter toda a mensagem em uma figura foi removida. A cópia manual permanece no clipboard. Não automatizamos uma sequência texto–anexo–texto: não existe confirmação genérica de conclusão de upload, de foco ou de posição de um anexo nos destinos. Não usamos coordenadas, não enviamos mensagens, não contornamos políticas do destino e não fazemos novas tentativas depois de uma colagem incerta.
 
 Mantivemos revisão do teclado, contexto/foco, identidade de campo, limites de tempo de consulta, token/lease e proteção contra sobrescrever uma nova cópia. Sem contador nativo Windows, uma revisão local alimentada por `QClipboard.dataChanged` detecta mudança durante a preparação. A janela de disponibilidade de 1450 ms já existente é mantida também para conteúdo com imagens: confirmar o texto não confirma que um leitor externo terminou de pedir seus dados. É uma disponibilidade limitada, não um recibo de colagem. A clonagem preserva os formatos expostos por Qt; objetos OLE privados de aplicações não têm garantia de reconstrução completa.
 
@@ -47,7 +47,7 @@ O smoke nativo Windows utiliza Qt com plataforma `windows`, disponibiliza exclus
 | --- | --- |
 | Editor e área de testes AURORA | Widgets/documentos Qt reais: duas imagens intercaladas, texto formatado, emoji, variável, cursor e substituição exata |
 | Clipboard Windows | Formatos nativos lidos por outro processo; não é teste de Word/Teams/ChatGPT |
-| Destino somente texto | QPlainTextEdit real recebe todos os parágrafos e avisos numerados |
+| Destino somente texto | QPlainTextEdit real recebe os parágrafos editáveis, sem marcadores falsos de imagem |
 | Motor externo | Simulações reproduzíveis de seleção, mudança de foco, destino ilegível, cópia concorrente e restauração |
 | Persistência/JSON/ZIP | Reabertura do SQLite, duas imagens e round-trip integral sem migração de esquema |
 | Word | Captura fornecida comprova a versão anterior; testar manualmente esta compilação |
@@ -61,7 +61,7 @@ O smoke nativo Windows utiliza Qt com plataforma `windows`, disponibiliza exclus
 3. No Word, em um documento vazio, repita a expansão e confira visualmente as duas figuras e a formatação. Não basta ver os parágrafos. Repita com uma imagem isolada.
 4. Em rascunhos vazios do ChatGPT e Teams, repita sem enviar. Registre separadamente: atalho removido, texto completo, imagens no corpo, imagens anexadas ou apenas aviso. Se o intervalo não puder ser verificado, o comportamento esperado é cancelar e preservar o atalho.
 5. Para testar o fallback, no AURORA abra o comando, escolha **Copiar texto sem imagens**, volte ao rascunho e cole. Depois use **Copiar imagem 1** e cole no mesmo rascunho, aguardando a miniatura/anexo aparecer; repita para a segunda imagem. Não há garantia de imagem intercalada quando o destino usa anexos. Se PNG/bitmap também for rejeitado, use o seletor de anexos do próprio destino.
-6. Repita em aNotepad/campo somente texto e num editor `contenteditable` que aceite imagens: somente texto deve manter os avisos explícitos; o suporte a HTML do outro editor deve ser conferido visualmente. Um campo `<textarea>` não pode mostrar imagens.
+6. Repita em aNotepad/campo somente texto e num editor `contenteditable` que aceite imagens: somente texto deve manter as palavras editáveis e não adicionar avisos como se fossem parte da mensagem; o suporte a HTML do outro editor deve ser conferido visualmente. Um campo `<textarea>` não pode mostrar imagens.
 7. Antes de expandir, copie um texto e uma imagem de teste. Depois de confirmar a expansão e aguardar a restauração, cole em um documento descartável para conferir o conteúdo anterior. Faça uma nova cópia durante uma tentativa e confirme que ela prevalece. Troque o foco antes da substituição e confirme que nenhum outro campo recebe texto. Não use dados sensíveis nesse ensaio.
 8. Exporte JSON, faça backup ZIP e restaure em perfil descartável. Confirme texto e ambas as imagens. Para MSI, faça os ensaios de instalação/desinstalação em um perfil de teste.
 

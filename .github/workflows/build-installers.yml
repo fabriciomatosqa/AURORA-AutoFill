@@ -73,7 +73,7 @@ jobs:
       - name: Testes automatizados de regressão
         env:
           QT_QPA_PLATFORM: offscreen
-        run: python -m unittest discover -s tests -v
+        run: python packaging/run_unit_tests.py
       - name: Testar seleção e cursor com acessibilidade real do Windows
         # Exercise Windows' real UIA range implementation, not just mocks.
         # The smoke fixture owns its window and contains only synthetic text.
@@ -254,7 +254,7 @@ jobs:
       - name: Testes (Qt offscreen)
         env:
           QT_QPA_PLATFORM: offscreen
-        run: python -m unittest discover -s tests -v
+        run: python packaging/run_unit_tests.py
       - name: Compilar aplicativo Linux
         run: |
           # pynput consulta DISPLAY ao ser importado; Xvfb garante que o
