@@ -70,6 +70,82 @@ class PersistenceTests(unittest.TestCase):
         self.store.delete(ident)
         self.assertEqual(self.store.snippets(), [])
 
+    def test_prefix_conflicts_in_both_directions_and_exact_match(self):
+        folder = self.store.create_folder("HUBRASIL")
+        other = self.store.create_folder("Outro setor")
+        existing = self.store.save(folder, "CAD", "/2", "Texto inicial")
+        cases = ("/2", "/23", "/234", "/2abc", "/2ABC")
+        for candidate in cases:
+            with self.subTest(candidate=candidate):
+                conflict = self.store.shortcut_conflict(candidate)
+                self.assertEqual(conflict.id, existing)
+                self.assertEqual(conflict.shortcut, "/2")
+                self.assertEqual(conflict.title, "CAD")
+                self.assertEqual(conflict.folder, "HUBRASIL")
+                with self.assertRaisesRegex(ValueError, "HUBRASIL"):
+                    self.store.save(other, "Novo", candidate, "texto")
+        self.assertIsNone(self.store.shortcut_conflict("/2", excluding_id=existing))
+        self.store.save(folder, "CAD editado", "/2", "Conteúdo editado", existing)
+        self.store.delete(existing)
+        longer = self.store.save(other, "Longo", "/cadcolaborador", "Cadastro")
+        for candidate in ("/cad", "/CAD", "/cadCol", "/CADCOLABORADOR"):
+            with self.subTest(candidate=candidate):
+                with self.assertRaisesRegex(ValueError, "/cadcolaborador"):
+                    self.store.save(folder, "Novo", candidate, "Outro texto")
+        self.assertIsNone(self.store.shortcut_conflict("/cadcolaborador", excluding_id=longer))
+        self.assertIsNone(self.store.shortcut_conflict("/xyz"))
+        self.store.save(folder, "Diferente", "/xyz", "Aceito")
+
+    def test_shortcut_edit_rechecks_conflicts_and_is_atomic(self):
+        folder = self.store.create_folder("Equipe")
+        a = self.store.save(folder, "Mensagem curta", "/1", "Um")
+        b = self.store.save(folder, "Outro", "/cadastro", "Dois")
+        with self.assertRaises(ValueError):
+            self.store.save(folder, "Alterado", "/10", "Nova mensagem", b)
+        self.assertEqual(self.store.snippet_by_shortcut("/cadastro").id, b)
+        self.assertEqual(self.store.snippet_by_shortcut("/cadastro").content, "Dois")
+        self.assertEqual(self.store.snippet_by_shortcut("/1").id, a)
+        # Após remover o atalho de prefixo, é permitido cadastrá-lo.
+        self.store.delete(a)
+        self.store.save(folder, "Alterado", "/10", "Nova mensagem", b)
+        self.assertEqual(self.store.snippet_by_shortcut("/10").content, "Nova mensagem")
+
+    def test_import_skips_ambiguous_shortcuts_and_does_not_create_unused_folder(self):
+        folder = self.store.create_folder("Original")
+        self.store.save(folder, "Existente", "/2", "Atendimento")
+        backup = Path(self.directory.name) / "colliding-import.json"
+        backup.write_text(json.dumps({
+            "format": "AutoFillStudioBackup", "version": 1,
+            "folders": ["Original"],
+            "snippets": [
+                {"folder": "Pasta ignorada", "title": "Duplicado", "shortcut": "/23", "content": "X"},
+                {"folder": "Original", "title": "Novo", "shortcut": "/cad", "content": "Y"},
+                {"folder": "Original", "title": "Sobreposto", "shortcut": "/cadcolaborador", "content": "Z"},
+                {"folder": "Original", "title": "Seguro", "shortcut": "/ola", "content": "Olá"},
+                {"folder": "Original", "title": "Duplicado 2", "shortcut": "/OLA", "content": "Outro"}
+            ]
+        }), encoding="utf-8")
+        imported, skipped = self.store.import_json(backup)
+        self.assertEqual((imported, skipped), (2, 3))
+        self.assertEqual({x.shortcut for x in self.store.snippets()}, {"/2", "/cad", "/ola"})
+        self.assertFalse(any(name == "Pasta ignorada" for _, name in self.store.folders()))
+        self.assertEqual(self.store.snippet_by_shortcut("/2").content, "Atendimento")
+
+    def test_existing_legacy_prefix_records_survive_migration(self):
+        folder = self.store.create_folder("Legado")
+        self.store.connection.execute(
+            "INSERT INTO snippets(folder_id,title,shortcut,content) VALUES (?,?,?,?)",
+            (folder, "Um", "/1", "Texto 1"))
+        self.store.connection.execute(
+            "INSERT INTO snippets(folder_id,title,shortcut,content) VALUES (?,?,?,?)",
+            (folder, "Dez", "/10", "Texto 10"))
+        self.store.connection.commit()
+        self.assertEqual({s.shortcut for s in self.store.snippets()}, {"/1", "/10"})
+        self.store.save(folder, "Separado", "/outro", "Texto diferente")
+        self.assertEqual({s.shortcut for s in self.store.snippets()}, {"/1", "/10", "/outro"})
+        with self.assertRaisesRegex(ValueError, "/1"):
+            self.store.save(folder, "Novo", "/11", "Não permitido")
+
     def test_backup_roundtrip(self):
         folder = self.store.create_folder("Suporte")
         self.store.save(folder, "Atendimento", "/at", "Texto {{data}}")
