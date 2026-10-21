@@ -1441,9 +1441,10 @@ class AutoFillWindow(AuroraFeaturesMixin, QMainWindow):
                 select_text_range(operation.before, begin, end)
                 if not self._candidate_valid(operation.candidate) or not self._owns_clipboard(lease):
                     raise ValueError("Contexto ou clipboard mudou após selecionar o atalho.")
-                # UI Automation pode confirmar a seleção antes de o editor
-                # WebView aplicar a mudança. Não iniciar Ctrl+V no mesmo ciclo:
-                # revalidar após uma curta estabilização, sem reselecionar.
+                # O TextPatternRange.Select do Teams pode concluir antes de a
+                # seleção aparecer no GetSelection. Só uma solicitação é enviada:
+                # até 700 ms para confirmar, SEM selecionar ou colar de novo.
+                operation.deadline = monotonic() + 0.7
                 QTimer.singleShot(25, lambda op=operation: self._paste_verified_selection(op))
                 return
             else:
@@ -1467,14 +1468,33 @@ class AutoFillWindow(AuroraFeaturesMixin, QMainWindow):
             selected = self._edit_snapshot(accessibility=bool(before.identity))
             if (selected is None or selected.context != before.context
                     or selected.identity != before.identity
-                    or selected.text != before.text
-                    or (selected.start, selected.end) != (begin, end)):
-                raise ValueError("O editor não manteve a seleção exata do atalho; colagem cancelada.")
+                    or selected.text != before.text):
+                raise ValueError("O editor alterou o campo ou seu conteúdo antes da colagem.")
+            if (selected.start, selected.end) != (begin, end):
+                # WebView ainda pode estar exibindo o caret original mesmo após
+                # Select() ter retornado. Somente este estado *inalterado* admite
+                # mais uma consulta. Outra seleção, texto ou identidade aborta.
+                if ((selected.start, selected.end) == (before.start, before.end)
+                        and monotonic() < operation.deadline):
+                    QTimer.singleShot(30, lambda op=operation: self._paste_verified_selection(op))
+                    return
+                raise ValueError(
+                    "O Teams não confirmou a seleção do atalho dentro do prazo; "
+                    "nenhum texto foi colado.")
             if not self._candidate_valid(operation.candidate) or not self._owns_clipboard(operation.lease):
                 raise ValueError("O contexto mudou durante a verificação da seleção.")
             operation.stage = "sent"
             paste_clipboard()
             self._expansion_sent(operation)
+        except ContextUnavailable as exc:
+            # Consulta momentaneamente indisponível: repetir apenas a leitura.
+            # Nunca reenviar seleção nem Ctrl+V enquanto não houver prova.
+            if (monotonic() < operation.deadline
+                    and self._candidate_valid(operation.candidate)
+                    and self._owns_clipboard(operation.lease)):
+                QTimer.singleShot(30, lambda op=operation: self._paste_verified_selection(op))
+            else:
+                self._finish_expansion(operation, f"Não foi possível expandir: {exc}")
         except Exception as exc:
             self._finish_expansion(operation, f"Não foi possível expandir: {exc}")
 
