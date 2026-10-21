@@ -284,7 +284,7 @@ class ExpansionTransactionTests(EngineTestCase):
         old = self.win._clipboard_lease
         self.engine.until(100)
         self.engine.type('/ola')
-        self.engine.until(145)
+        self.engine.until(120)
         new = self.win._clipboard_lease
         self.assertIsNot(old, new)
         self.win._restore_clipboard(old)
