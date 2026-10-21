@@ -34,7 +34,7 @@ class AccessibilityContextTests(unittest.TestCase):
             pointer._obj.value = 7
             return 1
         api = SimpleNamespace(GetWindowThreadProcessId=pid)
-        with patch.object(ctypes, 'windll', SimpleNamespace(user32=api), create=True), \\
+        with patch.object(ctypes, 'windll', SimpleNamespace(user32=api), create=True), \
              patch('app.accessibility_context._client.request', return_value=response) as send:
             self.assertIs(select_accessible(snapshot, 0, 4), SELECTION_SUBMITTED)
             self.assertEqual(send.call_args.kwargs['action'], 'select')
@@ -42,7 +42,7 @@ class AccessibilityContextTests(unittest.TestCase):
             for changed in ({'identity': ['7', 'other', 'doc']},
                             {'window': '999'}, {'control': '99'},
                             {'status': 'changed'}):
-                with self.subTest(changed=changed), \\
+                with self.subTest(changed=changed), \
                      patch('app.accessibility_context._client.request',
                            return_value=dict(response, **changed)):
                     with self.assertRaises(AccessibilityUnavailable):
