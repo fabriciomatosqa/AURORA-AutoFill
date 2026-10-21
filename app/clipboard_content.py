@@ -6,20 +6,12 @@ isolated image, never a representation of an entire mixed document.
 from dataclasses import dataclass
 from datetime import datetime
 
-
 from PySide6.QtCore import QBuffer, QByteArray, QIODevice, QMimeData
 from PySide6.QtGui import QImage, QTextDocument
 
 from .core import render_snippet
 from .formatting import render_rich_html
 from .inline_images import decode_embedded_image, image_sources, validate_inline_html
-
-
-def image_notice_text(text: str) -> str:
-    parts = text.split("\ufffc")
-    return "".join(part + (f"[Imagem {index + 1}: cole separadamente pelo AURORA]"
-                          if index < len(parts) - 1 else "")
-                   for index, part in enumerate(parts))
 
 
 @dataclass(frozen=True)
@@ -40,7 +32,9 @@ def prepare_mixed_content(html: str, clipboard_text: str, now: datetime) -> Mixe
     document.setHtml(html)
     template = document.toPlainText()
     rich = render_snippet(template, clipboard_text, now)
-    plain = render_snippet(image_notice_text(template), clipboard_text, now)
+    # Campos somente texto recebem palavras editáveis, não marcadores
+    # artificiais. As imagens são oferecidas separadamente como PNG nativo.
+    plain = render_snippet(template.replace("\ufffc", ""), clipboard_text, now)
     sources = image_sources(html)
     return MixedContent(
         render_rich_html(html, clipboard_text, now), plain.text, rich.text,
