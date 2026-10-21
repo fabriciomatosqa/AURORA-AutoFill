@@ -78,6 +78,73 @@ class ExpansionTransactionTests(EngineTestCase):
                 e.drain()
                 self.assertEqual(e.clipboard.text(), 'original')
 
+    def test_teams_selection_ack_that_settles_late_pastes_once(self):
+        from app.accessibility_context import SELECTION_SUBMITTED
+        from app.expansion import EditSnapshot
+        with EngineFixture() as e:
+            e.save('/teams', 'Resposta')
+            def snapshot(context, *, accessibility=False):
+                current = e.snapshot(context)
+                return EditSnapshot(context, current.text, current.start,
+                                    current.end, ('renderer', 'teams', 'document'))
+            with patch('app.ui.capture_edit', side_effect=snapshot):
+                def select_later(before, begin, end):
+                    # O worker retorna ACK, mas o Teams somente aplica o
+                    # intervalo 120 ms depois, sem receber nova seleção.
+                    e.schedule(120, lambda: e.select(before, begin, end))
+                    return SELECTION_SUBMITTED
+                e.selection.side_effect = select_later
+                e.type('/teams')
+                e.until(45)
+                self.assertEqual(e.field.text, '/teams')
+                self.assertEqual(e.api_calls, 0)
+                e.until(135)
+                self.assertEqual(e.api_calls, 0)
+                e.until(165)
+                self.assertEqual(e.field.text, 'Resposta')
+                self.assertEqual(e.api_calls, 1)
+                e.drain()
+            e.selection.assert_called_once()
+            self.assertEqual(e.clipboard.text(), 'original')
+
+    def test_teams_selection_ack_never_materializes_and_never_pastes(self):
+        from app.accessibility_context import SELECTION_SUBMITTED
+        from app.expansion import EditSnapshot
+        with EngineFixture() as e:
+            e.save('/teams', 'Resposta')
+            def snapshot(context, *, accessibility=False):
+                current = e.snapshot(context)
+                return EditSnapshot(context, current.text, current.start,
+                                    current.end, ('renderer', 'teams', 'document'))
+            with patch('app.ui.capture_edit', side_effect=snapshot):
+                e.selection.side_effect = lambda *_: SELECTION_SUBMITTED
+                e.type('/teams')
+                e.drain()
+            self.assertEqual(e.field.text, '/teams')
+            self.assertEqual(e.api_calls, 0)
+            e.selection.assert_called_once()
+            e.host._play_confirmation.assert_not_called()
+            self.assertEqual(e.clipboard.text(), 'original')
+
+    def test_teams_typing_during_pending_selection_aborts_safely(self):
+        from app.accessibility_context import SELECTION_SUBMITTED
+        from app.expansion import EditSnapshot
+        with EngineFixture() as e:
+            e.save('/teams', 'Resposta')
+            def snapshot(context, *, accessibility=False):
+                current = e.snapshot(context)
+                return EditSnapshot(context, current.text, current.start,
+                                    current.end, ('renderer', 'teams', 'document'))
+            with patch('app.ui.capture_edit', side_effect=snapshot):
+                e.selection.side_effect = lambda *_: SELECTION_SUBMITTED
+                e.type('/teams')
+                e.schedule(80, lambda: e.type('X'))
+                e.drain()
+            self.assertEqual(e.field.text, '/teamsX')
+            self.assertEqual(e.api_calls, 0)
+            e.selection.assert_called_once()
+            self.assertEqual(e.clipboard.text(), 'original')
+
     def test_webview_selection_changed_before_paste_is_not_overwritten(self):
         from app.expansion import EditSnapshot
         with EngineFixture() as e:
