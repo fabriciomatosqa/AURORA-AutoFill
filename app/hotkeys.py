@@ -46,7 +46,7 @@ class ShortcutMatcher:
             if key_name in {"enter", "tab", "esc", "delete", "left", "right", "up", "down", "home", "end"}:
                 self._buffer = ""
                 return None
-            if not character or len(character) != 1 or character in "\\r\\n\\t":
+            if not character or len(character) != 1 or character in "\r\n\t":
                 return None
             self._buffer = (self._buffer + character)[-64:]
             # Todos os comandos válidos começam em / e não têm outra barra.
