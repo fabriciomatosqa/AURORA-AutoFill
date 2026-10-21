@@ -13,7 +13,6 @@ from .version import IS_PRERELEASE
 DEFAULTS = {
     "sound_enabled": True,
     "sound_volume": 65,
-    "images_as_single_picture": False,
     "check_updates": True,
     "include_prereleases": IS_PRERELEASE,
     "start_minimized": False,
@@ -30,8 +29,7 @@ def normalize_preferences(raw: dict) -> dict:
     """Use the same bounded, typed settings for files, imports and writes."""
     settings = dict(DEFAULTS)
     if isinstance(raw, dict):
-        for key in ("sound_enabled", "check_updates", "include_prereleases", "start_minimized",
-                    "images_as_single_picture"):
+        for key in ("sound_enabled", "check_updates", "include_prereleases", "start_minimized"):
             if type(raw.get(key)) is bool:
                 settings[key] = raw[key]
         volume = raw.get("sound_volume")
