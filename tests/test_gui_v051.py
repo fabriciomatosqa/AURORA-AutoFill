@@ -50,6 +50,9 @@ class InterfaceSmokeTests(unittest.TestCase):
                     self.assertTrue(win.save_button.isEnabled())
                 finally:
                     app.clipboard().clear()
+                    # A edição propositalmente insere texto inválido; não abrir
+                    # o diálogo modal de alterações não salvas ao fechar em CI.
+                    win.dirty = False
                     win._quitting = True
                     win.close()
                     win.deleteLater()
