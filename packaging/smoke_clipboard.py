@@ -51,10 +51,15 @@ def read_native(case):
         fragment = raw[fields["StartFragment"]:fields["EndFragment"]].decode("utf-8")
         assert "data:image/png;base64," in fragment
         assert fields["StartHTML"] <= fields["StartFragment"] < fields["EndFragment"] <= fields["EndHTML"] <= len(raw)
-        text = data(13).decode("utf-16-le").rstrip("\x00")  # CF_UNICODETEXT
-        assert "cole separadamente" in text
-        formats = ["CF_HTML", "CF_UNICODETEXT"]
+        # CF_UNICODETEXT is optional for a pure native image.
+        text = (data(13).decode("utf-16-le").rstrip("\x00")
+                if api.IsClipboardFormatAvailable(13) else "")
+        assert "[Imagem" not in text and "cole separadamente" not in text
+        formats = ["CF_HTML"]
+        if api.IsClipboardFormatAvailable(13):
+            formats.append("CF_UNICODETEXT")
         if case == "isolated":
+            assert not text
             assert data(api.RegisterClipboardFormatW("PNG")).startswith(b"\x89PNG")
             bitmap_format = 17 if api.IsClipboardFormatAvailable(17) else 8
             bitmap = data(bitmap_format)  # DIBV5 / DIB
@@ -63,6 +68,7 @@ def read_native(case):
         else:
             assert not api.IsClipboardFormatAvailable(8) and not api.IsClipboardFormatAvailable(17)
             assert "Antes 😀" in fragment and "Depois" in fragment
+            assert "Antes 😀" in text and "Depois" in text
         return formats
     finally:
         api.CloseClipboard()
