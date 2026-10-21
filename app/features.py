@@ -54,8 +54,6 @@ class AuroraFeaturesMixin:
             lambda checked: self._change_preference("sound_enabled", checked))
         self.settings_page.volume_changed.connect(
             lambda value: self._change_preference("sound_volume", value))
-        self.settings_page.picture_mode_toggled.connect(
-            lambda checked: self._change_preference("images_as_single_picture", checked))
         self.settings_page.updates_toggled.connect(
             lambda checked: self._change_preference("check_updates", checked))
         self.settings_page.prereleases_toggled.connect(
@@ -88,8 +86,6 @@ class AuroraFeaturesMixin:
                       "check_updates": self.settings_page.updates,
                       "include_prereleases": self.settings_page.prereleases,
                       "start_minimized": self.settings_page.start_minimized}.get(key)
-            if key == "images_as_single_picture":
-                widget = getattr(self.settings_page, "picture_mode", None)
             if widget is not None:
                 widget.blockSignals(True)
                 if key == "sound_volume":
