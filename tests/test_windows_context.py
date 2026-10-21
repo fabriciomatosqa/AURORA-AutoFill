@@ -4,7 +4,9 @@ from types import SimpleNamespace
 from unittest.mock import patch
 
 from app.expansion import EditSnapshot, FocusContext, utf16_length
-from app.windows_context import ContextUnavailable, MAX_TEXT_UNITS, capture_edit
+from app.windows_context import (ContextUnavailable, MAX_TEXT_UNITS,
+                                 capture_edit, select_text_range)
+from app.accessibility_context import SELECTION_SUBMITTED
 
 
 class WindowsContextTests(unittest.TestCase):
@@ -31,6 +33,15 @@ class WindowsContextTests(unittest.TestCase):
              patch('app.windows_context._api', return_value=api), \
              patch('app.windows_context.capture_focus', return_value=context):
             return capture_edit(context)
+
+    def test_uia_ack_is_pending_not_a_confirmation(self):
+        snapshot = EditSnapshot(FocusContext(101, 1), '/ola', 4, 4,
+                                ('process', 'field', 'document'))
+        with patch('app.windows_context.capture_focus', return_value=snapshot.context), \\
+             patch('app.windows_context.select_accessible',
+                   return_value=SELECTION_SUBMITTED) as action:
+            self.assertIs(select_text_range(snapshot, 0, 4), SELECTION_SUBMITTED)
+            action.assert_called_once_with(snapshot, 0, 4)
 
     def test_known_edit_returns_text_and_selection(self):
         snapshot = self.read()
