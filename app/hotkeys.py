@@ -5,7 +5,7 @@ No Linux, pynput exige sessão X11; Wayland não suporta esta integração globa
 """
 from __future__ import annotations
 
-from threading import RLock
+from threading import RLock, Timer
 from typing import Callable
 import os
 from time import monotonic
@@ -15,6 +15,10 @@ from .windows_context import capture_focus
 
 # Only our events are ignored; injected events from other tools are still input.
 INJECTION_TAG = 0xA6700000 | (os.getpid() & 0xFFFF)
+
+# Uma entrada curta como /1 pode também iniciar /10, /11...
+# Aguarda brevemente a próxima tecla antes de confirmar o comando curto.
+AMBIGUOUS_SHORTCUT_PAUSE = 0.22
 
 
 class ShortcutMatcher:
@@ -68,6 +72,27 @@ class ShortcutMatcher:
                 return typed
             return None
 
+    def ambiguous_exact(self) -> str | None:
+        """Atalho completo que também é prefixo de outro; sem confirmação ainda."""
+        with self._lock:
+            pos = self._buffer.rfind("/")
+            if pos < 0:
+                return None
+            typed = self._buffer[pos:]
+            normalized = typed.lower()
+            return typed if normalized in self._shortcuts and normalized in self._prefixes else None
+
+    def consume_ambiguous(self, shortcut: str) -> bool:
+        """Confirma somente a sequência intacta após uma pausa sem novas teclas."""
+        with self._lock:
+            pos = self._buffer.rfind("/")
+            if (pos < 0 or self._buffer[pos:] != shortcut
+                    or shortcut.lower() not in self._shortcuts
+                    or shortcut.lower() not in self._prefixes):
+                return False
+            self._buffer = ""
+            return True
+
     def clear(self) -> None:
         with self._lock:
             self._buffer = ""
@@ -89,14 +114,24 @@ class GlobalHotkeyListener:
         self._latest_id = 0
         self._claimed_id = 0
         self._context = None
+        self._ambiguity_timer = None
+        self._ambiguity_token = 0
 
     def update_shortcuts(self, shortcuts: list[str]) -> None:
         with self._state_lock:
             self.invalidate()
             self._matcher.configure(shortcuts)
 
+    def _cancel_ambiguity(self) -> None:
+        """Chamado sempre com _state_lock; invalida também callback já agendado."""
+        self._ambiguity_token += 1
+        timer, self._ambiguity_timer = self._ambiguity_timer, None
+        if timer is not None:
+            timer.cancel()
+
     def invalidate(self) -> None:
         with self._state_lock:
+            self._cancel_ambiguity()
             self._revision += 1
             self._pending = self._pending_key = None
             self._context = None
@@ -151,6 +186,7 @@ class GlobalHotkeyListener:
 
     def _on_press(self, key: object) -> None:
         with self._state_lock:
+            self._cancel_ambiguity()
             self._revision += 1
             context = capture_focus()
             if self._context is not None and self._context != context:
@@ -192,13 +228,58 @@ class GlobalHotkeyListener:
         with self._state_lock:
             matched = self._release(key)
             if not matched:
+                self._schedule_ambiguous_if_ready(key)
                 return
+            self._cancel_ambiguity()
             context = capture_focus()
             if context != self._context:
                 self.invalidate()
                 return
             self._latest_id += 1
             candidate = ExpansionCandidate(self._latest_id, matched, self._revision, context, monotonic())
+        try:
+            self._on_trigger(candidate)
+        except Exception:
+            self.invalidate()
+
+    def _schedule_ambiguous_if_ready(self, key: object) -> None:
+        """Não bloqueia a digitação /10 para disparar /1 prematuramente."""
+        if not self._enabled or self._pending is not None or self._modifiers:
+            return
+        shortcut = self._matcher.ambiguous_exact()
+        if not shortcut:
+            return
+        name = getattr(key, "name", "")
+        character = getattr(key, "char", None)
+        # Apenas o keyup final, uma correção por Backspace ou Shift liberado.
+        # Keyups antigos (p.ex. o / soltando depois do 1) não reiniciam timer.
+        if (character != shortcut[-1]
+                and name != "backspace" and not name.startswith("shift")):
+            return
+        context = capture_focus()
+        if context != self._context:
+            self.invalidate()
+            return
+        self._cancel_ambiguity()
+        token, revision = self._ambiguity_token, self._revision
+        timer = Timer(AMBIGUOUS_SHORTCUT_PAUSE,
+                      lambda: self._fire_ambiguous(shortcut, context, revision, token))
+        timer.daemon = True
+        self._ambiguity_timer = timer
+        timer.start()
+
+    def _fire_ambiguous(self, shortcut: str, context, revision: int, token: int) -> None:
+        with self._state_lock:
+            if (token != self._ambiguity_token or not self._enabled
+                    or self._revision != revision or self._modifiers
+                    or self._context != context or capture_focus() != context):
+                return
+            if not self._matcher.consume_ambiguous(shortcut):
+                return
+            self._ambiguity_timer = None
+            self._ambiguity_token += 1
+            self._latest_id += 1
+            candidate = ExpansionCandidate(self._latest_id, shortcut, revision, context, monotonic())
         try:
             self._on_trigger(candidate)
         except Exception:
