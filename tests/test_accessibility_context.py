@@ -58,7 +58,9 @@ class AccessibilityContextTests(unittest.TestCase):
                     self.assertTrue(any(calls))
                 else:
                     self.assertEqual(e.field.text, content)
-                    self.assertFalse(any(calls))
+                    # Mesmo texto simples exige prova de cursor/atalho
+                    # antes de substituir campos web não reconhecidos pelo Win32.
+                    self.assertTrue(any(calls))
                 self.assertEqual(e.api_calls, 1)
                 self.assertEqual(e.clipboard.text(), 'original')
 
