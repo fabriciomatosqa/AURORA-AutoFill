@@ -62,7 +62,7 @@ class SeparateContentTests(unittest.TestCase):
                 self.assertFalse(mime.hasText())
                 self.assertFalse(mime.hasHtml())
                 self.assertTrue(bytes(mime.data("image/png")).startswith(
-                    b"\\x89PNG\\r\\n\\x1a\\n".replace(b"\\\\", b"\\")))
+                    bytes([137, 80, 78, 71, 13, 10, 26, 10])))
 
     def test_text_only_fallback_has_no_image_placeholder(self):
         editor = self.illustrated_editor()
