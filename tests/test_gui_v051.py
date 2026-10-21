@@ -7,6 +7,56 @@ from unittest.mock import patch
 
 
 class InterfaceSmokeTests(unittest.TestCase):
+    def test_editor_warns_and_disables_save_for_prefix_overlap(self):
+        os.environ.setdefault('QT_QPA_PLATFORM', 'offscreen')
+        try:
+            from PySide6.QtWidgets import QApplication
+            from app.ui import AutoFillWindow
+        except ImportError:
+            self.skipTest('PySide6 ausente')
+        app = QApplication.instance() or QApplication([])
+        type(self)._application = app
+        with tempfile.TemporaryDirectory(prefix='aurora-conflict-test-') as tmp:
+            with patch('app.ui.application_db_path', return_value=os.path.join(tmp, 'test.db')), \
+                 patch('app.ui.GlobalHotkeyListener.start', return_value=(False, 'Modo de teste')), \
+                 patch('app.ui.AutoFillWindow._initial_release_check'):
+                win = AutoFillWindow()
+                try:
+                    folder = win.store.create_folder('HUBRASIL')
+                    existing = win.store.save(folder, 'CAD', '/2', 'Mensagem antiga')
+                    win._refresh_all()
+                    win._new_snippet()
+                    win.shortcut_input.setText('/23')
+                    self.assertTrue(win.shortcut_feedback.isVisibleTo(win.editor_scroll))
+                    self.assertIn('/2', win.shortcut_feedback.text())
+                    self.assertIn('CAD', win.shortcut_feedback.text())
+                    self.assertIn('HUBRASIL', win.shortcut_feedback.text())
+                    self.assertFalse(win.save_button.isEnabled())
+                    win.shortcut_input.setText('/2')
+                    self.assertFalse(win.save_button.isEnabled())
+                    win.shortcut_input.setText('/23a')
+                    self.assertFalse(win.save_button.isEnabled())
+                    win.shortcut_input.setText('/3')
+                    self.assertEqual(win.shortcut_feedback.text(), '')
+                    self.assertTrue(win.save_button.isEnabled())
+                    win._load_editor(win._get_snippet(existing))
+                    self.assertEqual(win.shortcut_feedback.text(), '')
+                    self.assertTrue(win.save_button.isEnabled())
+                    win.shortcut_input.setText('/23')
+                    self.assertFalse(win.save_button.isEnabled())
+                    # Ao editar o próprio comando, seu ID é ignorado, mas
+                    # outro registro com prefixo conflitante seria bloqueado.
+                    win.shortcut_input.setText('/2')
+                    self.assertTrue(win.save_button.isEnabled())
+                finally:
+                    app.clipboard().clear()
+                    win._quitting = True
+                    win.close()
+                    win.deleteLater()
+                    from PySide6.QtCore import QCoreApplication, QEvent
+                    QCoreApplication.sendPostedEvents(None, QEvent.DeferredDelete)
+        app.processEvents()
+
     def test_visual_controls_credit_and_dropdown(self):
         os.environ.setdefault('QT_QPA_PLATFORM', 'offscreen')
         try:
