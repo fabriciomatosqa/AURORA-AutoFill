@@ -33,6 +33,51 @@ class ExpansionTransactionTests(EngineTestCase):
         self.assertEqual(self.engine.field.text, 'OK')
         self.assertEqual(self.engine.api_calls, 1)
 
+    def test_shortcut_one_character_settles_before_expanding(self):
+        self.engine.save('/1', 'Resposta curta')
+        self.engine.type('/1')
+        self.engine.until(79)
+        self.assertEqual(self.engine.field.text, '/1')
+        self.assertEqual(self.engine.api_calls, 0)
+        self.engine.until(80)
+        self.assertEqual(self.engine.field.text, 'Resposta curta')
+        self.assertEqual(self.engine.api_calls, 1)
+        self.engine.drain()
+        self.assertEqual(self.engine.clipboard.text(), 'original')
+
+    def test_shortcut_one_character_waits_for_late_editor_key_delivery(self):
+        self.engine.save('/1', 'Resposta curta')
+        self.engine.type('/')
+        # O editor assíncrono confirma o keyup antes de inserir a última tecla.
+        self.engine.listener._on_press(key('1'))
+        self.engine.schedule(60, lambda: self.engine.field.insert('1'))
+        self.engine.listener._on_release(key('1'))
+        self.engine.until(60)
+        self.assertEqual(self.engine.field.text, '/1')
+        self.engine.until(79)
+        self.assertEqual(self.engine.api_calls, 0)
+        self.engine.until(80)
+        self.assertEqual(self.engine.field.text, 'Resposta curta')
+        self.assertEqual(self.engine.api_calls, 1)
+
+    def test_longer_shortcuts_retain_fast_dispatch(self):
+        self.engine.save('/long', 'Texto')
+        self.engine.type('/long')
+        self.engine.until(19)
+        self.assertEqual(self.engine.field.text, '/long')
+        self.engine.until(20)
+        self.assertEqual(self.engine.field.text, 'Texto')
+
+    def test_shortcut_one_character_does_not_replace_unrelated_text(self):
+        self.engine.save('/1', 'Resposta curta')
+        self.engine.field.insert('Olá ')
+        self.engine.type('/1')
+        self.engine.schedule(40, lambda: self.engine.type('x'))
+        self.engine.drain()
+        self.assertEqual(self.engine.field.text, 'Olá /1x')
+        self.assertEqual(self.engine.api_calls, 0)
+        self.assertEqual(self.engine.clipboard.text(), 'original')
+
     def test_web_uia_selection_does_not_repeat_preselection_snapshot(self):
         from app.expansion import EditSnapshot
         self.engine.save('/web', 'Conteúdo pronto')
