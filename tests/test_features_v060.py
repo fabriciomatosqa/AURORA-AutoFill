@@ -40,7 +40,7 @@ class DataSafetyTests(unittest.TestCase):
         main = self.store.create_folder("Meus atalhos")
         doomed = self.store.create_folder("Trabalho")
         one = self.store.save(doomed, "Modelo", "/trabalho", "Texto", rich_content="<b>Texto</b>")
-        two = self.store.save(doomed, "Modelo 2", "/trabalho2", "Outra resposta")
+        two = self.store.save(doomed, "Modelo 2", "/resposta2", "Outra resposta")
         count, target, deleted = self.store.delete_folder_with_undo(doomed)
         self.assertEqual((count, target), (2, "Meus atalhos"))
         self.assertTrue(all(item.folder_id == main for item in self.store.snippets()))
