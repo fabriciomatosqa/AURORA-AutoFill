@@ -12,24 +12,24 @@ from engine_fixture import key
 class ExpansionTransactionTests(EngineTestCase):
     def test_f7_01_typing_at_former_selection_gap_preserves_content(self):
         phrase = 'Olá! Este é um teste do AURORA.'
-        for delay in (20, 44, 45, 50, 74, 75, 80, 96):
+        for delay in (0, 10, 19, 20, 30, 44, 50, 80, 96):
             with self.subTest(delay=delay), EngineFixture() as e:
                 e.save('/ola', phrase)
                 e.type('/ola')
                 e.schedule(delay, lambda: e.type('x'))
                 e.drain()
-                self.assertEqual(e.field.text, '/olax' if delay < 45 else phrase + 'x')
-                self.assertEqual(e.api_calls, 0 if delay < 45 else 1)
+                self.assertEqual(e.field.text, '/olax' if delay < 20 else phrase + 'x')
+                self.assertEqual(e.api_calls, 0 if delay < 20 else 1)
                 self.assertEqual(e.clipboard.text(), 'original')
                 self.assertFalse(e.shift or e.ctrl)
 
     def test_fast_dispatch_after_last_key_reaches_destination(self):
         self.engine.save('/rapido', 'OK')
         self.engine.type('/rapido')
-        self.engine.until(44)
+        self.engine.until(19)
         self.assertEqual(self.engine.field.text, '/rapido')
         self.assertEqual(self.engine.api_calls, 0)
-        self.engine.until(45)
+        self.engine.until(20)
         self.assertEqual(self.engine.field.text, 'OK')
         self.assertEqual(self.engine.api_calls, 1)
 
@@ -46,13 +46,31 @@ class ExpansionTransactionTests(EngineTestCase):
 
         with patch('app.ui.capture_edit', side_effect=accessible_snapshot):
             self.engine.type('/web')
-            self.engine.until(45)
+            self.engine.until(20)
             self.assertEqual(self.engine.field.text, 'Conteúdo pronto')
             # Captura inicial + validação executada pela própria seleção UIA.
             # A leitura redundante que causava mais latência não deve existir.
             self.assertEqual(len(calls), 2)
             self.engine.drain()
             self.assertEqual(self.clipboard.text(), 'original')
+
+    def test_rejected_uia_paste_restores_the_unmodified_shortcut_caret(self):
+        from app.expansion import EditSnapshot
+        self.engine.reject_paste = True
+
+        def snapshot(context, *, accessibility=False):
+            snap = self.engine.snapshot(context)
+            return EditSnapshot(context, snap.text, snap.start, snap.end,
+                                ('browser-window', 'teams-editor', 'document'))
+
+        with patch('app.ui.capture_edit', side_effect=snapshot):
+            self.engine.type('/ola')
+            self.engine.drain()
+        self.assertEqual(self.engine.field.text, '/ola')
+        self.assertEqual((self.engine.field.anchor, self.engine.field.caret), (4, 4))
+        self.engine.position.assert_called_once()
+        self.win._play_confirmation.assert_called_once()  # envio, não aceitação
+        self.assertEqual(self.engine.replace.call_count, 0)
 
     def test_replacement_batch_is_not_split_even_above_128_events(self):
         # Exercise backend limit without changing the store's 30-character rule.
@@ -142,7 +160,7 @@ class ExpansionTransactionTests(EngineTestCase):
         self.assertEqual(self.engine.field.text, 'BEFORE OK AFTER')
 
     def test_additional_typing_before_selection_cancels_without_editing(self):
-        for delay in (0, 20, 44):
+        for delay in (0, 10, 19):
             with self.subTest(delay=delay), EngineFixture() as e:
                 e.type('/ola')
                 e.schedule(delay, lambda: e.type('x'))
@@ -262,11 +280,11 @@ class ExpansionTransactionTests(EngineTestCase):
 
     def test_old_restore_cannot_restore_or_unlock_new_lease(self):
         self.engine.type('/ola')
-        self.engine.until(45)
+        self.engine.until(20)
         old = self.win._clipboard_lease
         self.engine.until(100)
         self.engine.type('/ola')
-        self.engine.until(145)
+        self.engine.until(120)
         new = self.win._clipboard_lease
         self.assertIsNot(old, new)
         self.win._restore_clipboard(old)
@@ -296,7 +314,7 @@ class ExpansionTransactionTests(EngineTestCase):
     def test_sent_cursor_expansion_does_not_expire_during_web_confirmation(self):
         self.engine.save('/ola', 'A{{cursor}}B')
         self.engine.type('/ola')
-        self.engine.until(45)
+        self.engine.until(20)
         operation = self.win._expansion_operation
         self.assertIsNotNone(operation)
         self.assertEqual(operation.stage, 'sent')
@@ -312,7 +330,7 @@ class ExpansionTransactionTests(EngineTestCase):
     def test_sent_cursor_expansion_still_rejects_real_input_change(self):
         self.engine.save('/ola', 'A{{cursor}}B')
         self.engine.type('/ola')
-        self.engine.until(45)
+        self.engine.until(20)
         operation = self.win._expansion_operation
         self.assertIsNotNone(operation)
         self.engine.listener.invalidate()

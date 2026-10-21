@@ -22,18 +22,25 @@ class ShortcutMatcher:
 
     def __init__(self, shortcuts: list[str] | None = None):
         self._lock = RLock()
-        self._shortcuts: list[str] = []
+        self._shortcuts: set[str] = set()
+        self._prefixes: set[str] = set()
         self._buffer = ""
         self.configure(shortcuts or [])
 
     def configure(self, shortcuts: list[str]) -> None:
+        # Compila uma vez o índice dos comandos. O hook de teclado não deve
+        # varrer toda a lista (nem carregar imagens) a cada caractere digitado.
         with self._lock:
-            self._shortcuts = sorted(set(shortcuts), key=len, reverse=True)
+            self._shortcuts = {shortcut.lower() for shortcut in shortcuts}
+            self._prefixes = {shortcut[:end].lower()
+                              for shortcut in shortcuts
+                              for end in range(1, len(shortcut))}
             self._buffer = ""
 
     def feed(self, character: str | None, key_name: str = "") -> str | None:
         with self._lock:
             if key_name == "backspace":
+                # Corrigir /bomdiq -> /bomdia deve disparar sem espaço ou Enter.
                 self._buffer = self._buffer[:-1]
                 return None
             if key_name in {"enter", "tab", "esc", "delete", "left", "right", "up", "down", "home", "end"}:
@@ -42,17 +49,23 @@ class ShortcutMatcher:
             if not character or len(character) != 1 or character in "\r\n\t":
                 return None
             self._buffer = (self._buffer + character)[-64:]
+            # Todos os comandos válidos começam em / e não têm outra barra.
+            # Buscar somente a sequência após a última barra evita trabalho
+            # proporcional ao número de atalhos cadastrados.
+            pos = self._buffer.rfind("/")
+            if pos < 0:
+                return None
+            typed = self._buffer[pos:]
             if character == " ":
-                for shortcut in self._shortcuts:
-                    if self._buffer.endswith(shortcut + " "):
-                        self._buffer = ""
-                        return shortcut + " "
-            for shortcut in self._shortcuts:
-                if self._buffer.endswith(shortcut):
-                    if any(s != shortcut and s.startswith(shortcut) for s in self._shortcuts):
-                        return None
+                candidate = typed[:-1]
+                if candidate.lower() in self._shortcuts:
                     self._buffer = ""
-                    return shortcut
+                    return typed
+                return None
+            lowered = typed.lower()
+            if lowered in self._shortcuts and lowered not in self._prefixes:
+                self._buffer = ""
+                return typed
             return None
 
     def clear(self) -> None:

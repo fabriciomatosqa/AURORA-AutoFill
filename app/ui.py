@@ -1235,7 +1235,7 @@ class AutoFillWindow(AuroraFeaturesMixin, QMainWindow):
         self._active_candidate = candidate
         # Aguarda a última tecla chegar ao destino sem bloquear a GUI.
         # Revisão/foco/intervalo ainda são validados antes de qualquer colagem.
-        QTimer.singleShot(45, lambda c=candidate: self._perform_expansion(c))
+        QTimer.singleShot(20, lambda c=candidate: self._perform_expansion(c))
 
     def _candidate_valid(self, candidate):
         operation = self._expansion_operation
@@ -1300,6 +1300,12 @@ class AutoFillWindow(AuroraFeaturesMixin, QMainWindow):
                     QTimer.singleShot(10, lambda c=candidate: self._perform_expansion(c))
                     return
                 raise ValueError("O atalho não está no intervalo esperado; expansão cancelada.")
+            # Em destinos que não expõem um snapshot, não usar Shift+Left
+            # antes de dar tempo ao editor de receber o último caractere.
+            # Com snapshot verificado, o envio já pode ocorrer em 20 ms.
+            if before is None and monotonic() - candidate.created < 0.055:
+                QTimer.singleShot(10, lambda c=candidate: self._perform_expansion(c))
+                return
             current_text = self._clipboard_source_text()
             now = datetime.now()
             rendered = render_snippet(snippet.content, current_text, now)
@@ -1524,10 +1530,38 @@ class AutoFillWindow(AuroraFeaturesMixin, QMainWindow):
             self._play_confirmation()
         self._finish_expansion(operation)
 
+    def _clear_failed_selection(self, operation):
+        """Desfaz somente a seleção residual de um atalho cuja colagem falhou.
+
+        O Teams/Chromium pode aceitar a seleção UIA e rejeitar Ctrl+V.
+        Não apagar nem digitar nada, e nunca mover um cursor que o usuário
+        tenha alterado depois da tentativa.
+        """
+        if (operation is None or operation.before is None
+                or operation.stage not in {"selected", "sent"}
+                or not operation.before.identity
+                or not self._candidate_valid(operation.candidate)):
+            return
+        try:
+            begin_end = operation.before.shortcut_range(operation.candidate.shortcut)
+            if begin_end is None:
+                return
+            begin, end = begin_end
+            current = self._edit_snapshot(accessibility=True)
+            if (current is not None and current.context == operation.before.context
+                    and current.identity == operation.before.identity
+                    and current.text == operation.before.text
+                    and (current.start, current.end) == (begin, end)):
+                self._set_caret(current, end)
+        except (ContextUnavailable, ValueError, OSError):
+            # Falha no provedor de acessibilidade: não arriscar outra edição.
+            pass
+
     def _finish_expansion(self, operation, message=""):
         if operation is not None and self._expansion_operation is not operation:
             return
         if message:
+            self._clear_failed_selection(operation)
             self.statusBar().showMessage(message, 8000)
         if operation and operation.lease:
             lease = operation.lease
