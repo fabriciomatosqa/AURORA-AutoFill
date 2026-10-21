@@ -1300,12 +1300,32 @@ class AutoFillWindow(AuroraFeaturesMixin, QMainWindow):
                     QTimer.singleShot(10, lambda c=candidate: self._perform_expansion(c))
                     return
                 raise ValueError("O atalho não está no intervalo esperado; expansão cancelada.")
-            # Em destinos que não expõem um snapshot, não usar Shift+Left
-            # antes de dar tempo ao editor de receber o último caractere.
-            # Com snapshot verificado, o envio já pode ocorrer em 20 ms.
-            if before is None and monotonic() - candidate.created < 0.055:
-                QTimer.singleShot(10, lambda c=candidate: self._perform_expansion(c))
-                return
+            if before is None and sys.platform == "win32" and not (
+                    self.isActiveWindow() and self.focusWidget() is self.test_box):
+                # Campos WebView e controles personalizados podem não expor
+                # texto por Win32. Jamais selecionar caracteres às cegas:
+                # requeremos o texto e o cursor reais via UI Automation.
+                if monotonic() - candidate.created < 0.055:
+                    QTimer.singleShot(10, lambda c=candidate: self._perform_expansion(c))
+                    return
+                try:
+                    before = self._edit_snapshot(accessibility=True)
+                except ContextUnavailable:
+                    if monotonic() - candidate.created < 0.85:
+                        QTimer.singleShot(20, lambda c=candidate: self._perform_expansion(c))
+                        return
+                    raise
+                if before is None:
+                    raise ValueError(
+                        "O editor não oferece seleção verificável. "
+                        "Atalho preservado; use Copiar para outro aplicativo.")
+                if before.shortcut_range(shortcut) is None:
+                    if monotonic() - candidate.created < 0.35:
+                        QTimer.singleShot(20, lambda c=candidate: self._perform_expansion(c))
+                        return
+                    raise ValueError(
+                        "O atalho não está imediatamente antes do cursor; "
+                        "não foi feita nenhuma substituição.")
             current_text = self._clipboard_source_text()
             now = datetime.now()
             rendered = render_snippet(snippet.content, current_text, now)
@@ -1421,22 +1441,52 @@ class AutoFillWindow(AuroraFeaturesMixin, QMainWindow):
                 select_text_range(operation.before, begin, end)
                 if not self._candidate_valid(operation.candidate) or not self._owns_clipboard(lease):
                     raise ValueError("Contexto ou clipboard mudou após selecionar o atalho.")
-                operation.stage = "sent"
-                paste_clipboard()
+                # UI Automation pode confirmar a seleção antes de o editor
+                # WebView aplicar a mudança. Não iniciar Ctrl+V no mesmo ciclo:
+                # revalidar após uma curta estabilização, sem reselecionar.
+                QTimer.singleShot(25, lambda op=operation: self._paste_verified_selection(op))
+                return
             else:
+                if sys.platform == "win32" and operation.before is None:
+                    raise ValueError("Não há intervalo de texto verificável para substituir.")
                 operation.stage = "sent"
                 replace_shortcut(cursor_steps(operation.candidate.shortcut))
-            # Para navegadores a confirmação de conteúdo pode não estar
-            # disponível. Reproduzir o som ao ACIONAR a colagem, sem afirmar
-            # que o destino aceitou imagens/anexos. Não toca duas vezes.
-            if (operation.image_count or operation.before is None
-                    or operation.before.identity):
-                operation.feedback_played = True
-                self._play_confirmation()
-            operation.deadline = monotonic() + 1.5
-            QTimer.singleShot(10, lambda op=operation: self._confirm_expansion(op))
+            self._expansion_sent(operation)
         except Exception as exc:
             self._finish_expansion(operation, f"Não foi possível expandir: {exc}")
+
+    def _paste_verified_selection(self, operation):
+        """Confirma que o Teams ainda seleciona somente o atalho antes do Ctrl+V."""
+        if self._expansion_operation is not operation or operation.stage != "selected":
+            return
+        try:
+            if not self._candidate_valid(operation.candidate) or not self._owns_clipboard(operation.lease):
+                raise ValueError("Foco, digitação ou clipboard alterado após selecionar o atalho.")
+            before = operation.before
+            begin, end = before.shortcut_range(operation.candidate.shortcut)
+            selected = self._edit_snapshot(accessibility=bool(before.identity))
+            if (selected is None or selected.context != before.context
+                    or selected.identity != before.identity
+                    or selected.text != before.text
+                    or (selected.start, selected.end) != (begin, end)):
+                raise ValueError("O editor não manteve a seleção exata do atalho; colagem cancelada.")
+            if not self._candidate_valid(operation.candidate) or not self._owns_clipboard(operation.lease):
+                raise ValueError("O contexto mudou durante a verificação da seleção.")
+            operation.stage = "sent"
+            paste_clipboard()
+            self._expansion_sent(operation)
+        except Exception as exc:
+            self._finish_expansion(operation, f"Não foi possível expandir: {exc}")
+
+    def _expansion_sent(self, operation):
+        # O som informa somente que Ctrl+V foi enviado, não comprova
+        # aceitação ou upload no editor externo.
+        if (operation.image_count or operation.before is None
+                or operation.before.identity):
+            operation.feedback_played = True
+            self._play_confirmation()
+        operation.deadline = monotonic() + 1.5
+        QTimer.singleShot(10, lambda op=operation: self._confirm_expansion(op))
 
     @staticmethod
     def _normal_text(text):
