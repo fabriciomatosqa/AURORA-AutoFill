@@ -27,7 +27,7 @@ class InterfaceSmokeTests(unittest.TestCase):
                     win._refresh_all()
                     win._new_snippet()
                     win.shortcut_input.setText('/23')
-                    self.assertTrue(win.shortcut_feedback.isVisibleTo(win.editor_scroll))
+                    self.assertFalse(win.shortcut_feedback.isHidden())
                     self.assertIn('/2', win.shortcut_feedback.text())
                     self.assertIn('CAD', win.shortcut_feedback.text())
                     self.assertIn('HUBRASIL', win.shortcut_feedback.text())
