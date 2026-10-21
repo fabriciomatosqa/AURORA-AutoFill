@@ -37,7 +37,7 @@ class WindowsContextTests(unittest.TestCase):
     def test_uia_ack_is_pending_not_a_confirmation(self):
         snapshot = EditSnapshot(FocusContext(101, 1), '/ola', 4, 4,
                                 ('process', 'field', 'document'))
-        with patch('app.windows_context.capture_focus', return_value=snapshot.context), \\
+        with patch('app.windows_context.capture_focus', return_value=snapshot.context), \
              patch('app.windows_context.select_accessible',
                    return_value=SELECTION_SUBMITTED) as action:
             self.assertIs(select_text_range(snapshot, 0, 4), SELECTION_SUBMITTED)
