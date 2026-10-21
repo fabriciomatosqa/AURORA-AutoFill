@@ -23,6 +23,11 @@ class AccessibilityUnavailable(ValueError):
     pass
 
 
+# O worker executou Select(), mas WebView pode atualizar GetSelection()
+# somente no próximo ciclo. Este ACK nunca autoriza Ctrl+V por si só.
+SELECTION_SUBMITTED = object()
+
+
 class AccessibilityClient:
     def __init__(self):
         self._lock = Lock()
@@ -151,6 +156,15 @@ def _request_context(context, **fields):
         raise AccessibilityUnavailable('Janela de acessibilidade indisponível.')
     response = _client.request(process_id.value, window=str(context.window),
                                control=str(context.control), **fields)
+    if isinstance(response, dict) and response.get('status') == 'selection_requested':
+        # O ACK precisa vir EXCLUSIVAMENTE da ação de seleção, ecoando
+        # contexto e identidade verificados pelo worker antes de Select().
+        if (fields.get('action') != 'select'
+                or response.get('window') != str(context.window)
+                or response.get('control') != str(context.control)
+                or response.get('identity') != fields.get('identity')):
+            raise AccessibilityUnavailable('Confirmação de seleção inválida.')
+        return SELECTION_SUBMITTED
     snapshot = decode_snapshot(context, response)
     # Embedded WebView providers may belong to a renderer process instead of
     # the host HWND. The helper proves ancestry within the focused window and
@@ -173,6 +187,8 @@ def select_accessible(snapshot, start, end):
     result = _request_context(snapshot.context, action='select', identity=list(snapshot.identity),
                               text=snapshot.text, selection_start=snapshot.start,
                               selection_end=snapshot.end, start=start, end=end)
+    if result is SELECTION_SUBMITTED:
+        return result  # Apenas solicitação, a GUI revalida antes da colagem.
     if (result is None or result.identity != snapshot.identity or result.text != snapshot.text
             or (result.start, result.end) != (start, end)):
         raise AccessibilityUnavailable('O campo não confirmou a seleção solicitada.')

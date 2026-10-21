@@ -124,9 +124,13 @@ function Read-FocusedText($request) {
         if (-not (Test-FocusScope $nowFocused $request) -or
             [string]::Join(',', $nowFocused.GetRuntimeId()) -cne $focusedId -or
             $document.GetText(65535) -cne $text) { return @{ status = 'changed' } }
+        # TextPatternRange.Select() retorna antes de o Teams/WebView refletir
+        # a seleção em GetSelection(). Responder com um ACK explícito evita
+        # confundir o estado anterior com uma seleção recusada. A GUI deverá
+        # consultar e comprovar o intervalo exato antes de executar Ctrl+V.
         $startRange.Select()
-        return Read-FocusedText @{ process = $request.process; window = $request.window;
-                                  control = $request.control }
+        return @{ status = 'selection_requested'; window = [string]$request.window;
+                  control = [string]$request.control; identity = $identity }
     }
     return @{ status = 'ok'; text = $text; start = $beforeStart.Length; end = $beforeEnd.Length;
         identity = $identity; window = [string]$request.window; control = [string]$request.control }

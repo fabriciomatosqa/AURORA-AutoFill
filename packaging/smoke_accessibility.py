@@ -75,7 +75,7 @@ def main():
         raise SystemExit('This smoke test requires Windows')
     from app.accessibility_context import (capture_accessible, select_accessible,
                                            warm_accessibility, stop_accessibility,
-                                           AccessibilityUnavailable)
+                                           AccessibilityUnavailable, SELECTION_SUBMITTED)
     from app.expansion import FocusContext, utf16_length, utf16_slice
     from app.windows_context import capture_focus
     powershell = Path(os.environ['SystemRoot']) / 'System32/WindowsPowerShell/v1.0/powershell.exe'
@@ -90,27 +90,39 @@ def main():
         stale-selection rejection checked below.
         """
         deadline = time.monotonic() + 9
+        acknowledged = False
         while True:
+            if not acknowledged:
+                try:
+                    request_result = select_accessible(previous, start, end)
+                    if request_result is SELECTION_SUBMITTED:
+                        acknowledged = True
+                    else:
+                        return request_result
+                except AccessibilityUnavailable:
+                    if time.monotonic() >= deadline:
+                        raise
             try:
-                return select_accessible(previous, start, end)
-            except AccessibilityUnavailable as exc:
+                actual = capture_accessible(previous.context)
+            except AccessibilityUnavailable:
                 if time.monotonic() >= deadline:
                     raise
-                try:
-                    actual = capture_accessible(previous.context)
-                except AccessibilityUnavailable:
-                    time.sleep(.1)
-                    continue
-                if (actual is None or actual.context != previous.context
-                        or actual.identity != previous.identity
-                        or actual.text != previous.text):
-                    raise AssertionError('Synthetic UIA document changed during retry') from exc
-                if (actual.start, actual.end) == (start, end):
-                    return actual
-                if (actual.start, actual.end) != (previous.start, previous.end):
-                    raise AssertionError('Synthetic UIA selection changed unexpectedly') from exc
-                previous = actual
                 time.sleep(.1)
+                continue
+            if (actual is None or actual.context != previous.context
+                    or actual.identity != previous.identity
+                    or actual.text != previous.text):
+                raise AssertionError('Synthetic UIA document changed during selection')
+            if (actual.start, actual.end) == (start, end):
+                return actual
+            if (actual.start, actual.end) != (previous.start, previous.end):
+                raise AssertionError('Synthetic UIA selection changed unexpectedly')
+            if time.monotonic() >= deadline:
+                raise AssertionError('Synthetic UIA selection was not confirmed')
+            previous = actual
+            # O ACK representa uma única chamada nativa Select(); nunca
+            # reenviar a seleção enquanto aguardamos o WebView refletir.
+            time.sleep(.05)
 
     try:
         # Starting two cold PowerShell/.NET processes concurrently caused

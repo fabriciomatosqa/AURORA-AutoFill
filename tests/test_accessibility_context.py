@@ -3,7 +3,9 @@ import unittest
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
-from app.accessibility_context import AccessibilityClient, AccessibilityUnavailable, decode_snapshot
+from app.accessibility_context import (AccessibilityClient, AccessibilityUnavailable,
+                                       SELECTION_SUBMITTED, decode_snapshot,
+                                       select_accessible, _request_context)
 from app.expansion import EditSnapshot, FocusContext
 from engine_fixture import EngineFixture
 
@@ -21,6 +23,33 @@ class AccessibilityContextTests(unittest.TestCase):
                         {'status': 'unavailable'}):
             with self.subTest(changes=list(changes)), self.assertRaises(AccessibilityUnavailable):
                 decode_snapshot(context, dict(valid, **changes))
+
+    def test_select_ack_requires_exact_scope_and_identity(self):
+        import ctypes
+        context = FocusContext(101, 1)
+        snapshot = EditSnapshot(context, '/ola', 4, 4, ('7', 'field', 'doc'))
+        response = {'status': 'selection_requested', 'window': '101',
+                    'control': '1', 'identity': ['7', 'field', 'doc']}
+        def pid(_hwnd, pointer):
+            pointer._obj.value = 7
+            return 1
+        api = SimpleNamespace(GetWindowThreadProcessId=pid)
+        with patch.object(ctypes, 'windll', SimpleNamespace(user32=api), create=True), \
+             patch('app.accessibility_context._client.request', return_value=response) as send:
+            self.assertIs(select_accessible(snapshot, 0, 4), SELECTION_SUBMITTED)
+            self.assertEqual(send.call_args.kwargs['action'], 'select')
+            self.assertEqual(send.call_args.kwargs['selection_start'], 4)
+            for changed in ({'identity': ['7', 'other', 'doc']},
+                            {'window': '999'}, {'control': '99'},
+                            {'status': 'changed'}):
+                with self.subTest(changed=changed), \
+                     patch('app.accessibility_context._client.request',
+                           return_value=dict(response, **changed)):
+                    with self.assertRaises(AccessibilityUnavailable):
+                        select_accessible(snapshot, 0, 4)
+            # ACKs sem ação 'select' nunca devem virar snapshots válidos.
+            with self.assertRaises(AccessibilityUnavailable):
+                _request_context(context)
 
     def test_worker_timeout_poisons_late_response(self):
         client = AccessibilityClient()
