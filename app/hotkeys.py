@@ -536,6 +536,16 @@ def select_previous_characters(count: int) -> None:
             kb.tap(Key.left)
 
 
+def windows_modifiers_down() -> bool:
+    """Detecta Shift/Ctrl/Alt/Win reais antes de injetar atalhos de edição."""
+    import sys
+    if sys.platform != "win32":
+        return False
+    import ctypes
+    return any(ctypes.windll.user32.GetAsyncKeyState(vk) & 0x8000
+               for vk in (0x10, 0x11, 0x12, 0x5B, 0x5C))
+
+
 def select_and_copy_shortcut(count: int) -> None:
     """Seleciona e copia o atalho num lote Win32, sem excluir conteúdo."""
     import sys
