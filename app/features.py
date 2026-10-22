@@ -21,6 +21,8 @@ from .updates import is_newer, launch_installer
 from .version import APP_VERSION
 from .versioning import display_version
 from .icons import apply_icon
+from .update_cadence import UpdateCadence, computer_uptime_seconds
+from .update_notice import UpdateNotice
 
 
 def confirm_update(parent, text):
@@ -45,6 +47,15 @@ class AuroraFeaturesMixin:
         self._download_progress = None
         self._download_release = None
         self._exit_when_updates_done = False
+        self._update_cadence = UpdateCadence(computer_uptime_seconds())
+        self._available_update_release = None
+        self._update_notice = None
+        # Acorda a cada 30 s, mas a agenda usa uptime do sistema operacional
+        # (não o tempo desde a abertura do aplicativo).
+        self._update_watch = QTimer(self)
+        self._update_watch.setInterval(30000)
+        self._update_watch.timeout.connect(self._periodic_update_check)
+        self._update_watch.start()
 
     def _build_features_page(self):
         self.settings_page = SettingsPage(
@@ -95,6 +106,15 @@ class AuroraFeaturesMixin:
                 widget.blockSignals(False)
             self._sync_audio_controls()
             QMessageBox.warning(self, "Configurações", f"Não foi possível salvar: {exc}")
+            return
+        if key == "check_updates":
+            if not value and self._update_notice is not None:
+                self._update_notice.hide()
+            if value:
+                QTimer.singleShot(0, self._initial_release_check)
+        elif key == "include_prereleases" and self.preferences.get("check_updates"):
+            # Mudança de canal é uma opção explícita; conferir a seleção nova.
+            QTimer.singleShot(0, self._initial_release_check)
 
     def _sync_audio_controls(self):
         enabled = self.preferences["sound_enabled"]
@@ -285,8 +305,68 @@ class AuroraFeaturesMixin:
         self._render_undo()
 
     def _initial_release_check(self):
-        if os.environ.get("AURORA_AUTOFILL_SMOKE_TEST") != "1" and self.preferences["check_updates"]:
+        """Consulta sempre que o app inicia, inclusive --minimized e com o Windows."""
+        if (os.environ.get("AURORA_AUTOFILL_SMOKE_TEST") != "1"
+                and self.preferences["check_updates"]):
             self._check_updates(manual=False)
+
+    def _periodic_update_check(self):
+        if (os.environ.get("AURORA_AUTOFILL_SMOKE_TEST") == "1"
+                or not self.preferences.get("check_updates")
+                or self._check_thread is not None
+                or self._download_thread is not None
+                or self._exit_when_updates_done):
+            return
+        if self._update_cadence.should_check(computer_uptime_seconds()):
+            self._check_updates(manual=False)
+
+    def _display_update_notice(self, release):
+        # Sem QSystemTrayIcon.showMessage: o balão nativo não oferece dois
+        # botões de resposta portáteis; a janela Qt Tool fica próxima ao relógio.
+        if self._update_notice is None:
+            self._update_notice = UpdateNotice()
+            self._update_notice.accepted.connect(self._accept_update_notice)
+            self._update_notice.declined.connect(self._decline_update_notice)
+        if (self._update_notice.isVisible()
+                and self._available_update_release is not None
+                and self._available_update_release.version == release.version):
+            return
+        self._available_update_release = release
+        page_only = (
+            not getattr(sys, "frozen", False)
+            or (sys.platform == "win32"
+                and (Path(sys.executable).resolve().parent
+                     / "AURORA-MSI-CHANNEL.txt").is_file()))
+        self._update_notice.display(
+            display_version(release.version), APP_VERSION, page_only=page_only)
+
+    def _decline_update_notice(self):
+        release = self._available_update_release
+        self._available_update_release = None
+        if release is not None:
+            self._update_cadence.decline(release.version, computer_uptime_seconds())
+            self.statusBar().showMessage(
+                "Atualização adiada: novo aviso após 3 horas de funcionamento do computador.",
+                5000)
+
+    def _accept_update_notice(self):
+        release = self._available_update_release
+        self._available_update_release = None
+        self._update_cadence.accept()
+        if release is None or not is_newer(release.version, APP_VERSION):
+            return
+        if not getattr(sys, "frozen", False):
+            webbrowser.open(release.page_url)
+            return
+        if (sys.platform == "win32"
+                and (Path(sys.executable).resolve().parent
+                     / "AURORA-MSI-CHANNEL.txt").is_file()):
+            # O MSI nunca é substituído por um instalador EXE sem consentimento
+            # sobre o tipo de instalação; mantém a orientação já existente.
+            webbrowser.open(release.page_url)
+            return
+        if release.installer_url and release.checksum_url:
+            self._download_update(release)
 
     def _check_updates(self, *, manual: bool):
         if (self._check_thread is not None or self._download_thread is not None
@@ -333,6 +413,12 @@ class AuroraFeaturesMixin:
             if manual:
                 QMessageBox.information(self, "Atualizações",
                                         f"O AURORA v{APP_VERSION} já está atualizado.")
+            return
+        if not manual:
+            if (self.preferences.get("check_updates")
+                    and self._update_cadence.should_notify(
+                        release.version, computer_uptime_seconds())):
+                self._display_update_notice(release)
             return
         channel = " de teste" if getattr(release, "prerelease", False) else ""
         text = (f"Nova versão{channel} disponível: v{display_version(release.version)}\n"
@@ -416,6 +502,10 @@ class AuroraFeaturesMixin:
 
     def _prepare_updates_shutdown(self):
         """Keep QThreads alive until their bounded network operations finish."""
+        if self._update_notice is not None:
+            self._update_notice.hide()
+        if self._update_watch is not None:
+            self._update_watch.stop()
         if self._check_thread is None and self._download_thread is None:
             self._exit_when_updates_done = False
             return True
