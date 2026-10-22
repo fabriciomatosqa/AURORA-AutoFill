@@ -85,7 +85,7 @@ QFrame#fontToolbar {
 }
 QFrame#fontToolbar QPushButton#fontTool,
 QFrame#fontToolbar QToolButton#fontTool {
-  min-width: 0px; max-height: 27px; min-height: 27px;
+  min-width: 0px; max-height: 25px; min-height: 25px;
   border-radius: 5px; padding: 0px 4px; font-weight: 680;
   background: #19364b; border: 1px solid #365a71; color: #effaff;
 }
