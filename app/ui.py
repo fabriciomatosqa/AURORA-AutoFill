@@ -1590,9 +1590,8 @@ class AutoFillWindow(AuroraFeaturesMixin, QMainWindow):
                 # Campos WebView e controles personalizados podem não expor
                 # texto por Win32. Jamais selecionar caracteres às cegas:
                 # requeremos o texto e o cursor reais via UI Automation.
-                if monotonic() - candidate.created < 0.055:
-                    QTimer.singleShot(10, lambda c=candidate: self._perform_expansion(c))
-                    return
+                # UIA logo após keyup; tenta novamente apenas se o editor
+                # ainda não confirmar texto/cursor, sem pausar à força.
                 try:
                     before = self._edit_snapshot(accessibility=True)
                 except ContextUnavailable:
@@ -1730,7 +1729,7 @@ class AutoFillWindow(AuroraFeaturesMixin, QMainWindow):
                 # seleção aparecer no GetSelection. Só uma solicitação é enviada:
                 # até 700 ms para confirmar, SEM selecionar ou colar de novo.
                 operation.deadline = monotonic() + 0.7
-                QTimer.singleShot(25, lambda op=operation: self._paste_verified_selection(op))
+                QTimer.singleShot(0, lambda op=operation: self._paste_verified_selection(op))
                 return
             else:
                 if sys.platform == "win32" and operation.before is None:
@@ -1761,7 +1760,7 @@ class AutoFillWindow(AuroraFeaturesMixin, QMainWindow):
                 # mais uma consulta. Outra seleção, texto ou identidade aborta.
                 if ((selected.start, selected.end) == (before.start, before.end)
                         and monotonic() < operation.deadline):
-                    QTimer.singleShot(30, lambda op=operation: self._paste_verified_selection(op))
+                    QTimer.singleShot(10, lambda op=operation: self._paste_verified_selection(op))
                     return
                 raise ValueError(
                     "O Teams não confirmou a seleção do atalho dentro do prazo; "
@@ -1777,7 +1776,7 @@ class AutoFillWindow(AuroraFeaturesMixin, QMainWindow):
             if (monotonic() < operation.deadline
                     and self._candidate_valid(operation.candidate)
                     and self._owns_clipboard(operation.lease)):
-                QTimer.singleShot(30, lambda op=operation: self._paste_verified_selection(op))
+                QTimer.singleShot(10, lambda op=operation: self._paste_verified_selection(op))
             else:
                 self._finish_expansion(operation, f"Não foi possível expandir: {exc}")
         except Exception as exc:
