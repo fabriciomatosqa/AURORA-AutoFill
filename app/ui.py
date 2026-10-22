@@ -1930,12 +1930,12 @@ class AutoFillWindow(AuroraFeaturesMixin, QMainWindow):
             # Um único Ctrl+C pode produzir no máximo duas revisões ao
             # disponibilizar formatos diferentes. Não sobrescrever cópia nova.
             copied = (sequence is not None and old is not None
-                      and 0 < sequence - old <= 2
-                      and copied_shortcut_matches(
-                          clipboard.text(), operation.candidate.shortcut))
+                      and 0 < sequence - old <= 2)
             marker = (sequence == old and clipboard.text() == operation.verify_marker)
             if marker or (copied and self._candidate_valid(operation.candidate)):
-                # Não restaurar uma cópia feita pelo usuário em outro app.
+                # Nossa própria tentativa de Ctrl+C foi abortada. Se o foco
+                # e a revisão do teclado não mudaram, reponha o clipboard
+                # anterior, mesmo que o editor copiou trecho diferente.
                 clipboard.setMimeData(original)
             if self._candidate_valid(operation.candidate):
                 collapse_selection_to_end()
