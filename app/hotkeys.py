@@ -484,19 +484,6 @@ def _send_windows_paste(backspaces: int, left_moves: int = 0, *, phase: str = "a
         submit([event(VK_CTRL), event(VK_C), event(VK_C, True), event(VK_CTRL, True)],
                single_batch=True)
         return
-    if phase == "select-copy":
-        if not 1 <= backspaces <= 64:
-            raise ValueError("Atalho fora do limite de seleção segura.")
-        # Um único lote Win32 preserva a ordem Shift+Left -> Ctrl+C e
-        # elimina a corrida entre seleção assíncrona e cópia do editor.
-        keys = [event(0x10)]
-        for _ in range(backspaces):
-            keys.extend((event(VK_LEFT), event(VK_LEFT, True)))
-        keys.append(event(0x10, True))
-        keys.extend((event(VK_CTRL), event(VK_C), event(VK_C, True),
-                     event(VK_CTRL, True)))
-        submit(keys, single_batch=True)
-        return
     if phase == "collapse":
         # Right encerra a seleção preservando o texto, no fim do atalho.
         submit([event(VK_RIGHT), event(VK_RIGHT, True)], single_batch=True)
@@ -534,24 +521,6 @@ def select_previous_characters(count: int) -> None:
     with kb.pressed(Key.shift):
         for _ in range(count):
             kb.tap(Key.left)
-
-
-def windows_modifiers_down() -> bool:
-    """Detecta Shift/Ctrl/Alt/Win reais antes de injetar atalhos de edição."""
-    import sys
-    if sys.platform != "win32":
-        return False
-    import ctypes
-    return any(ctypes.windll.user32.GetAsyncKeyState(vk) & 0x8000
-               for vk in (0x10, 0x11, 0x12, 0x5B, 0x5C))
-
-
-def select_and_copy_shortcut(count: int) -> None:
-    """Seleciona e copia o atalho num lote Win32, sem excluir conteúdo."""
-    import sys
-    if sys.platform != "win32":
-        raise OSError("Seleção verificada disponível apenas no Windows.")
-    _send_windows_paste(count, phase="select-copy")
 
 
 def copy_selected_text() -> None:
