@@ -7,7 +7,13 @@ import re
 
 from .core import render_snippet
 
-_FORMATTED_RE = re.compile(r'(?:font-weight\s*:\s*(?:bold|[6-9]00)|font-style\s*:\s*italic|text-decoration[^;\"]*underline|<(?:b|strong|i|em|u)(?:\s|>))', re.I)
+# QTextEdit emite spans para fonte, tamanho, cor e destaque; preservar no clipboard.
+_FORMATTED_RE = re.compile(
+    r'(?:font-weight\\s*:\\s*(?:bold|[6-9]00)|font-style\\s*:\\s*italic'
+    r'|text-decoration[^;"]*(?:underline|line-through)|font-family\\s*:'
+    r'|font-size\\s*:|(?:^|[;\\s])color\\s*:|background-color\\s*:'
+    r'|vertical-align\\s*:|<(?:b|strong|i|em|u|s|strike|sup|sub)(?:\\s|>))',
+    re.I)
 _TOKEN_RE = re.compile(r'\{\{(?:data_hora|data|hora|clipboard|area_transferencia|cursor)\}\}')
 
 
