@@ -79,8 +79,8 @@ class StableExpansionRollbackTests(unittest.TestCase):
                     start, end = sorted((field.anchor, field.caret))
                     engine.clipboard.setText(utf16_slice(field.text, start, end))
 
-                with patch("app.ui.capture_edit", side_effect=stale), \\
-                     patch("app.ui.supports_verified_copy", return_value=True), \\
+                with patch("app.ui.capture_edit", side_effect=stale), \
+                     patch("app.ui.supports_verified_copy", return_value=True), \
                      patch("app.ui.copy_selected_text", side_effect=copy_actual_selection):
                     engine.type("/1")
                     engine.drain()
@@ -94,8 +94,8 @@ class StableExpansionRollbackTests(unittest.TestCase):
             engine.save("/teste", "Texto não deve ser inserido")
             def stale(context, *, accessibility=False):
                 return EditSnapshot(context, engine.field.text, 0, 0)
-            with patch("app.ui.capture_edit", side_effect=stale), \\
-                 patch("app.ui.supports_verified_copy", return_value=False), \\
+            with patch("app.ui.capture_edit", side_effect=stale), \
+                 patch("app.ui.supports_verified_copy", return_value=False), \
                  patch("app.ui.copy_selected_text",
                        side_effect=AssertionError("Não copiar neste destino")):
                 engine.type("/teste")
@@ -110,8 +110,8 @@ class StableExpansionRollbackTests(unittest.TestCase):
             engine.field.insert("Antes ")
             def stale(context, *, accessibility=False):
                 return EditSnapshot(context, engine.field.text, 0, 0)
-            with patch("app.ui.capture_edit", side_effect=stale), \\
-                 patch("app.ui.supports_verified_copy", return_value=True), \\
+            with patch("app.ui.capture_edit", side_effect=stale), \
+                 patch("app.ui.supports_verified_copy", return_value=True), \
                  patch("app.ui.copy_selected_text",
                        side_effect=lambda: engine.clipboard.setText("texto diferente")):
                 engine.type("/eu")
