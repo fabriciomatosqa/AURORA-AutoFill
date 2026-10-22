@@ -30,6 +30,7 @@ from .version import APP_VERSION
 from .icons import apply_icon
 from .font_catalog import AuroraFontCombo
 from .color_dialog import AuroraColorDialog
+from .color_button import AuroraColorButton
 from .branding import brand_webp_bytes
 from .inline_images import AuroraImageEditor, contains_inline_images, plain_text_fallback, validate_inline_html, image_sources, read_image_file
 from .clipboard_content import (clone_mime, expansion_mime, image_mime,
@@ -800,6 +801,9 @@ class AutoFillWindow(AuroraFeaturesMixin, QMainWindow):
         toolbar_layout = QVBoxLayout(self.font_toolbar)
         toolbar_layout.setContentsMargins(7, 6, 7, 6)
         toolbar_layout.setSpacing(3)
+        # Ordem inspirada no Word: fonte/tamanho no topo, estilos logo
+        # abaixo e cores/caixa/tamanho na última linha. Sem espaços vazios
+        # entre ferramentas da mesma família.
         family_row = QHBoxLayout()
         family_row.setSpacing(4)
         self.font_family = AuroraFontCombo()
@@ -810,6 +814,7 @@ class AutoFillWindow(AuroraFeaturesMixin, QMainWindow):
             lambda _: self._commit_font_family())
         self.font_family.lineEdit().editingFinished.connect(self._commit_font_family)
         family_row.addWidget(self.font_family)
+
         self.font_size = QSpinBox()
         self.font_size.setObjectName("fontSize")
         self.font_size.setRange(6, 96)
@@ -820,16 +825,9 @@ class AutoFillWindow(AuroraFeaturesMixin, QMainWindow):
         self.font_size.setToolTip("Tamanho da fonte, em pontos")
         self.font_size.valueChanged.connect(self._apply_font_size)
         family_row.addWidget(self.font_size)
-        for text, tip, delta in (("A+", "Aumentar tamanho", 1),
-                                 ("A−", "Diminuir tamanho", -1)):
-            button = QPushButton(text)
-            button.setObjectName("fontTool")
-            button.setFixedSize(30, 27)
-            button.setToolTip(tip)
-            button.clicked.connect(lambda _=False, amount=delta: self._step_font_size(amount))
-            family_row.addWidget(button)
         family_row.addStretch()
         toolbar_layout.addLayout(family_row)
+
         formatting_row = QHBoxLayout()
         formatting_row.setSpacing(4)
         self.format_buttons = {}
@@ -846,6 +844,27 @@ class AutoFillWindow(AuroraFeaturesMixin, QMainWindow):
             button.clicked.connect(lambda checked, m=mode: self._apply_format(m, checked))
             self.format_buttons[mode] = button
             formatting_row.addWidget(button)
+        clear_button = QPushButton("Limpar")
+        clear_button.setFixedSize(62, 27)
+        clear_button.setObjectName("fontTool")
+        clear_button.setToolTip("Limpar formatação do trecho selecionado")
+        clear_button.clicked.connect(self._clear_text_format)
+        formatting_row.addWidget(clear_button)
+        formatting_row.addStretch()
+        toolbar_layout.addLayout(formatting_row)
+
+        color_row = QHBoxLayout()
+        color_row.setSpacing(4)
+        # As amostras inferiores mostram a última cor escolhida, tal como no
+        # Word, inclusive quando o cursor vai para outro trecho da mensagem.
+        self.text_color_button = AuroraColorButton("A", QColor("#142b40"))
+        self.text_color_button.setToolTip("Cor do texto — a barra mostra a cor escolhida")
+        self.text_color_button.clicked.connect(lambda: self._choose_font_color(False))
+        color_row.addWidget(self.text_color_button)
+        self.highlight_button = AuroraColorButton("✎", QColor("#fff59d"))
+        self.highlight_button.setToolTip("Cor do realce — a barra mostra a cor escolhida")
+        self.highlight_button.clicked.connect(lambda: self._choose_font_color(True))
+        color_row.addWidget(self.highlight_button)
         case_button = QToolButton()
         case_button.setText("Aa ▾")
         case_button.setFixedSize(48, 27)
@@ -860,27 +879,17 @@ class AutoFillWindow(AuroraFeaturesMixin, QMainWindow):
             action = case_menu.addAction(label)
             action.triggered.connect(lambda checked=False, m=mode: self._transform_case(m))
         case_button.setMenu(case_menu)
-        formatting_row.addWidget(case_button)
-        self.text_color_button = QPushButton("A ▾")
-        self.text_color_button.setFixedSize(39, 27)
-        self.text_color_button.setObjectName("fontTool")
-        self.text_color_button.setToolTip("Cor do texto")
-        self.text_color_button.clicked.connect(lambda: self._choose_font_color(False))
-        formatting_row.addWidget(self.text_color_button)
-        self.highlight_button = QPushButton("▰ ▾")
-        self.highlight_button.setFixedSize(39, 27)
-        self.highlight_button.setObjectName("fontTool")
-        self.highlight_button.setToolTip("Cor do realce")
-        self.highlight_button.clicked.connect(lambda: self._choose_font_color(True))
-        formatting_row.addWidget(self.highlight_button)
-        clear_button = QPushButton("Limpar")
-        clear_button.setFixedSize(62, 27)
-        clear_button.setObjectName("fontTool")
-        clear_button.setToolTip("Restaurar formatação padrão para o texto selecionado")
-        clear_button.clicked.connect(self._clear_text_format)
-        formatting_row.addWidget(clear_button)
-        formatting_row.addStretch()
-        toolbar_layout.addLayout(formatting_row)
+        color_row.addWidget(case_button)
+        for text, tip, delta in (("A+", "Aumentar tamanho", 1),
+                                 ("A−", "Diminuir tamanho", -1)):
+            button = QPushButton(text)
+            button.setObjectName("fontTool")
+            button.setFixedSize(30, 27)
+            button.setToolTip(tip)
+            button.clicked.connect(lambda _=False, amount=delta: self._step_font_size(amount))
+            color_row.addWidget(button)
+        color_row.addStretch()
+        toolbar_layout.addLayout(color_row)
         v.addWidget(self.font_toolbar)
         image_tools_row = QHBoxLayout()
         image_tools_row.setSpacing(8)
@@ -1134,6 +1143,8 @@ class AutoFillWindow(AuroraFeaturesMixin, QMainWindow):
         else:
             change.setForeground(color)
         self._merge_text_format(change)
+        # Reflete a escolha somente após uma cor válida ter sido aplicada.
+        (self.highlight_button if highlight else self.text_color_button).set_marker_color(color)
 
     def _clear_text_format(self):
         cursor = self.body_input.textCursor()
