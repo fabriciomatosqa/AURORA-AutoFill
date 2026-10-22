@@ -10,7 +10,7 @@ from PySide6.QtCore import QObject, Qt, QMimeData, QTimer, Signal, QPoint, QRect
 from PySide6.QtGui import (QAction, QColor, QFont, QFontMetricsF, QIcon, QKeySequence, QPalette,
                            QShortcut, QTextCharFormat, QTextCursor, QPainter, QPainterPath, QLinearGradient, QPen, QPixmap)
 from PySide6.QtWidgets import (
-    QApplication, QAbstractItemView, QComboBox, QColorDialog, QFileDialog, QFontComboBox,
+    QApplication, QAbstractItemView, QComboBox, QFileDialog,
     QFrame, QHBoxLayout, QInputDialog, QLabel, QLineEdit, QListView, QListWidget,
     QListWidgetItem, QMainWindow, QMenu, QMessageBox, QPlainTextEdit, QPushButton,
     QScrollArea, QSpinBox, QSplitter, QStackedWidget, QSystemTrayIcon,
@@ -28,6 +28,8 @@ from .formatting import has_rich_formatting, render_rich_html
 from .features import AuroraFeaturesMixin
 from .version import APP_VERSION
 from .icons import apply_icon
+from .font_catalog import AuroraFontCombo
+from .color_dialog import AuroraColorDialog
 from .branding import brand_webp_bytes
 from .inline_images import AuroraImageEditor, contains_inline_images, plain_text_fallback, validate_inline_html, image_sources, read_image_file
 from .clipboard_content import (clone_mime, expansion_mime, image_mime,
@@ -77,16 +79,49 @@ QWidget#sidebar { background: #0f1d31; border-right: 1px solid #24445f; }
 QLabel#sectionTitle { color: #91e1d6; font-size: 12px; font-weight: 750; letter-spacing: .6px; }
 QLabel#shortcutConflict { color: #ffc0c8; font-size: 12px; font-weight: 600; }
 QLabel#autosaveStatus { color: #79ead8; font-size: 12px; font-weight: 640; }
-QLabel#fontToolLabel { color: #a1e8dc; font-size: 11px; font-weight: 740; }
-QPushButton#fontTool {
-  min-width: 30px; padding: 6px 8px; border-radius: 7px;
-  background: #17354c; border: 1px solid #315a70; color: #e8fbff; }
-QPushButton#fontTool:checked { border: 1px solid #79ead8; background: #28666d; }
-QPushButton#fontTool:hover { background: #2d596a; border-color: #7cebd9; }
-QSpinBox#fontSize { background: #17354c; color: #f1fbff; border: 1px solid #396178;
-  border-radius: 7px; padding: 6px; min-height: 29px; }
-QFontComboBox#fontFamily { background: #17354c; color: #f1fbff; border: 1px solid #396178;
-  border-radius: 7px; padding: 6px; min-height: 29px; }
+/* Barra tipográfica compacta, com dois alinhamentos como no Word. */
+QFrame#fontToolbar {
+  background: #102338; border: 1px solid #31536b; border-radius: 9px;
+}
+QFrame#fontToolbar QPushButton#fontTool,
+QFrame#fontToolbar QToolButton#fontTool {
+  min-width: 0px; max-height: 25px; min-height: 25px;
+  border-radius: 5px; padding: 0px 4px; font-weight: 680;
+  background: #19364b; border: 1px solid #365a71; color: #effaff;
+}
+QFrame#fontToolbar QPushButton#fontTool:checked,
+QFrame#fontToolbar QToolButton#fontTool:checked {
+  border-color: #79ead8; background: #2c6870; color: #ffffff;
+}
+QFrame#fontToolbar QPushButton#fontTool:hover,
+QFrame#fontToolbar QToolButton#fontTool:hover {
+  border-color: #79ead8; background: #28546a;
+}
+QFrame#fontToolbar QComboBox#fontFamily,
+QFrame#fontToolbar QSpinBox#fontSize {
+  min-height: 27px; max-height: 27px; padding: 0px 5px;
+  background: #18394d; border: 1px solid #427084;
+  border-radius: 5px; color: #effaff;
+}
+QFrame#fontToolbar QComboBox#fontFamily {
+  padding-left: 7px; padding-right: 24px;
+}
+QFrame#fontToolbar QComboBox#fontFamily::drop-down {
+  subcontrol-origin: padding; subcontrol-position: top right;
+  width: 23px; border-left: 1px solid #355d74;
+  background: #204558; border-top-right-radius: 5px; border-bottom-right-radius: 5px;
+}
+QFrame#fontToolbar QComboBox#fontFamily::down-arrow { image: none; }
+QFrame#fontToolbar QComboBox#fontFamily QLineEdit {
+  background: transparent; color: #effaff; border: none;
+  min-height: 18px; padding: 0px;
+}
+QFrame#fontToolbar QComboBox#fontFamily:focus,
+QFrame#fontToolbar QSpinBox#fontSize:focus { border-color: #79ead8; }
+QFrame#fontToolbar QFrame#fontDivider {
+  color: #385a70; background: #385a70;
+  max-width: 1px; min-width: 1px;
+}
 QLabel#heading { color: #f3f9ff; font-size: 24px; font-weight: 760; }
 QLabel#subheading { color: #b8cde0; font-size: 13px; }
 QLabel#hint { color: #a8bfd2; font-size: 12px; }
@@ -758,24 +793,30 @@ class AutoFillWindow(AuroraFeaturesMixin, QMainWindow):
             lambda message: QMessageBox.warning(self, "Imagem não inserida", message))
         # Barra própria Aurora, com todas as famílias instaladas no computador.
         # O QTextEdit continua sendo a origem do HTML e das imagens independentes.
+        # Todos os comandos tipográficos em um único painel de 2 linhas,
+        # com botões de 27px e espaçamento pequeno.
+        self.font_toolbar = QFrame()
+        self.font_toolbar.setObjectName("fontToolbar")
+        toolbar_layout = QVBoxLayout(self.font_toolbar)
+        toolbar_layout.setContentsMargins(7, 6, 7, 6)
+        toolbar_layout.setSpacing(3)
         family_row = QHBoxLayout()
-        family_row.setSpacing(7)
-        font_label = QLabel("TIPOGRAFIA")
-        font_label.setObjectName("fontToolLabel")
-        family_row.addWidget(font_label)
-        self.font_family = QFontComboBox()
-        self.font_family.setObjectName("fontFamily")
-        self.font_family.setMinimumWidth(188)
-        self.font_family.setMaximumWidth(270)
-        self.font_family.currentFontChanged.connect(
-            lambda font: self._apply_font_family(font.family()))
-        family_row.addWidget(self.font_family, 1)
+        family_row.setSpacing(4)
+        self.font_family = AuroraFontCombo()
+        self.font_family.setFixedWidth(214)
+        self.font_family.setFixedHeight(29)
+        self.font_family.setToolTip("Fontes instaladas no Windows. Clique na seta ou pesquise pelo nome.")
+        self.font_family.activated.connect(
+            lambda _: self._commit_font_family())
+        self.font_family.lineEdit().editingFinished.connect(self._commit_font_family)
+        family_row.addWidget(self.font_family)
         self.font_size = QSpinBox()
         self.font_size.setObjectName("fontSize")
         self.font_size.setRange(6, 96)
         self.font_size.setSuffix(" pt")
         self.font_size.setValue(11)
-        self.font_size.setMaximumWidth(90)
+        self.font_size.setFixedWidth(67)
+        self.font_size.setFixedHeight(29)
         self.font_size.setToolTip("Tamanho da fonte, em pontos")
         self.font_size.valueChanged.connect(self._apply_font_size)
         family_row.addWidget(self.font_size)
@@ -783,14 +824,14 @@ class AutoFillWindow(AuroraFeaturesMixin, QMainWindow):
                                  ("A−", "Diminuir tamanho", -1)):
             button = QPushButton(text)
             button.setObjectName("fontTool")
+            button.setFixedSize(30, 27)
             button.setToolTip(tip)
             button.clicked.connect(lambda _=False, amount=delta: self._step_font_size(amount))
             family_row.addWidget(button)
         family_row.addStretch()
-        v.addLayout(family_row)
-
+        toolbar_layout.addLayout(family_row)
         formatting_row = QHBoxLayout()
-        formatting_row.setSpacing(6)
+        formatting_row.setSpacing(4)
         self.format_buttons = {}
         for title, tip, mode in (
             ("B", "Negrito", "bold"), ("I", "Itálico", "italic"),
@@ -801,12 +842,13 @@ class AutoFillWindow(AuroraFeaturesMixin, QMainWindow):
             button.setObjectName("fontTool")
             button.setToolTip(tip)
             button.setCheckable(True)
-            button.setMaximumWidth(40)
+            button.setFixedSize(29, 27)
             button.clicked.connect(lambda checked, m=mode: self._apply_format(m, checked))
             self.format_buttons[mode] = button
             formatting_row.addWidget(button)
-        case_button = AuroraMenuButton()
-        case_button.setText("Aa")
+        case_button = QToolButton()
+        case_button.setText("Aa ▾")
+        case_button.setFixedSize(48, 27)
         case_button.setToolTip("Maiúsculas, minúsculas e iniciais maiúsculas")
         case_button.setObjectName("fontTool")
         case_button.setPopupMode(QToolButton.InstantPopup)
@@ -820,22 +862,26 @@ class AutoFillWindow(AuroraFeaturesMixin, QMainWindow):
         case_button.setMenu(case_menu)
         formatting_row.addWidget(case_button)
         self.text_color_button = QPushButton("A ▾")
+        self.text_color_button.setFixedSize(39, 27)
         self.text_color_button.setObjectName("fontTool")
         self.text_color_button.setToolTip("Cor do texto")
         self.text_color_button.clicked.connect(lambda: self._choose_font_color(False))
         formatting_row.addWidget(self.text_color_button)
         self.highlight_button = QPushButton("▰ ▾")
+        self.highlight_button.setFixedSize(39, 27)
         self.highlight_button.setObjectName("fontTool")
         self.highlight_button.setToolTip("Cor do realce")
         self.highlight_button.clicked.connect(lambda: self._choose_font_color(True))
         formatting_row.addWidget(self.highlight_button)
-        clear_button = QPushButton("Limpar estilo")
+        clear_button = QPushButton("Limpar")
+        clear_button.setFixedSize(62, 27)
         clear_button.setObjectName("fontTool")
         clear_button.setToolTip("Restaurar formatação padrão para o texto selecionado")
         clear_button.clicked.connect(self._clear_text_format)
         formatting_row.addWidget(clear_button)
         formatting_row.addStretch()
-        v.addLayout(formatting_row)
+        toolbar_layout.addLayout(formatting_row)
+        v.addWidget(self.font_toolbar)
         image_tools_row = QHBoxLayout()
         image_tools_row.setSpacing(8)
         self.insert_image_button = apply_icon(QPushButton("Inserir imagem"), "image",
@@ -1040,6 +1086,16 @@ class AutoFillWindow(AuroraFeaturesMixin, QMainWindow):
             fmt.setVerticalAlignment(target if active else QTextCharFormat.AlignNormal)
         self._merge_text_format(fmt)
 
+    def _commit_font_family(self):
+        """Aplicar só uma família existente, escolhida ou digitada no filtro."""
+        value = self.font_family.currentText().strip()
+        index = self.font_family.findText(value, Qt.MatchFixedString)
+        if index < 0:
+            self.statusBar().showMessage(
+                "Selecione uma fonte instalada na lista.", 3000)
+            return
+        self._apply_font_family(self.font_family.itemText(index))
+
     def _apply_font_family(self, family: str):
         if self._loading or not family:
             return
@@ -1068,7 +1124,7 @@ class AutoFillWindow(AuroraFeaturesMixin, QMainWindow):
         previous = (fmt.background() if highlight else fmt.foreground()).color()
         if not previous.isValid():
             previous = QColor("#fff59d" if highlight else "#142b40")
-        color = QColorDialog.getColor(
+        color = AuroraColorDialog.get_color(
             previous, self, "Cor do realce" if highlight else "Cor do texto")
         if not color.isValid():
             return
@@ -1126,7 +1182,13 @@ class AutoFillWindow(AuroraFeaturesMixin, QMainWindow):
         families = fmt.fontFamilies()
         if families:
             self.font_family.blockSignals(True)
-            self.font_family.setCurrentFont(QFont(families[0]))
+            selected = str(families[0])
+            index = self.font_family.findText(selected, Qt.MatchFixedString)
+            if index >= 0:
+                self.font_family.setCurrentIndex(index)
+            else:
+                # Preserva fontes legadas de documentos de outro computador.
+                self.font_family.setEditText(selected)
             self.font_family.blockSignals(False)
         size = fmt.fontPointSize()
         if size > 0:
