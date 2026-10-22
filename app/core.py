@@ -266,6 +266,42 @@ class SnippetStore:
         except sqlite3.IntegrityError as error:
             raise ValueError("Esse atalho já existe ou a pasta é inválida.") from error
 
+    def update_snippet_fields(self, snippet_id: int, **fields) -> None:
+        """Salva imediatamente somente os campos alterados, sem reler imagens HTML.
+
+        A atualização do atalho permanece atômica e sujeita à verificação global
+        de prefixos. Não cria rascunhos inválidos nem descarta dados anteriores.
+        """
+        allowed = {"title", "shortcut", "folder_id", "content", "rich_content"}
+        if not fields or not set(fields).issubset(allowed):
+            raise ValueError("Campos de edição inválidos.")
+        for key in ("title", "shortcut", "content", "rich_content"):
+            if key in fields and not isinstance(fields[key], str):
+                raise ValueError("O campo precisa ser texto.")
+        if "title" in fields:
+            fields["title"] = fields["title"].strip()
+            if not fields["title"]:
+                raise ValueError("Informe um título para salvar automaticamente.")
+        if "content" in fields and not fields["content"].strip():
+            raise ValueError("Informe o conteúdo para salvar automaticamente.")
+        if "shortcut" in fields:
+            fields["shortcut"] = fields["shortcut"].strip()
+            validate_shortcut(fields["shortcut"])
+        try:
+            with self.connection:
+                if "shortcut" in fields:
+                    conflict = self.shortcut_conflict(fields["shortcut"], excluding_id=snippet_id)
+                    if conflict is not None:
+                        raise ValueError(shortcut_conflict_message(fields["shortcut"], conflict))
+                assignments = ", ".join(f"{key}=?" for key in fields)
+                changed = self.connection.execute(
+                    f"UPDATE snippets SET {assignments}, updated_at=CURRENT_TIMESTAMP WHERE id=?",
+                    (*fields.values(), snippet_id))
+                if changed.rowcount != 1:
+                    raise ValueError("O comando não existe mais; atualize a lista.")
+        except sqlite3.IntegrityError as error:
+            raise ValueError("O atalho já existe ou a pasta não é válida.") from error
+
     def delete(self, snippet_id: int) -> None:
         with self.connection:
             self.connection.execute("DELETE FROM snippets WHERE id=?", (snippet_id,))
