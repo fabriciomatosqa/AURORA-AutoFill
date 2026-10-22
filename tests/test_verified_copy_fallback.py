@@ -84,9 +84,9 @@ class VerifiedCopyFallbackTests(unittest.TestCase):
                  patch("app.ui.copy_selected_text", return_value=None):
                 e.type("/eu")
                 def user_continues_typing():
-                e.field.anchor = e.field.caret = len(e.field.text)
-                e.type("X")
-            e.schedule(175, user_continues_typing)
+                    e.field.anchor = e.field.caret = len(e.field.text)
+                    e.type("X")
+                e.schedule(175, user_continues_typing)
                 e.drain()
             assert e.field.text.endswith("/euX")
             assert e.clipboard.text() == "original"
