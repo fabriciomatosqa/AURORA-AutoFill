@@ -146,6 +146,13 @@ class AutosaveAndFontUiTests(unittest.TestCase):
                 win._apply_format('strike', True)
                 with patch('app.ui.AuroraColorDialog.get_color', return_value=QColor('#aa3300')):
                     win._choose_font_color(False)
+                self.assertEqual(win.text_color_button.marker_color().name(), '#aa3300')
+                with patch('app.ui.AuroraColorDialog.get_color', return_value=QColor('#ffee22')):
+                    win._choose_font_color(True)
+                self.assertEqual(win.highlight_button.marker_color().name(), '#ffee22')
+                with patch('app.ui.AuroraColorDialog.get_color', return_value=QColor()):
+                    win._choose_font_color(False)
+                self.assertEqual(win.text_color_button.marker_color().name(), '#aa3300')
                 saved = win.store.snippet_by_shortcut('/fonte')
                 self.assertEqual(saved.content, 'Grande pequeno')
                 self.assertTrue(has_rich_formatting(saved.rich_content))
@@ -157,7 +164,10 @@ class AutosaveAndFontUiTests(unittest.TestCase):
                 from app.font_catalog import AuroraFontCombo
                 self.assertIsInstance(win.font_family, AuroraFontCombo)
                 self.assertGreater(win.font_family.count(), 0)
-                self.assertLessEqual(win.font_toolbar.sizeHint().height(), 92)
+                # Três linhas compactas como no Word: seleção de fonte,
+                # estilos e cores. O painel não cresce sem necessidade.
+                self.assertLessEqual(win.font_toolbar.sizeHint().height(), 115)
+                self.assertGreaterEqual(win.font_toolbar.sizeHint().height(), 80)
                 self.assertEqual(win.format_buttons['bold'].height(), 27)
             finally:
                 self._cleanup(win)
