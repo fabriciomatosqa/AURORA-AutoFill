@@ -69,10 +69,7 @@ def interoperable_html(html: str) -> str:
             if color is not None:
                 styles.append(f"color:{color.name()}")
             if highlight is not None:
-                # Teams e Word importam marcações distintas. Informar cor
-                # CSS nos dois atributos, sem depender do tema escuro do app.
                 styles.append(f"background-color:{highlight.name()}")
-                styles.append(f"background:{highlight.name()}")
             family = _family(fmt)
             if family:
                 styles.append("font-family:'" + family.replace("'", "&#39;") + "'")
@@ -91,14 +88,6 @@ def interoperable_html(html: str) -> str:
             if decorations:
                 styles.append("text-decoration:" + " ".join(decorations))
             escaped = escape(text)
-            # <mark> representa um REALCE sem converter o texto em imagem.
-            # Alguns editores WebView reconhecem mark mesmo descartando CSS
-            # do span; ambos usam o tom exato escolhido, quando aceito.
-            if highlight is not None:
-                escaped = (
-                    f'<mark style="background-color:{highlight.name()};'
-                    f'background:{highlight.name()}">{escaped}</mark>'
-                )
             span = f'<span style="{";".join(styles)}">{escaped}</span>' if styles else escaped
             # Alguns editores Office antigos utilizam <font color> em vez de
             # color CSS. Fornecer ambos sem alterar a semântica do fragmento.
