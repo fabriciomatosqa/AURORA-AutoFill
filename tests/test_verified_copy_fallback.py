@@ -31,7 +31,7 @@ def accessible_ui_snapshot(engine):
 
 
 class VerifiedCopyFallbackTests(unittest.TestCase):
-    def test_unavailable_uia_expands_only_after_real_copy_matches_shortcut():
+    def test_unavailable_uia_expands_only_after_real_copy_matches_shortcut(self):
         with EngineFixture() as e:
             e.save("/eu", "Mensagem com formatação")
             with patch("app.ui.capture_edit", side_effect=readonly_uia), \
