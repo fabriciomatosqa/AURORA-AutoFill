@@ -21,7 +21,8 @@ from .core import (Snippet, SnippetStore, application_db_path,
                    render_snippet, validate_shortcut)
 from .hotkeys import (GlobalHotkeyListener, replace_shortcut, paste_clipboard,
                       select_previous_characters, select_and_copy_shortcut,
-                      copy_selected_text, collapse_selection_to_end)
+                      windows_modifiers_down, copy_selected_text,
+                      collapse_selection_to_end)
 from .expansion import ClipboardLease, EditSnapshot, ExpansionCandidate, ExpansionOperation, utf16_slice, prefix_offset
 from .windows_context import ContextUnavailable, FocusMonitor, capture_focus, capture_edit, set_caret, select_text_range
 from .verified_fallback import supports_verified_copy, copied_shortcut_matches
@@ -1852,6 +1853,16 @@ class AutoFillWindow(AuroraFeaturesMixin, QMainWindow):
                 or not self._candidate_valid(operation.candidate)
                 or not supports_verified_copy(operation.candidate.context)):
             raise ValueError("O destino mudou ou não permite a confirmação por cópia.")
+        # Atalhos como "/" em teclados ABNT podem manter Shift pressionado
+        # por alguns milissegundos após a última tecla. Aguardar apenas nesse
+        # caso, sem qualquer delay obrigatório na digitação normal.
+        if windows_modifiers_down():
+            if monotonic() - operation.candidate.created < 0.4:
+                QTimer.singleShot(
+                    10, lambda op=operation, sel=select_keyboard:
+                    self._begin_keyboard_verification(op, select_keyboard=sel))
+                return
+            raise ValueError("Solte Shift/Ctrl/Alt para concluir o atalho.")
         clipboard = QApplication.clipboard()
         prior = operation.lease
         original = prior.original if prior is not None else self._clone_clipboard_mime()
