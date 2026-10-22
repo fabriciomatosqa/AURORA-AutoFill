@@ -1121,10 +1121,12 @@ class AutoFillWindow(AuroraFeaturesMixin, QMainWindow):
             btn.blockSignals(True)
             btn.setChecked(bool(checked))
             btn.blockSignals(False)
-        family = fmt.fontFamily()
-        if family:
+        # fontFamily() é obsoleto no Qt 6 e pode acessar estado nulo do
+        # QTextCharFormat em runners Qt offscreen. Usar fontFamilies().
+        families = fmt.fontFamilies()
+        if families:
             self.font_family.blockSignals(True)
-            self.font_family.setCurrentFont(QFont(family))
+            self.font_family.setCurrentFont(QFont(families[0]))
             self.font_family.blockSignals(False)
         size = fmt.fontPointSize()
         if size > 0:
