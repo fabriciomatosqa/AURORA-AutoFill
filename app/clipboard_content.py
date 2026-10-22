@@ -4,6 +4,7 @@ HTML preserves the ordered document. A bitmap is an alternative for ONE
 isolated image, never a representation of an entire mixed document.
 """
 from dataclasses import dataclass
+import sys
 from datetime import datetime
 
 from PySide6.QtCore import QBuffer, QByteArray, QIODevice, QMimeData
@@ -11,6 +12,7 @@ from PySide6.QtGui import QImage, QTextDocument
 
 from .core import render_snippet
 from .formatting import render_rich_html
+from .rich_clipboard import interoperable_html, rich_text_rtf, cf_html_bytes
 from .inline_images import decode_embedded_image, image_sources, validate_inline_html
 
 
@@ -122,7 +124,27 @@ def expansion_mime(text: str, html: str = "", *, image_only: bool = False) -> QM
         payload = QMimeData()
     payload.setText(text)
     if html:
-        payload.setHtml(html)  # Qt owns CF_HTML offsets and UTF-8 encoding.
+        sources = image_sources(html)
+        if sources:
+            # Não converter documentos com imagens para RTF, que não suporta
+            # aqui anexos independentes. HTML original preserva cada <img>.
+            payload.setHtml(html)
+        else:
+            # Fragmento HTML plano e inline: mantém cor, realce, fonte e
+            # caracteres editáveis em Word, Teams e editores web.
+            fragment = interoperable_html(html)
+            payload.setHtml(
+                '<html><head><meta charset="utf-8"></head><body>'
+                + fragment + '</body></html>')
+            if sys.platform == "win32":
+                # Word pode preferir Rich Text Format ao HTML. Disponibilizar
+                # CF_HTML e RTF nativos além do CF_UNICODETEXT já existente.
+                payload.setData(
+                    'application/x-qt-windows-mime;value="HTML Format"',
+                    QByteArray(cf_html_bytes(fragment)))
+                payload.setData(
+                    'application/x-qt-windows-mime;value="Rich Text Format"',
+                    QByteArray(rich_text_rtf(html)))
     return payload
 
 
