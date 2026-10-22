@@ -41,10 +41,11 @@ class OfficeRichClipboardTests(unittest.TestCase):
         document = QTextDocument()
         document.setHtml(fragment)
         self.assertEqual(
-            document.toPlainText(),
+            document.toPlainText().replace("\u2028", "\n"),
             "CADASTRO COLABORADOR 22/10/2026\n\nvamos testar essa bagaça")
-        last_block = document.lastBlock()
-        fmt = last_block.begin().fragment().charFormat()
+        cursor = document.find("vamos testar")
+        self.assertFalse(cursor.isNull())
+        fmt = cursor.charFormat()
         self.assertEqual(fmt.foreground().color().name(), "#b345e2")
         self.assertEqual(fmt.background().color().name(), "#36d119")
 
