@@ -47,6 +47,51 @@ class VerifiedCopyFallbackTests(unittest.TestCase):
             assert not (e.shift or e.ctrl)
     
     
+    def test_long_colored_snippet_pastes_as_editable_text_with_html_and_rtf(self):
+        lorem = ("LOREM IPSUM DOLOR SIT AMET. " * 90).strip()
+        rich_html = (
+            "<p><span style='color:#cc2200'>LOREM</span> "
+            "<span style='background-color:#22cc00;color:#ffffff'>IPSUM</span></p>"
+        )
+        with EngineFixture() as e:
+            e.save("/lorem", lorem, rich_content=rich_html)
+            payloads = []
+            original_consume = e.consume
+            def record_paste():
+                mime = e.clipboard.mimeData()
+                payloads.append((
+                    mime.text(), mime.html(),
+                    bytes(mime.data('application/x-qt-windows-mime;value="Rich Text Format"'))
+                ))
+                original_consume()
+            e.consume = record_paste
+            with patch("app.ui.capture_edit", side_effect=readonly_uia), \\
+                 patch("app.ui.supports_verified_copy", return_value=True):
+                e.type("/lorem")
+                e.drain()
+            self.assertEqual(e.field.text, lorem)
+            self.assertEqual(len(payloads), 1)
+            plain, rich, rtf = payloads[0]
+            self.assertEqual(plain, lorem)
+            self.assertIn("<mark", rich)
+            self.assertIn("#22cc00", rich)
+            self.assertIn(b"\\highlight", rtf)
+            self.assertEqual(e.clipboard.text(), "original")
+
+    def test_held_shift_waits_only_until_key_is_released(self):
+        with EngineFixture() as e:
+            e.save("/eu", "Texto seguro")
+            e.held_modifier = True
+            with patch("app.ui.supports_verified_copy", return_value=True):
+                e.type("/eu")
+                e.until(0)
+                self.assertEqual(e.field.text, "/eu")
+                self.assertEqual(e.api_calls, 0)
+                e.schedule(20, lambda: setattr(e, "held_modifier", False))
+                e.drain()
+            self.assertEqual(e.field.text, "Texto seguro")
+            self.assertEqual(e.clipboard.text(), "original")
+
     def test_invalid_copy_does_not_delete_unrelated_text(self):
         with EngineFixture() as e:
             e.save("/eu", "REPOSTA")
