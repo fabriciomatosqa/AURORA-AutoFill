@@ -51,7 +51,8 @@ class VerifiedCopyFallbackTests(unittest.TestCase):
         lorem = ("LOREM IPSUM DOLOR SIT AMET. " * 90).strip()
         rich_html = (
             "<p><span style='color:#cc2200'>LOREM</span> "
-            "<span style='background-color:#22cc00;color:#ffffff'>IPSUM</span></p>"
+            "<span style='background-color:#22cc00;color:#ffffff'>IPSUM</span>"
+            + lorem[len("LOREM IPSUM"):] + "</p>"
         )
         with EngineFixture() as e:
             e.save("/lorem", lorem, rich_content=rich_html)
