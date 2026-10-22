@@ -902,7 +902,7 @@ class AutoFillWindow(AuroraFeaturesMixin, QMainWindow):
         cancel_button = QPushButton("Cancelar")
         cancel_button.clicked.connect(self._show_welcome)
         action_row.addWidget(cancel_button)
-        self.save_button = apply_icon(QPushButton("Salvar comando"), "save", color="#09283b")
+        self.save_button = apply_icon(QPushButton("Salvar agora (opcional)"), "save", color="#09283b")
         self.save_button.setObjectName("primary")
         self.save_button.clicked.connect(self._save)
         action_row.addWidget(self.save_button)
@@ -914,12 +914,13 @@ class AutoFillWindow(AuroraFeaturesMixin, QMainWindow):
         self.editor_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.editor_scroll.setWidget(page)
         self.stack.addWidget(self.editor_scroll)
-        self.title_input.textChanged.connect(self._mark_dirty)
-        self.shortcut_input.textChanged.connect(self._mark_dirty)
+        self.title_input.textChanged.connect(lambda *_: self._autosave_edit("title"))
         self.shortcut_input.textChanged.connect(self._update_shortcut_feedback)
-        self.body_input.textChanged.connect(self._mark_dirty)
+        self.shortcut_input.textChanged.connect(lambda *_: self._autosave_edit("shortcut"))
+        self.body_input.textChanged.connect(lambda: self._autosave_edit("content"))
         self.body_input.textChanged.connect(self._update_preview)
-        self.editor_folder.currentIndexChanged.connect(self._mark_dirty)
+        self.editor_folder.currentIndexChanged.connect(
+            lambda *_: self._autosave_edit("folder_id"))
 
     def _prepare_copy_menu(self):
         self.copy_content_menu.clear()
@@ -1283,7 +1284,8 @@ class AutoFillWindow(AuroraFeaturesMixin, QMainWindow):
         if self.stack.currentIndex() != 1 or not self.dirty:
             return True
         choice = QMessageBox.question(
-            self, "Alterações não salvas", "Descartar alterações deste comando?",
+            self, "Rascunho incompleto",
+            "Existem alterações ainda inválidas que não puderam ser salvas automaticamente. Descartá-las?",
             QMessageBox.Discard | QMessageBox.Cancel, QMessageBox.Cancel)
         return choice == QMessageBox.Discard
 
@@ -1320,6 +1322,10 @@ class AutoFillWindow(AuroraFeaturesMixin, QMainWindow):
         if snippet is None:
             self.title_input.setFocus()
         self._update_shortcut_feedback()
+        self._set_save_status(
+            "✓ Alterações salvas automaticamente" if snippet
+            else "Novo comando: será salvo quando título, atalho e conteúdo estiverem completos.")
+        self._sync_format_buttons(self.body_input.currentCharFormat())
         self._update_preview()
 
     def _new_snippet(self):
@@ -1379,11 +1385,15 @@ class AutoFillWindow(AuroraFeaturesMixin, QMainWindow):
         except (ValueError, sqlite3.Error, OSError) as error:
             QMessageBox.warning(self, "Não foi possível salvar", str(error))
             return
+        was_new = self.current_id is None
         self.current_id = new_id
         self.dirty = False
-        self._refresh_all()
-        self._load_editor(self._get_snippet(new_id))
-        self.statusBar().showMessage("Comando salvo com sucesso.", 5000)
+        if was_new:
+            self.edit_heading.setText("Editar comando")
+            self.delete_button.setVisible(True)
+        self._refresh_list()
+        self._set_save_status("✓ Alterações salvas automaticamente")
+        self.statusBar().showMessage("Comando salvo com sucesso.", 3500)
         self._play_confirmation()
 
     def _delete(self):
