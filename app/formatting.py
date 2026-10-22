@@ -9,11 +9,12 @@ from .core import render_snippet
 
 # QTextEdit emite spans para fonte, tamanho, cor e destaque; preservar no clipboard.
 _FORMATTED_RE = re.compile(
-    r'(?:font-weight\\s*:\\s*(?:bold|[6-9]00)|font-style\\s*:\\s*italic'
-    r'|text-decoration[^;"]*(?:underline|line-through)|font-family\\s*:'
-    r'|font-size\\s*:|(?:^|[;\\s])color\\s*:|background-color\\s*:'
-    r'|vertical-align\\s*:|<(?:b|strong|i|em|u|s|strike|sup|sub)(?:\\s|>))',
+    r'(?:font-weight\s*:\s*(?:bold|[6-9]00)|font-style\s*:\s*italic'
+    r'|text-decoration[^;"]*(?:underline|line-through)|font-family\s*:'
+    r'|font-size\s*:|(?:^|[;\s])color\s*:|background-color\s*:'
+    r'|vertical-align\s*:|<(?:b|strong|i|em|u|s|strike|sup|sub)(?:\s|>))',
     re.I)
+
 _TOKEN_RE = re.compile(r'\{\{(?:data_hora|data|hora|clipboard|area_transferencia|cursor)\}\}')
 
 
@@ -25,7 +26,7 @@ def has_rich_formatting(html: str) -> bool:
         return True
     # Qt coloca font-family/font-size padrão no <body> de *todo* QTextEdit.
     # Não marcar texto simples como HTML formatado só por esse estilo base.
-    content = re.sub(r"<body\\b[^>]*>", "<body>", html, count=1, flags=re.I)
+    content = re.sub(r"<body\b[^>]*>", "<body>", html, count=1, flags=re.I)
     return bool(_FORMATTED_RE.search(content))
 
 
