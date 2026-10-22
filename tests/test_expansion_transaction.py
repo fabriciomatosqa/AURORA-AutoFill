@@ -87,13 +87,12 @@ class ExpansionTransactionTests(EngineTestCase):
 
         with patch('app.ui.capture_edit', side_effect=accessible_snapshot):
             self.engine.type('/web')
-            self.engine.until(20)
             self.assertEqual(self.engine.field.text, '/web')
-            self.engine.until(45)
+            self.engine.until(0)
             self.assertEqual(self.engine.field.text, 'Conteúdo pronto')
             # Captura + seleção UIA + confirmação da seleção estabilizada,
             # antes de enviar Ctrl+V ao editor WebView.
-            self.assertEqual(len(calls), 4)
+            self.assertEqual(len(calls), 3)
             self.engine.drain()
             self.assertEqual(self.clipboard.text(), 'original')
 
@@ -107,15 +106,12 @@ class ExpansionTransactionTests(EngineTestCase):
                                     ('renderer', 'teams', 'document'))
             with patch('app.ui.capture_edit', side_effect=snapshot):
                 e.type('/teams')
-                e.until(20)
                 self.assertEqual(e.field.text, '/teams')
                 self.assertEqual(e.api_calls, 0)
-                self.assertEqual((e.field.anchor, e.field.caret), (0, 6))
-                e.until(24)
-                self.assertEqual(e.api_calls, 0)
-                e.until(25)
+                e.until(0)
                 self.assertEqual(e.field.text, 'Resposta')
                 self.assertEqual(e.api_calls, 1)
+                e.selection.assert_called_once()
                 e.drain()
                 self.assertEqual(e.clipboard.text(), 'original')
 
@@ -139,9 +135,9 @@ class ExpansionTransactionTests(EngineTestCase):
                 e.until(45)
                 self.assertEqual(e.field.text, '/teams')
                 self.assertEqual(e.api_calls, 0)
-                e.until(135)
+                e.until(119)
                 self.assertEqual(e.api_calls, 0)
-                e.until(165)
+                e.until(135)
                 self.assertEqual(e.field.text, 'Resposta')
                 self.assertEqual(e.api_calls, 1)
                 e.drain()
@@ -196,8 +192,8 @@ class ExpansionTransactionTests(EngineTestCase):
                                     ('renderer', 'teams', 'document'))
             with patch('app.ui.capture_edit', side_effect=snapshot):
                 e.type('/teams')
-                e.until(20)
-                # O editor perde a seleção ao exibir o menu de comandos /.
+                # Interferência no editor antes da primeira captura UIA.
+                # O comando não deve colar se o caret não estiver mais correto.
                 e.field.anchor = e.field.caret = 0
                 e.drain()
             self.assertEqual(e.field.text, '/teams')

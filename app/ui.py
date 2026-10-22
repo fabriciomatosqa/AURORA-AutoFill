@@ -10,9 +10,10 @@ from PySide6.QtCore import QObject, Qt, QMimeData, QTimer, Signal, QPoint, QRect
 from PySide6.QtGui import (QAction, QColor, QFont, QFontMetricsF, QIcon, QKeySequence, QPalette,
                            QShortcut, QTextCharFormat, QTextCursor, QPainter, QPainterPath, QLinearGradient, QPen, QPixmap)
 from PySide6.QtWidgets import (
-    QApplication, QAbstractItemView, QComboBox, QFileDialog, QFrame, QHBoxLayout, QInputDialog,
-    QLabel, QLineEdit, QListView, QListWidget, QListWidgetItem, QMainWindow, QMenu, QMessageBox,
-    QPlainTextEdit, QPushButton, QScrollArea, QSplitter, QStackedWidget, QSystemTrayIcon,
+    QApplication, QAbstractItemView, QComboBox, QColorDialog, QFileDialog, QFontComboBox,
+    QFrame, QHBoxLayout, QInputDialog, QLabel, QLineEdit, QListView, QListWidget,
+    QListWidgetItem, QMainWindow, QMenu, QMessageBox, QPlainTextEdit, QPushButton,
+    QScrollArea, QSpinBox, QSplitter, QStackedWidget, QSystemTrayIcon,
     QTextEdit, QStatusBar, QToolButton, QVBoxLayout, QWidget,
 )
 
@@ -75,6 +76,17 @@ QLabel#topCaption { color: #d2eafa; font-size: 11px; font-weight: 600; }
 QWidget#sidebar { background: #0f1d31; border-right: 1px solid #24445f; }
 QLabel#sectionTitle { color: #91e1d6; font-size: 12px; font-weight: 750; letter-spacing: .6px; }
 QLabel#shortcutConflict { color: #ffc0c8; font-size: 12px; font-weight: 600; }
+QLabel#autosaveStatus { color: #79ead8; font-size: 12px; font-weight: 640; }
+QLabel#fontToolLabel { color: #a1e8dc; font-size: 11px; font-weight: 740; }
+QPushButton#fontTool {
+  min-width: 30px; padding: 6px 8px; border-radius: 7px;
+  background: #17354c; border: 1px solid #315a70; color: #e8fbff; }
+QPushButton#fontTool:checked { border: 1px solid #79ead8; background: #28666d; }
+QPushButton#fontTool:hover { background: #2d596a; border-color: #7cebd9; }
+QSpinBox#fontSize { background: #17354c; color: #f1fbff; border: 1px solid #396178;
+  border-radius: 7px; padding: 6px; min-height: 29px; }
+QFontComboBox#fontFamily { background: #17354c; color: #f1fbff; border: 1px solid #396178;
+  border-radius: 7px; padding: 6px; min-height: 29px; }
 QLabel#heading { color: #f3f9ff; font-size: 24px; font-weight: 760; }
 QLabel#subheading { color: #b8cde0; font-size: 13px; }
 QLabel#hint { color: #a8bfd2; font-size: 12px; }
@@ -732,30 +744,96 @@ class AutoFillWindow(AuroraFeaturesMixin, QMainWindow):
         fields.addLayout(folder_box, 1)
         v.addLayout(fields)
         content_header = QHBoxLayout()
-        content_label = QLabel("Texto / modelo")
+        content_label = QLabel("FONTE")
         content_label.setObjectName("sectionTitle")
         content_header.addWidget(content_label)
         content_header.addStretch()
+        self.autosave_status = QLabel("Salvamento automático ativado")
+        self.autosave_status.setObjectName("autosaveStatus")
+        content_header.addWidget(self.autosave_status)
         v.addLayout(content_header)
         self.body_input = AuroraImageEditor()
-        self.body_input.setPlaceholderText("Escreva aqui o conteúdo que será inserido...")
+        self.body_input.setPlaceholderText("Escreva e formate o conteúdo do comando...")
         self.body_input.imageRejected.connect(
             lambda message: QMessageBox.warning(self, "Imagem não inserida", message))
-        # Formatação rich-text: salva HTML mas mantém texto simples para apps básicos.
+        # Barra própria Aurora, com todas as famílias instaladas no computador.
+        # O QTextEdit continua sendo a origem do HTML e das imagens independentes.
+        family_row = QHBoxLayout()
+        family_row.setSpacing(7)
+        font_label = QLabel("TIPOGRAFIA")
+        font_label.setObjectName("fontToolLabel")
+        family_row.addWidget(font_label)
+        self.font_family = QFontComboBox()
+        self.font_family.setObjectName("fontFamily")
+        self.font_family.setMinimumWidth(188)
+        self.font_family.setMaximumWidth(270)
+        self.font_family.currentFontChanged.connect(
+            lambda font: self._apply_font_family(font.family()))
+        family_row.addWidget(self.font_family, 1)
+        self.font_size = QSpinBox()
+        self.font_size.setObjectName("fontSize")
+        self.font_size.setRange(6, 96)
+        self.font_size.setSuffix(" pt")
+        self.font_size.setValue(11)
+        self.font_size.setMaximumWidth(90)
+        self.font_size.setToolTip("Tamanho da fonte, em pontos")
+        self.font_size.valueChanged.connect(self._apply_font_size)
+        family_row.addWidget(self.font_size)
+        for text, tip, delta in (("A+", "Aumentar tamanho", 1),
+                                 ("A−", "Diminuir tamanho", -1)):
+            button = QPushButton(text)
+            button.setObjectName("fontTool")
+            button.setToolTip(tip)
+            button.clicked.connect(lambda _=False, amount=delta: self._step_font_size(amount))
+            family_row.addWidget(button)
+        family_row.addStretch()
+        v.addLayout(family_row)
+
         formatting_row = QHBoxLayout()
-        formatting_row.setSpacing(8)
+        formatting_row.setSpacing(6)
         self.format_buttons = {}
-        for title, tip, mode in [("B", "Negrito", "bold"), ("I", "Itálico", "italic"), ("U", "Sublinhado", "underline")]:
-            button = apply_icon(QPushButton(), mode, label=tip)
+        for title, tip, mode in (
+            ("B", "Negrito", "bold"), ("I", "Itálico", "italic"),
+            ("U", "Sublinhado", "underline"), ("S̶", "Tachado", "strike"),
+            ("x₂", "Subscrito", "subscript"), ("x²", "Sobrescrito", "superscript")
+        ):
+            button = QPushButton(title)
+            button.setObjectName("fontTool")
             button.setToolTip(tip)
             button.setCheckable(True)
-            button.setFixedWidth(40)
+            button.setMaximumWidth(40)
             button.clicked.connect(lambda checked, m=mode: self._apply_format(m, checked))
             self.format_buttons[mode] = button
             formatting_row.addWidget(button)
-        guide = QLabel("Formatação básica · depende do aplicativo de destino")
-        guide.setObjectName("hint")
-        formatting_row.addWidget(guide)
+        case_button = AuroraMenuButton()
+        case_button.setText("Aa")
+        case_button.setToolTip("Maiúsculas, minúsculas e iniciais maiúsculas")
+        case_button.setObjectName("fontTool")
+        case_button.setPopupMode(QToolButton.InstantPopup)
+        case_menu = AuroraMenu(case_button)
+        for label, mode in (("MAIÚSCULAS", "upper"),
+                            ("minúsculas", "lower"),
+                            ("Iniciais Maiúsculas", "title"),
+                            ("Alternar caixa", "swapcase")):
+            action = case_menu.addAction(label)
+            action.triggered.connect(lambda checked=False, m=mode: self._transform_case(m))
+        case_button.setMenu(case_menu)
+        formatting_row.addWidget(case_button)
+        self.text_color_button = QPushButton("A ▾")
+        self.text_color_button.setObjectName("fontTool")
+        self.text_color_button.setToolTip("Cor do texto")
+        self.text_color_button.clicked.connect(lambda: self._choose_font_color(False))
+        formatting_row.addWidget(self.text_color_button)
+        self.highlight_button = QPushButton("▰ ▾")
+        self.highlight_button.setObjectName("fontTool")
+        self.highlight_button.setToolTip("Cor do realce")
+        self.highlight_button.clicked.connect(lambda: self._choose_font_color(True))
+        formatting_row.addWidget(self.highlight_button)
+        clear_button = QPushButton("Limpar estilo")
+        clear_button.setObjectName("fontTool")
+        clear_button.setToolTip("Restaurar formatação padrão para o texto selecionado")
+        clear_button.clicked.connect(self._clear_text_format)
+        formatting_row.addWidget(clear_button)
         formatting_row.addStretch()
         v.addLayout(formatting_row)
         image_tools_row = QHBoxLayout()
@@ -824,7 +902,7 @@ class AutoFillWindow(AuroraFeaturesMixin, QMainWindow):
         cancel_button = QPushButton("Cancelar")
         cancel_button.clicked.connect(self._show_welcome)
         action_row.addWidget(cancel_button)
-        self.save_button = apply_icon(QPushButton("Salvar comando"), "save", color="#09283b")
+        self.save_button = apply_icon(QPushButton("Salvar agora (opcional)"), "save", color="#09283b")
         self.save_button.setObjectName("primary")
         self.save_button.clicked.connect(self._save)
         action_row.addWidget(self.save_button)
@@ -836,12 +914,13 @@ class AutoFillWindow(AuroraFeaturesMixin, QMainWindow):
         self.editor_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.editor_scroll.setWidget(page)
         self.stack.addWidget(self.editor_scroll)
-        self.title_input.textChanged.connect(self._mark_dirty)
-        self.shortcut_input.textChanged.connect(self._mark_dirty)
+        self.title_input.textChanged.connect(lambda *_: self._autosave_edit("title"))
         self.shortcut_input.textChanged.connect(self._update_shortcut_feedback)
-        self.body_input.textChanged.connect(self._mark_dirty)
+        self.shortcut_input.textChanged.connect(lambda *_: self._autosave_edit("shortcut"))
+        self.body_input.textChanged.connect(lambda: self._autosave_edit("content"))
         self.body_input.textChanged.connect(self._update_preview)
-        self.editor_folder.currentIndexChanged.connect(self._mark_dirty)
+        self.editor_folder.currentIndexChanged.connect(
+            lambda *_: self._autosave_edit("folder_id"))
 
     def _prepare_copy_menu(self):
         self.copy_content_menu.clear()
@@ -937,7 +1016,13 @@ class AutoFillWindow(AuroraFeaturesMixin, QMainWindow):
         if self.body_input.insert_image(image):
             self.body_input.setFocus()
             self.statusBar().showMessage(
-                "Imagem incorporada ao texto. Salve o comando para reutilizar.", 5000)
+                "Imagem incorporada e salva automaticamente quando o comando estiver válido.", 5000)
+
+    def _merge_text_format(self, fmt: QTextCharFormat):
+        """Formata somente a seleção; sem seleção define o estilo das próximas letras."""
+        self.body_input.mergeCurrentCharFormat(fmt)
+        self.body_input.setFocus()
+        self._autosave_edit("content")
 
     def _apply_format(self, mode: str, active: bool):
         fmt = QTextCharFormat()
@@ -945,18 +1030,176 @@ class AutoFillWindow(AuroraFeaturesMixin, QMainWindow):
             fmt.setFontWeight(QFont.Bold if active else QFont.Normal)
         elif mode == "italic":
             fmt.setFontItalic(active)
-        else:
+        elif mode == "underline":
             fmt.setFontUnderline(active)
-        self.body_input.mergeCurrentCharFormat(fmt)
+        elif mode == "strike":
+            fmt.setFontStrikeOut(active)
+        elif mode in {"superscript", "subscript"}:
+            target = (QTextCharFormat.AlignSuperScript if mode == "superscript"
+                      else QTextCharFormat.AlignSubScript)
+            fmt.setVerticalAlignment(target if active else QTextCharFormat.AlignNormal)
+        self._merge_text_format(fmt)
+
+    def _apply_font_family(self, family: str):
+        if self._loading or not family:
+            return
+        fmt = QTextCharFormat()
+        fmt.setFontFamilies([family])
+        self._merge_text_format(fmt)
+
+    def _apply_font_size(self, size: int):
+        if self._loading:
+            return
+        fmt = QTextCharFormat()
+        fmt.setFontPointSize(float(size))
+        self._merge_text_format(fmt)
+
+    def _step_font_size(self, delta: int):
+        fmt = self.body_input.currentCharFormat()
+        original = fmt.fontPointSize()
+        if original <= 0:
+            original = self.body_input.font().pointSizeF()
+        if original <= 0:
+            original = 11
+        self._apply_font_size(max(6, min(96, round(original) + delta)))
+
+    def _choose_font_color(self, highlight: bool):
+        fmt = self.body_input.currentCharFormat()
+        previous = (fmt.background() if highlight else fmt.foreground()).color()
+        if not previous.isValid():
+            previous = QColor("#fff59d" if highlight else "#142b40")
+        color = QColorDialog.getColor(
+            previous, self, "Cor do realce" if highlight else "Cor do texto")
+        if not color.isValid():
+            return
+        change = QTextCharFormat()
+        if highlight:
+            change.setBackground(color)
+        else:
+            change.setForeground(color)
+        self._merge_text_format(change)
+
+    def _clear_text_format(self):
+        cursor = self.body_input.textCursor()
+        clean = QTextCharFormat()
+        # setCharFormat aplica a formatação à seleção (merge de objeto vazio
+        # não remove propriedades antigas); sem seleção, às futuras letras.
+        if cursor.hasSelection():
+            cursor.setCharFormat(clean)
+        else:
+            self.body_input.setCurrentCharFormat(clean)
         self.body_input.setFocus()
+        self._autosave_edit("content")
+
+    def _transform_case(self, mode: str):
+        cursor = self.body_input.textCursor()
+        if not cursor.hasSelection():
+            self.statusBar().showMessage("Selecione as letras para mudar maiúsculas/minúsculas.", 3000)
+            return
+        content = cursor.selectedText()
+        conversion = {
+            "upper": str.upper, "lower": str.lower,
+            "title": str.title, "swapcase": str.swapcase,
+        }[mode]
+        cursor.insertText(conversion(content).replace("\u2029", "\n"), cursor.charFormat())
+        self.body_input.setTextCursor(cursor)
+        self.body_input.setFocus()
+        self._autosave_edit("content")
 
     def _sync_format_buttons(self, fmt: QTextCharFormat):
-        for key, checked in (("bold", fmt.fontWeight() >= QFont.Bold),
-                             ("italic", fmt.fontItalic()), ("underline", fmt.fontUnderline())):
+        alignment = fmt.verticalAlignment()
+        values = (
+            ("bold", fmt.fontWeight() >= QFont.Bold),
+            ("italic", fmt.fontItalic()),
+            ("underline", fmt.fontUnderline()),
+            ("strike", fmt.fontStrikeOut()),
+            ("subscript", alignment == QTextCharFormat.AlignSubScript),
+            ("superscript", alignment == QTextCharFormat.AlignSuperScript),
+        )
+        for key, checked in values:
             btn = self.format_buttons[key]
             btn.blockSignals(True)
             btn.setChecked(bool(checked))
             btn.blockSignals(False)
+        # fontFamily() é obsoleto no Qt 6 e pode acessar estado nulo do
+        # QTextCharFormat em runners Qt offscreen. Usar fontFamilies().
+        families = fmt.fontFamilies()
+        if families:
+            self.font_family.blockSignals(True)
+            self.font_family.setCurrentFont(QFont(families[0]))
+            self.font_family.blockSignals(False)
+        size = fmt.fontPointSize()
+        if size > 0:
+            self.font_size.blockSignals(True)
+            self.font_size.setValue(max(6, min(96, round(size))))
+            self.font_size.blockSignals(False)
+
+    def _set_save_status(self, message: str, *, error: bool = False):
+        self.autosave_status.setText(message)
+        self.autosave_status.setStyleSheet(
+            "color: #ffc0c8;" if error else "color: #79ead8;")
+
+    def _update_current_list_item(self):
+        """Atualiza a navegação sem recriar o editor, seleção ou cursor."""
+        current = self.current_id
+        if current is None:
+            return
+        for index in range(self.snippet_list.count()):
+            item = self.snippet_list.item(index)
+            if item.data(Qt.UserRole) == current:
+                item.setText(f"{self.title_input.text().strip()}  ·  {self.shortcut_input.text().strip()}")
+                item.setToolTip(
+                    f"Atalho: {self.shortcut_input.text().strip()}\n"
+                    f"{plain_text_fallback(self.body_input.toPlainText())[:160]}")
+                break
+
+    def _autosave_edit(self, field: str):
+        """Cada alteração válida é persistida antes da próxima edição.
+
+        Atalhos inválidos nunca sobrescrevem o último comando íntegro.
+        A mudança de título/atalho não reserializa HTML e imagens.
+        """
+        if self._loading:
+            return
+        self.dirty = True
+        try:
+            folder = self.editor_folder.currentData()
+            if folder is None:
+                raise ValueError("Selecione uma pasta.")
+            if self.current_id is None:
+                text = plain_text_fallback(self.body_input.toPlainText())
+                # Campos obrigatórios ainda incompletos são um rascunho
+                # em memória; a criação ocorre no primeiro estado válido.
+                new_id = self.store.save(
+                    folder, self.title_input.text(), self.shortcut_input.text(),
+                    text, rich_content=self._validated_editor_html())
+                self.current_id = new_id
+                self.edit_heading.setText("Editar comando")
+                self.delete_button.setVisible(True)
+                self._refresh_list()
+            else:
+                if field == "title":
+                    data = {"title": self.title_input.text()}
+                elif field == "shortcut":
+                    data = {"shortcut": self.shortcut_input.text()}
+                elif field == "folder_id":
+                    data = {"folder_id": folder}
+                elif field == "content":
+                    data = {
+                        "content": plain_text_fallback(self.body_input.toPlainText()),
+                        "rich_content": self._validated_editor_html(),
+                    }
+                else:
+                    return
+                self.store.update_snippet_fields(self.current_id, **data)
+                if field == "shortcut":
+                    self._update_listener_shortcuts()
+                self._update_current_list_item()
+        except (ValueError, sqlite3.Error, OSError) as error:
+            self._set_save_status(f"Ainda não salvo: {error}", error=True)
+            return
+        self.dirty = False
+        self._set_save_status("✓ Alterações salvas automaticamente")
 
     def _mark_dirty(self, *_):
         if not self._loading:
@@ -967,7 +1210,7 @@ class AutoFillWindow(AuroraFeaturesMixin, QMainWindow):
         current_clipboard = QApplication.clipboard().text()
         result = render_snippet(text, current_clipboard)
         rich_html = self.body_input.toHtml()
-        if contains_inline_images(rich_html):
+        if contains_inline_images(rich_html) or has_rich_formatting(rich_html):
             self.preview.setHtml(render_rich_html(rich_html, current_clipboard))
         else:
             self.preview.setPlainText(result.text)
@@ -1043,7 +1286,8 @@ class AutoFillWindow(AuroraFeaturesMixin, QMainWindow):
         if self.stack.currentIndex() != 1 or not self.dirty:
             return True
         choice = QMessageBox.question(
-            self, "Alterações não salvas", "Descartar alterações deste comando?",
+            self, "Rascunho incompleto",
+            "Existem alterações ainda inválidas que não puderam ser salvas automaticamente. Descartá-las?",
             QMessageBox.Discard | QMessageBox.Cancel, QMessageBox.Cancel)
         return choice == QMessageBox.Discard
 
@@ -1080,6 +1324,10 @@ class AutoFillWindow(AuroraFeaturesMixin, QMainWindow):
         if snippet is None:
             self.title_input.setFocus()
         self._update_shortcut_feedback()
+        self._set_save_status(
+            "✓ Alterações salvas automaticamente" if snippet
+            else "Novo comando: será salvo quando título, atalho e conteúdo estiverem completos.")
+        self._sync_format_buttons(self.body_input.currentCharFormat())
         self._update_preview()
 
     def _new_snippet(self):
@@ -1139,11 +1387,15 @@ class AutoFillWindow(AuroraFeaturesMixin, QMainWindow):
         except (ValueError, sqlite3.Error, OSError) as error:
             QMessageBox.warning(self, "Não foi possível salvar", str(error))
             return
+        was_new = self.current_id is None
         self.current_id = new_id
         self.dirty = False
-        self._refresh_all()
-        self._load_editor(self._get_snippet(new_id))
-        self.statusBar().showMessage("Comando salvo com sucesso.", 5000)
+        if was_new:
+            self.edit_heading.setText("Editar comando")
+            self.delete_button.setVisible(True)
+        self._refresh_list()
+        self._set_save_status("✓ Alterações salvas automaticamente")
+        self.statusBar().showMessage("Comando salvo com sucesso.", 3500)
         self._play_confirmation()
 
     def _delete(self):
@@ -1340,9 +1592,8 @@ class AutoFillWindow(AuroraFeaturesMixin, QMainWindow):
                 # Campos WebView e controles personalizados podem não expor
                 # texto por Win32. Jamais selecionar caracteres às cegas:
                 # requeremos o texto e o cursor reais via UI Automation.
-                if monotonic() - candidate.created < 0.055:
-                    QTimer.singleShot(10, lambda c=candidate: self._perform_expansion(c))
-                    return
+                # UIA logo após keyup; tenta novamente apenas se o editor
+                # ainda não confirmar texto/cursor, sem pausar à força.
                 try:
                     before = self._edit_snapshot(accessibility=True)
                 except ContextUnavailable:
@@ -1480,7 +1731,7 @@ class AutoFillWindow(AuroraFeaturesMixin, QMainWindow):
                 # seleção aparecer no GetSelection. Só uma solicitação é enviada:
                 # até 700 ms para confirmar, SEM selecionar ou colar de novo.
                 operation.deadline = monotonic() + 0.7
-                QTimer.singleShot(25, lambda op=operation: self._paste_verified_selection(op))
+                QTimer.singleShot(0, lambda op=operation: self._paste_verified_selection(op))
                 return
             else:
                 if sys.platform == "win32" and operation.before is None:
@@ -1511,7 +1762,7 @@ class AutoFillWindow(AuroraFeaturesMixin, QMainWindow):
                 # mais uma consulta. Outra seleção, texto ou identidade aborta.
                 if ((selected.start, selected.end) == (before.start, before.end)
                         and monotonic() < operation.deadline):
-                    QTimer.singleShot(30, lambda op=operation: self._paste_verified_selection(op))
+                    QTimer.singleShot(10, lambda op=operation: self._paste_verified_selection(op))
                     return
                 raise ValueError(
                     "O Teams não confirmou a seleção do atalho dentro do prazo; "
@@ -1527,7 +1778,7 @@ class AutoFillWindow(AuroraFeaturesMixin, QMainWindow):
             if (monotonic() < operation.deadline
                     and self._candidate_valid(operation.candidate)
                     and self._owns_clipboard(operation.lease)):
-                QTimer.singleShot(30, lambda op=operation: self._paste_verified_selection(op))
+                QTimer.singleShot(10, lambda op=operation: self._paste_verified_selection(op))
             else:
                 self._finish_expansion(operation, f"Não foi possível expandir: {exc}")
         except Exception as exc:
