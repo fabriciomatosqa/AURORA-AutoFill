@@ -94,11 +94,11 @@ def interoperable_html(html: str) -> str:
             if color is not None:
                 span = f'<font color="{color.name()}">{span}</font>'
             pieces.append(span)
-        # Um parágrafo vazio já representa uma quebra de linha no QTextEdit.
-        # Acrescentar <br> dobraria a separação entre os blocos no Word.
-        inner = "".join(pieces)
-        result.append(f'<p style="margin:0">{inner}</p>')
-    return "".join(result)
+        # Blocos vazios entre textos devem continuar como uma linha vazia.
+        # Qt ignora <p></p>, mas <p><br></p> introduz uma quebra EXTRA;
+        # separar os blocos com <br> mantém exatamente a sequência original.
+        result.append("".join(pieces))
+    return '<div style="white-space:pre-wrap">' + '<br>'.join(result) + '</div>'
 
 
 def _rtf_escape(text: str) -> str:
