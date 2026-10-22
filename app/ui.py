@@ -1015,7 +1015,13 @@ class AutoFillWindow(AuroraFeaturesMixin, QMainWindow):
         if self.body_input.insert_image(image):
             self.body_input.setFocus()
             self.statusBar().showMessage(
-                "Imagem incorporada ao texto. Salve o comando para reutilizar.", 5000)
+                "Imagem incorporada e salva automaticamente quando o comando estiver válido.", 5000)
+
+    def _merge_text_format(self, fmt: QTextCharFormat):
+        """Formata somente a seleção; sem seleção define o estilo das próximas letras."""
+        self.body_input.mergeCurrentCharFormat(fmt)
+        self.body_input.setFocus()
+        self._autosave_edit("content")
 
     def _apply_format(self, mode: str, active: bool):
         fmt = QTextCharFormat()
@@ -1023,18 +1029,174 @@ class AutoFillWindow(AuroraFeaturesMixin, QMainWindow):
             fmt.setFontWeight(QFont.Bold if active else QFont.Normal)
         elif mode == "italic":
             fmt.setFontItalic(active)
-        else:
+        elif mode == "underline":
             fmt.setFontUnderline(active)
-        self.body_input.mergeCurrentCharFormat(fmt)
+        elif mode == "strike":
+            fmt.setFontStrikeOut(active)
+        elif mode in {"superscript", "subscript"}:
+            target = (QTextCharFormat.AlignSuperScript if mode == "superscript"
+                      else QTextCharFormat.AlignSubScript)
+            fmt.setVerticalAlignment(target if active else QTextCharFormat.AlignNormal)
+        self._merge_text_format(fmt)
+
+    def _apply_font_family(self, family: str):
+        if self._loading or not family:
+            return
+        fmt = QTextCharFormat()
+        fmt.setFontFamilies([family])
+        self._merge_text_format(fmt)
+
+    def _apply_font_size(self, size: int):
+        if self._loading:
+            return
+        fmt = QTextCharFormat()
+        fmt.setFontPointSize(float(size))
+        self._merge_text_format(fmt)
+
+    def _step_font_size(self, delta: int):
+        fmt = self.body_input.currentCharFormat()
+        original = fmt.fontPointSize()
+        if original <= 0:
+            original = self.body_input.font().pointSizeF()
+        if original <= 0:
+            original = 11
+        self._apply_font_size(max(6, min(96, round(original) + delta)))
+
+    def _choose_font_color(self, highlight: bool):
+        fmt = self.body_input.currentCharFormat()
+        previous = (fmt.background() if highlight else fmt.foreground()).color()
+        if not previous.isValid():
+            previous = QColor("#fff59d" if highlight else "#142b40")
+        color = QColorDialog.getColor(
+            previous, self, "Cor do realce" if highlight else "Cor do texto")
+        if not color.isValid():
+            return
+        change = QTextCharFormat()
+        if highlight:
+            change.setBackground(color)
+        else:
+            change.setForeground(color)
+        self._merge_text_format(change)
+
+    def _clear_text_format(self):
+        cursor = self.body_input.textCursor()
+        clean = QTextCharFormat()
+        # setCharFormat aplica a formatação à seleção (merge de objeto vazio
+        # não remove propriedades antigas); sem seleção, às futuras letras.
+        if cursor.hasSelection():
+            cursor.setCharFormat(clean)
+        else:
+            self.body_input.setCurrentCharFormat(clean)
         self.body_input.setFocus()
+        self._autosave_edit("content")
+
+    def _transform_case(self, mode: str):
+        cursor = self.body_input.textCursor()
+        if not cursor.hasSelection():
+            self.statusBar().showMessage("Selecione as letras para mudar maiúsculas/minúsculas.", 3000)
+            return
+        content = cursor.selectedText()
+        conversion = {
+            "upper": str.upper, "lower": str.lower,
+            "title": str.title, "swapcase": str.swapcase,
+        }[mode]
+        cursor.insertText(conversion(content).replace("\u2029", "\n"), cursor.charFormat())
+        self.body_input.setTextCursor(cursor)
+        self.body_input.setFocus()
+        self._autosave_edit("content")
 
     def _sync_format_buttons(self, fmt: QTextCharFormat):
-        for key, checked in (("bold", fmt.fontWeight() >= QFont.Bold),
-                             ("italic", fmt.fontItalic()), ("underline", fmt.fontUnderline())):
+        alignment = fmt.verticalAlignment()
+        values = (
+            ("bold", fmt.fontWeight() >= QFont.Bold),
+            ("italic", fmt.fontItalic()),
+            ("underline", fmt.fontUnderline()),
+            ("strike", fmt.fontStrikeOut()),
+            ("subscript", alignment == QTextCharFormat.AlignSubScript),
+            ("superscript", alignment == QTextCharFormat.AlignSuperScript),
+        )
+        for key, checked in values:
             btn = self.format_buttons[key]
             btn.blockSignals(True)
             btn.setChecked(bool(checked))
             btn.blockSignals(False)
+        family = fmt.fontFamily()
+        if family:
+            self.font_family.blockSignals(True)
+            self.font_family.setCurrentFont(QFont(family))
+            self.font_family.blockSignals(False)
+        size = fmt.fontPointSize()
+        if size > 0:
+            self.font_size.blockSignals(True)
+            self.font_size.setValue(max(6, min(96, round(size))))
+            self.font_size.blockSignals(False)
+
+    def _set_save_status(self, message: str, *, error: bool = False):
+        self.autosave_status.setText(message)
+        self.autosave_status.setStyleSheet(
+            "color: #ffc0c8;" if error else "color: #79ead8;")
+
+    def _update_current_list_item(self):
+        """Atualiza a navegação sem recriar o editor, seleção ou cursor."""
+        current = self.current_id
+        if current is None:
+            return
+        for index in range(self.snippet_list.count()):
+            item = self.snippet_list.item(index)
+            if item.data(Qt.UserRole) == current:
+                item.setText(f"{self.title_input.text().strip()}  ·  {self.shortcut_input.text().strip()}")
+                item.setToolTip(
+                    f"Atalho: {self.shortcut_input.text().strip()}\n"
+                    f"{plain_text_fallback(self.body_input.toPlainText())[:160]}")
+                break
+
+    def _autosave_edit(self, field: str):
+        """Cada alteração válida é persistida antes da próxima edição.
+
+        Atalhos inválidos nunca sobrescrevem o último comando íntegro.
+        A mudança de título/atalho não reserializa HTML e imagens.
+        """
+        if self._loading:
+            return
+        self.dirty = True
+        try:
+            folder = self.editor_folder.currentData()
+            if folder is None:
+                raise ValueError("Selecione uma pasta.")
+            if self.current_id is None:
+                text = plain_text_fallback(self.body_input.toPlainText())
+                # Campos obrigatórios ainda incompletos são um rascunho
+                # em memória; a criação ocorre no primeiro estado válido.
+                new_id = self.store.save(
+                    folder, self.title_input.text(), self.shortcut_input.text(),
+                    text, rich_content=self._validated_editor_html())
+                self.current_id = new_id
+                self.edit_heading.setText("Editar comando")
+                self.delete_button.setVisible(True)
+                self._refresh_list()
+            else:
+                if field == "title":
+                    data = {"title": self.title_input.text()}
+                elif field == "shortcut":
+                    data = {"shortcut": self.shortcut_input.text()}
+                elif field == "folder_id":
+                    data = {"folder_id": folder}
+                elif field == "content":
+                    data = {
+                        "content": plain_text_fallback(self.body_input.toPlainText()),
+                        "rich_content": self._validated_editor_html(),
+                    }
+                else:
+                    return
+                self.store.update_snippet_fields(self.current_id, **data)
+                if field == "shortcut":
+                    self._update_listener_shortcuts()
+                self._update_current_list_item()
+        except (ValueError, sqlite3.Error, OSError) as error:
+            self._set_save_status(f"Ainda não salvo: {error}", error=True)
+            return
+        self.dirty = False
+        self._set_save_status("✓ Alterações salvas automaticamente")
 
     def _mark_dirty(self, *_):
         if not self._loading:
@@ -1045,7 +1207,7 @@ class AutoFillWindow(AuroraFeaturesMixin, QMainWindow):
         current_clipboard = QApplication.clipboard().text()
         result = render_snippet(text, current_clipboard)
         rich_html = self.body_input.toHtml()
-        if contains_inline_images(rich_html):
+        if contains_inline_images(rich_html) or has_rich_formatting(rich_html):
             self.preview.setHtml(render_rich_html(rich_html, current_clipboard))
         else:
             self.preview.setPlainText(result.text)
