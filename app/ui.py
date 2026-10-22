@@ -439,7 +439,8 @@ class AutoFillWindow(AuroraFeaturesMixin, QMainWindow):
         self.statusBar().showMessage(message)
         self._refresh_all()
         self._show_welcome()
-        QTimer.singleShot(10000, self._initial_release_check)
+        # Consulta no primeiro ciclo Qt; a rede executa em QThread.
+        QTimer.singleShot(0, self._initial_release_check)
 
     def _play_confirmation(self):
         """Som suave com liga/desliga e volume independente do Windows."""
@@ -1266,13 +1267,10 @@ class AutoFillWindow(AuroraFeaturesMixin, QMainWindow):
         if capture_focus() != candidate.context or not self.hotkeys.claim(candidate):
             return
         self._active_candidate = candidate
-        # No Teams, '/' abre menu de comandos nativo. Com atalhos de apenas
-        # um caractere, o editor pode ainda estar aplicando a segunda tecla.
-        # Dar uma janela curta de estabilização SOMENTE a esses comandos;
-        # confirmar texto/caret/foco continua obrigatório antes da colagem.
-        short_slash = len(candidate.shortcut.rstrip()) == 2
-        settle_ms = 80 if short_slash else 20
-        QTimer.singleShot(settle_ms, lambda c=candidate: self._perform_expansion(c))
+        # Aciona imediatamente ao terminar o atalho, sem atraso mínimo.
+        # A segurança permanece no verificador de foco/texto/seleção; campos
+        # web assíncronos são tentados novamente somente quando necessário.
+        QTimer.singleShot(0, lambda c=candidate: self._perform_expansion(c))
 
     def _candidate_valid(self, candidate):
         operation = self._expansion_operation
