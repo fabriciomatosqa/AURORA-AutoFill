@@ -20,7 +20,8 @@ from PySide6.QtWidgets import (
 from .core import (Snippet, SnippetStore, application_db_path,
                    render_snippet, validate_shortcut)
 from .hotkeys import (GlobalHotkeyListener, replace_shortcut, paste_clipboard,
-                      select_previous_characters, copy_selected_text, collapse_selection_to_end)
+                      select_previous_characters, select_and_copy_shortcut,
+                      copy_selected_text, collapse_selection_to_end)
 from .expansion import ClipboardLease, EditSnapshot, ExpansionCandidate, ExpansionOperation, utf16_slice, prefix_offset
 from .windows_context import ContextUnavailable, FocusMonitor, capture_focus, capture_edit, set_caret, select_text_range
 from .verified_fallback import supports_verified_copy, copied_shortcut_matches
@@ -1654,51 +1655,59 @@ class AutoFillWindow(AuroraFeaturesMixin, QMainWindow):
             if not snippet:
                 self._finish_expansion(None)
                 return
-            try:
-                before = self._edit_snapshot()
-            except ContextUnavailable:
-                if monotonic() - candidate.created < (0.15 if copy_fallback else 0.85):
-                    QTimer.singleShot(10, lambda c=candidate: self._perform_expansion(c))
-                    return
-                if not copy_fallback:
-                    raise
+            # Editores reconhecidos: uma única sequência de teclado,
+            # com cópia e comparação literal do atalho, sem depender das
+            # leituras de acessibilidade do Teams/Word (intermitentes).
+            # Com {{cursor}}, a posição final ainda requer UIA confiável.
+            if copy_fallback and "{{cursor}}" not in snippet.content:
                 before = None
                 keyboard_verify = True
-            if before is not None and before.shortcut_range(shortcut) is None:
-                if monotonic() - candidate.created < 0.85:
-                    QTimer.singleShot(10, lambda c=candidate: self._perform_expansion(c))
-                    return
-                raise ValueError("O atalho não está no intervalo esperado; expansão cancelada.")
-            if before is None and not keyboard_verify and sys.platform == "win32" and not (
-                    self.isActiveWindow() and self.focusWidget() is self.test_box):
-                # Campos WebView e controles personalizados podem não expor
-                # texto por Win32. Jamais selecionar caracteres às cegas:
-                # requeremos o texto e o cursor reais via UI Automation.
-                # UIA logo após keyup; tenta novamente apenas se o editor
-                # ainda não confirmar texto/cursor, sem pausar à força.
+            else:
                 try:
-                    before = self._edit_snapshot(accessibility=True)
+                    before = self._edit_snapshot()
                 except ContextUnavailable:
                     if monotonic() - candidate.created < (0.15 if copy_fallback else 0.85):
-                        QTimer.singleShot(20, lambda c=candidate: self._perform_expansion(c))
+                        QTimer.singleShot(10, lambda c=candidate: self._perform_expansion(c))
                         return
                     if not copy_fallback:
                         raise
                     before = None
                     keyboard_verify = True
-                if before is None and copy_fallback:
-                    keyboard_verify = True
-                elif before is None:
-                    raise ValueError(
-                        "O editor não oferece seleção verificável. "
-                        "Atalho preservado; use Copiar para outro aplicativo.")
                 if before is not None and before.shortcut_range(shortcut) is None:
-                    if monotonic() - candidate.created < 0.35:
-                        QTimer.singleShot(20, lambda c=candidate: self._perform_expansion(c))
+                    if monotonic() - candidate.created < 0.85:
+                        QTimer.singleShot(10, lambda c=candidate: self._perform_expansion(c))
                         return
-                    raise ValueError(
-                        "O atalho não está imediatamente antes do cursor; "
-                        "não foi feita nenhuma substituição.")
+                    raise ValueError("O atalho não está no intervalo esperado; expansão cancelada.")
+                if before is None and not keyboard_verify and sys.platform == "win32" and not (
+                        self.isActiveWindow() and self.focusWidget() is self.test_box):
+                    # Campos WebView e controles personalizados podem não expor
+                    # texto por Win32. Jamais selecionar caracteres às cegas:
+                    # requeremos o texto e o cursor reais via UI Automation.
+                    # UIA logo após keyup; tenta novamente apenas se o editor
+                    # ainda não confirmar texto/cursor, sem pausar à força.
+                    try:
+                        before = self._edit_snapshot(accessibility=True)
+                    except ContextUnavailable:
+                        if monotonic() - candidate.created < (0.15 if copy_fallback else 0.85):
+                            QTimer.singleShot(20, lambda c=candidate: self._perform_expansion(c))
+                            return
+                        if not copy_fallback:
+                            raise
+                        before = None
+                        keyboard_verify = True
+                    if before is None and copy_fallback:
+                        keyboard_verify = True
+                    elif before is None:
+                        raise ValueError(
+                            "O editor não oferece seleção verificável. "
+                            "Atalho preservado; use Copiar para outro aplicativo.")
+                    if before is not None and before.shortcut_range(shortcut) is None:
+                        if monotonic() - candidate.created < 0.35:
+                            QTimer.singleShot(20, lambda c=candidate: self._perform_expansion(c))
+                            return
+                        raise ValueError(
+                            "O atalho não está imediatamente antes do cursor; "
+                            "não foi feita nenhuma substituição.")
             current_text = self._clipboard_source_text()
             now = datetime.now()
             rendered = render_snippet(snippet.content, current_text, now)
@@ -1855,8 +1864,9 @@ class AutoFillWindow(AuroraFeaturesMixin, QMainWindow):
         operation.verify_sequence = self._clipboard_sequence()
         operation.deadline = monotonic() + 0.45
         if select_keyboard:
-            select_previous_characters(cursor_steps(operation.candidate.shortcut))
-        copy_selected_text()
+            select_and_copy_shortcut(cursor_steps(operation.candidate.shortcut))
+        else:
+            copy_selected_text()
         QTimer.singleShot(10, lambda op=operation: self._confirm_keyboard_verification(op))
 
     def _confirm_keyboard_verification(self, operation):
@@ -1909,9 +1919,12 @@ class AutoFillWindow(AuroraFeaturesMixin, QMainWindow):
             # Um único Ctrl+C pode produzir no máximo duas revisões ao
             # disponibilizar formatos diferentes. Não sobrescrever cópia nova.
             copied = (sequence is not None and old is not None
-                      and 0 < sequence - old <= 2)
+                      and 0 < sequence - old <= 2
+                      and copied_shortcut_matches(
+                          clipboard.text(), operation.candidate.shortcut))
             marker = (sequence == old and clipboard.text() == operation.verify_marker)
             if marker or (copied and self._candidate_valid(operation.candidate)):
+                # Não restaurar uma cópia feita pelo usuário em outro app.
                 clipboard.setMimeData(original)
             if self._candidate_valid(operation.candidate):
                 collapse_selection_to_end()
@@ -1995,7 +2008,12 @@ class AutoFillWindow(AuroraFeaturesMixin, QMainWindow):
                 raise ValueError("Contexto alterado após envio; resultado não confirmado.")
             before = operation.before
             if before is None:
-                self._finish_expansion(operation, "Expansão enviada; este campo não permite confirmar o resultado.")
+                # Ctrl+C confirmou literalmente o atalho antes de Ctrl+V.
+                # O editor remoto pode aplicar a colagem de forma assíncrona;
+                # jamais afirmar que foi aceita nem reenviar (duplicaria).
+                self._finish_expansion(
+                    operation,
+                    "Atalho verificado e colagem enviada; confira a apresentação no aplicativo.")
                 return
             snapshot = self._edit_snapshot(accessibility=bool(before.identity))
             if snapshot is not None and snapshot.identity != before.identity:
