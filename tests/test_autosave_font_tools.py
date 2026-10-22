@@ -113,7 +113,8 @@ class AutosaveAndFontUiTests(unittest.TestCase):
                 self.assertFalse(win.dirty)
                 self.assertIn('automaticamente', win.autosave_status.text())
                 cursor = win.body_input.textCursor()
-                cursor.movePosition(cursor.End)
+                from PySide6.QtGui import QTextCursor
+                cursor.movePosition(QTextCursor.End)
                 win.body_input.setTextCursor(cursor)
                 win.body_input.insertPlainText('!')
                 self.assertEqual(win.store.snippet_by_shortcut('/x').content, 'Olá!')
