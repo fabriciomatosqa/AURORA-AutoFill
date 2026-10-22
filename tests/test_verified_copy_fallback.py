@@ -35,11 +35,11 @@ class VerifiedCopyFallbackTests(unittest.TestCase):
         with EngineFixture() as e:
             e.save("/eu", "Mensagem com formatação")
             with patch("app.ui.capture_edit", side_effect=readonly_uia), \
-                 patch("app.ui.supports_verified_copy", return_value=True), \
-                 patch("app.ui.copy_selected_text", side_effect=lambda: copied_selection(e)):
+                 patch("app.ui.supports_verified_copy", return_value=True):
                 e.type("/eu")
-                e.until(140)
-                assert e.api_calls == 0
+                e.until(0)
+                assert e.api_calls == 1  # Selecionar + copiar em lote
+                assert e.field.text == "/eu"
                 e.drain()
             assert e.field.text == "Mensagem com formatação"
             assert e.api_calls == 2  # Shift+Left, depois Ctrl+V, nunca backspace
@@ -53,8 +53,8 @@ class VerifiedCopyFallbackTests(unittest.TestCase):
             e.field.insert("Outra palavra ")
             with patch("app.ui.capture_edit", side_effect=readonly_uia), \
                  patch("app.ui.supports_verified_copy", return_value=True), \
-                 patch("app.ui.copy_selected_text",
-                       side_effect=lambda: e.clipboard.setText("texto-diferente")):
+                 patch("app.ui.select_and_copy_shortcut",
+                       side_effect=lambda count: e.clipboard.setText("texto-diferente")):
                 e.type("/eu")
                 e.drain()
             assert e.field.text == "Outra palavra /eu"
@@ -68,7 +68,7 @@ class VerifiedCopyFallbackTests(unittest.TestCase):
             e.save("/eu", "REPOSTA")
             with patch("app.ui.capture_edit", side_effect=readonly_uia), \
                  patch("app.ui.supports_verified_copy", return_value=True), \
-                 patch("app.ui.copy_selected_text", return_value=None):
+                 patch("app.ui.select_and_copy_shortcut", return_value=None):
                 e.type("/eu")
                 e.drain()
             assert e.field.text == "/eu"
@@ -81,12 +81,12 @@ class VerifiedCopyFallbackTests(unittest.TestCase):
             e.save("/eu", "REPOSTA")
             with patch("app.ui.capture_edit", side_effect=readonly_uia), \
                  patch("app.ui.supports_verified_copy", return_value=True), \
-                 patch("app.ui.copy_selected_text", return_value=None):
+                 patch("app.ui.select_and_copy_shortcut", return_value=None):
                 e.type("/eu")
                 def user_continues_typing():
                     e.field.anchor = e.field.caret = len(e.field.text)
                     e.type("X")
-                e.schedule(175, user_continues_typing)
+                e.schedule(5, user_continues_typing)
                 e.drain()
             assert e.field.text.endswith("/euX")
             assert e.clipboard.text() == "original"
@@ -95,7 +95,7 @@ class VerifiedCopyFallbackTests(unittest.TestCase):
     
     def test_teams_uia_selection_ack_without_visible_ack_can_copy_verify(self):
         with EngineFixture() as e:
-            e.save("/teams", "Resposta")
+            e.save("/teams", "Resposta{{cursor}}")
             def snapshot(context, *, accessibility=False):
                 actual = e.snapshot(context)
                 if actual is None:
