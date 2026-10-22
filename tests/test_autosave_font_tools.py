@@ -144,7 +144,7 @@ class AutosaveAndFontUiTests(unittest.TestCase):
                 win._apply_font_size(22)
                 win._apply_format('bold', True)
                 win._apply_format('strike', True)
-                with patch('app.ui.QColorDialog.getColor', return_value=QColor('#aa3300')):
+                with patch('app.ui.AuroraColorDialog.get_color', return_value=QColor('#aa3300')):
                     win._choose_font_color(False)
                 saved = win.store.snippet_by_shortcut('/fonte')
                 self.assertEqual(saved.content, 'Grande pequeno')
@@ -154,8 +154,11 @@ class AutosaveAndFontUiTests(unittest.TestCase):
                 self.assertIn('Grande', render_rich_html(saved.rich_content, ''))
                 self.assertIn('pequeno', render_rich_html(saved.rich_content, ''))
                 self.assertIn('automaticamente', win.autosave_status.text())
-                from PySide6.QtWidgets import QFontComboBox
-                self.assertIsInstance(win.font_family, QFontComboBox)
+                from app.font_catalog import AuroraFontCombo
+                self.assertIsInstance(win.font_family, AuroraFontCombo)
+                self.assertGreater(win.font_family.count(), 0)
+                self.assertLessEqual(win.font_toolbar.sizeHint().height(), 92)
+                self.assertEqual(win.format_buttons['bold'].height(), 27)
             finally:
                 self._cleanup(win)
 
