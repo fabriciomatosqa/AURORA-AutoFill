@@ -502,10 +502,12 @@ class AuroraFeaturesMixin:
 
     def _prepare_updates_shutdown(self):
         """Keep QThreads alive until their bounded network operations finish."""
-        if self._update_notice is not None:
-            self._update_notice.hide()
-        if self._update_watch is not None:
-            self._update_watch.stop()
+        notice = getattr(self, "_update_notice", None)
+        if notice is not None:
+            notice.hide()
+        watch = getattr(self, "_update_watch", None)
+        if watch is not None:
+            watch.stop()
         if self._check_thread is None and self._download_thread is None:
             self._exit_when_updates_done = False
             return True
