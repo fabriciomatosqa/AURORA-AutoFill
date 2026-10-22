@@ -18,28 +18,24 @@ class ExpansionTransactionTests(EngineTestCase):
                 e.type('/ola')
                 e.schedule(delay, lambda: e.type('x'))
                 e.drain()
-                self.assertEqual(e.field.text, '/olax' if delay < 20 else phrase + 'x')
-                self.assertEqual(e.api_calls, 0 if delay < 20 else 1)
+                self.assertEqual(e.field.text, phrase + 'x')
+                self.assertEqual(e.api_calls, 1)
                 self.assertEqual(e.clipboard.text(), 'original')
                 self.assertFalse(e.shift or e.ctrl)
 
     def test_fast_dispatch_after_last_key_reaches_destination(self):
         self.engine.save('/rapido', 'OK')
         self.engine.type('/rapido')
-        self.engine.until(19)
         self.assertEqual(self.engine.field.text, '/rapido')
-        self.assertEqual(self.engine.api_calls, 0)
-        self.engine.until(20)
+        self.engine.until(0)
         self.assertEqual(self.engine.field.text, 'OK')
         self.assertEqual(self.engine.api_calls, 1)
 
-    def test_shortcut_one_character_settles_before_expanding(self):
+    def test_shortcut_one_character_expands_without_delay(self):
         self.engine.save('/1', 'Resposta curta')
         self.engine.type('/1')
-        self.engine.until(79)
         self.assertEqual(self.engine.field.text, '/1')
-        self.assertEqual(self.engine.api_calls, 0)
-        self.engine.until(80)
+        self.engine.until(0)
         self.assertEqual(self.engine.field.text, 'Resposta curta')
         self.assertEqual(self.engine.api_calls, 1)
         self.engine.drain()
@@ -52,27 +48,27 @@ class ExpansionTransactionTests(EngineTestCase):
         self.engine.listener._on_press(key('1'))
         self.engine.schedule(60, lambda: self.engine.field.insert('1'))
         self.engine.listener._on_release(key('1'))
-        self.engine.until(60)
-        self.assertEqual(self.engine.field.text, '/1')
-        self.engine.until(79)
+        self.engine.until(59)
+        self.assertEqual(self.engine.field.text, '/')
         self.assertEqual(self.engine.api_calls, 0)
-        self.engine.until(80)
+        self.engine.until(60)
         self.assertEqual(self.engine.field.text, 'Resposta curta')
         self.assertEqual(self.engine.api_calls, 1)
 
     def test_longer_shortcuts_retain_fast_dispatch(self):
         self.engine.save('/long', 'Texto')
         self.engine.type('/long')
-        self.engine.until(19)
-        self.assertEqual(self.engine.field.text, '/long')
-        self.engine.until(20)
+        self.engine.until(0)
         self.assertEqual(self.engine.field.text, 'Texto')
 
     def test_shortcut_one_character_does_not_replace_unrelated_text(self):
         self.engine.save('/1', 'Resposta curta')
         self.engine.field.insert('Olá ')
+        self.engine.defer_signal = True
         self.engine.type('/1')
-        self.engine.schedule(40, lambda: self.engine.type('x'))
+        candidate = self.engine.received[-1]
+        self.engine.type('x')  # próxima tecla antes de a UI receber o sinal
+        self.win._expand_global(candidate)
         self.engine.drain()
         self.assertEqual(self.engine.field.text, 'Olá /1x')
         self.assertEqual(self.engine.api_calls, 0)
@@ -97,7 +93,7 @@ class ExpansionTransactionTests(EngineTestCase):
             self.assertEqual(self.engine.field.text, 'Conteúdo pronto')
             # Captura + seleção UIA + confirmação da seleção estabilizada,
             # antes de enviar Ctrl+V ao editor WebView.
-            self.assertEqual(len(calls), 3)
+            self.assertEqual(len(calls), 4)
             self.engine.drain()
             self.assertEqual(self.clipboard.text(), 'original')
 
@@ -115,9 +111,9 @@ class ExpansionTransactionTests(EngineTestCase):
                 self.assertEqual(e.field.text, '/teams')
                 self.assertEqual(e.api_calls, 0)
                 self.assertEqual((e.field.anchor, e.field.caret), (0, 6))
-                e.until(44)
+                e.until(24)
                 self.assertEqual(e.api_calls, 0)
-                e.until(45)
+                e.until(25)
                 self.assertEqual(e.field.text, 'Resposta')
                 self.assertEqual(e.api_calls, 1)
                 e.drain()
@@ -326,10 +322,15 @@ class ExpansionTransactionTests(EngineTestCase):
         self.assertEqual(self.engine.field.text, 'BEFORE OK AFTER')
 
     def test_additional_typing_before_selection_cancels_without_editing(self):
+        # O disparo é imediato, portanto a concorrência verdadeira agora é
+        # antes de o sinal de Qt ser entregue, não uma espera fixa de 20ms.
         for delay in (0, 10, 19):
             with self.subTest(delay=delay), EngineFixture() as e:
+                e.defer_signal = True
                 e.type('/ola')
+                candidate = e.received[-1]
                 e.schedule(delay, lambda: e.type('x'))
+                e.schedule(20, lambda: e.host._expand_global(candidate))
                 e.drain()
                 self.assertEqual(e.field.text, '/olax')
                 self.assertEqual(e.api_calls, 0)
@@ -446,11 +447,11 @@ class ExpansionTransactionTests(EngineTestCase):
 
     def test_old_restore_cannot_restore_or_unlock_new_lease(self):
         self.engine.type('/ola')
-        self.engine.until(20)
+        self.engine.until(0)
         old = self.win._clipboard_lease
         self.engine.until(100)
         self.engine.type('/ola')
-        self.engine.until(120)
+        self.engine.until(100)
         new = self.win._clipboard_lease
         self.assertIsNot(old, new)
         self.win._restore_clipboard(old)
@@ -480,7 +481,7 @@ class ExpansionTransactionTests(EngineTestCase):
     def test_sent_cursor_expansion_does_not_expire_during_web_confirmation(self):
         self.engine.save('/ola', 'A{{cursor}}B')
         self.engine.type('/ola')
-        self.engine.until(20)
+        self.engine.until(0)
         operation = self.win._expansion_operation
         self.assertIsNotNone(operation)
         self.assertEqual(operation.stage, 'sent')
@@ -496,7 +497,7 @@ class ExpansionTransactionTests(EngineTestCase):
     def test_sent_cursor_expansion_still_rejects_real_input_change(self):
         self.engine.save('/ola', 'A{{cursor}}B')
         self.engine.type('/ola')
-        self.engine.until(20)
+        self.engine.until(0)
         operation = self.win._expansion_operation
         self.assertIsNotNone(operation)
         self.engine.listener.invalidate()

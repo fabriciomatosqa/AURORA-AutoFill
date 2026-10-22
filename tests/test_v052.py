@@ -69,7 +69,7 @@ class ClipboardPasteTests(unittest.TestCase):
         with EngineFixture() as engine:
             engine.clipboard.setText('Minha cópia original')
             engine.type('/ola')
-            engine.until(20)
+            engine.until(0)
             mime = engine.clipboard.mimeData()
             self.assertTrue(mime.text().startswith('Olá!'))
             self.assertFalse(mime.hasHtml())

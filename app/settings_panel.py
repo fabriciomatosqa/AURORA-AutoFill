@@ -166,8 +166,9 @@ class SettingsPage(QWidget):
         self.prereleases.setChecked(prefs.get("include_prereleases", IS_PRERELEASE))
         self.prereleases.toggled.connect(self.prereleases_toggled.emit)
         layout.addWidget(self.prereleases)
-        updates_text = QLabel("Versões de teste ficam disponíveis durante o desenvolvimento.\n"
-                              "O aplicativo solicita sua confirmação antes de baixar e instalar.")
+        updates_text = QLabel("Busca ao iniciar e a cada 6 horas de funcionamento do computador.\n"
+                              "Aviso próximo ao relógio com Sim/Não; após Não, novo aviso em 3 horas. "
+                              "Instalação somente após confirmação.")
         updates_text.setWordWrap(True)
         updates_text.setObjectName("hint")
         layout.addWidget(updates_text)
