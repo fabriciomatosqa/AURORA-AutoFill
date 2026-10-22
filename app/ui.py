@@ -1668,7 +1668,14 @@ class AutoFillWindow(AuroraFeaturesMixin, QMainWindow):
                 if monotonic() - candidate.created < 0.85:
                     QTimer.singleShot(10, lambda c=candidate: self._perform_expansion(c))
                     return
-                raise ValueError("O atalho não está no intervalo esperado; expansão cancelada.")
+                if copy_fallback:
+                    # Alguns editores (Teams/WebView) entregam texto atual e
+                    # caret obsoleto. Sem confiar nesse intervalo, confirmar
+                    # somente o atalho exato por seleção+Ctrl+C.
+                    before = None
+                    keyboard_verify = True
+                else:
+                    raise ValueError("O atalho não está no intervalo esperado; expansão cancelada.")
             if before is None and not keyboard_verify and sys.platform == "win32" and not (
                     self.isActiveWindow() and self.focusWidget() is self.test_box):
                 # Campos WebView e controles personalizados podem não expor
@@ -1696,9 +1703,16 @@ class AutoFillWindow(AuroraFeaturesMixin, QMainWindow):
                     if monotonic() - candidate.created < 0.35:
                         QTimer.singleShot(20, lambda c=candidate: self._perform_expansion(c))
                         return
-                    raise ValueError(
-                        "O atalho não está imediatamente antes do cursor; "
-                        "não foi feita nenhuma substituição.")
+                    if copy_fallback:
+                        # UIA pode ler o texto mas indicar posição atrasada.
+                        # A via alternativa só cola após Ctrl+C provar que a
+                        # seleção contém exatamente o atalho digitado.
+                        before = None
+                        keyboard_verify = True
+                    else:
+                        raise ValueError(
+                            "O atalho não está imediatamente antes do cursor; "
+                            "não foi feita nenhuma substituição.")
             current_text = self._clipboard_source_text()
             now = datetime.now()
             rendered = render_snippet(snippet.content, current_text, now)

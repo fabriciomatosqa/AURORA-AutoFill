@@ -10,6 +10,7 @@ import unittest
 from unittest.mock import patch
 
 from engine_fixture import EngineFixture
+from app.expansion import EditSnapshot, utf16_slice
 from app.windows_context import ContextUnavailable
 
 
@@ -58,6 +59,66 @@ class StableExpansionRollbackTests(unittest.TestCase):
                 engine.drain()
             self.assertEqual(engine.field.text, "/teste")
             self.assertEqual(engine.clipboard.text(), "original")
+
+
+    def test_stale_caret_in_teams_falls_back_to_verified_shortcut_copy(self):
+        # Win32 or UIA may report the text but not the most recent caret.
+        # Only an exact Ctrl+C proof may authorize the replacement.
+        for accessibility_only in (False, True):
+            with self.subTest(accessibility_only=accessibility_only), EngineFixture() as engine:
+                engine.save("/1", "Resposta confirmada")
+
+                def stale(context, *, accessibility=False):
+                    if accessibility_only and not accessibility:
+                        return None
+                    identity = ("teams", "webview", "editor") if accessibility_only else ()
+                    return EditSnapshot(context, engine.field.text, 0, 0, identity)
+
+                def copy_actual_selection():
+                    field = engine.field
+                    start, end = sorted((field.anchor, field.caret))
+                    engine.clipboard.setText(utf16_slice(field.text, start, end))
+
+                with patch("app.ui.capture_edit", side_effect=stale), \\
+                     patch("app.ui.supports_verified_copy", return_value=True), \\
+                     patch("app.ui.copy_selected_text", side_effect=copy_actual_selection):
+                    engine.type("/1")
+                    engine.drain()
+                self.assertEqual(engine.field.text, "Resposta confirmada")
+                self.assertEqual(engine.api_calls, 2)  # selecionar e colar, sem apagar
+                self.assertEqual(engine.clipboard.text(), "original")
+                self.assertFalse(engine.shift or engine.ctrl)
+
+    def test_stale_caret_in_unknown_editor_leaves_shortcut_untouched(self):
+        with EngineFixture() as engine:
+            engine.save("/teste", "Texto não deve ser inserido")
+            def stale(context, *, accessibility=False):
+                return EditSnapshot(context, engine.field.text, 0, 0)
+            with patch("app.ui.capture_edit", side_effect=stale), \\
+                 patch("app.ui.supports_verified_copy", return_value=False), \\
+                 patch("app.ui.copy_selected_text",
+                       side_effect=AssertionError("Não copiar neste destino")):
+                engine.type("/teste")
+                engine.drain()
+            self.assertEqual(engine.field.text, "/teste")
+            self.assertEqual(engine.api_calls, 0)
+            self.assertEqual(engine.clipboard.text(), "original")
+
+    def test_stale_caret_wrong_copy_never_deletes_existing_text(self):
+        with EngineFixture() as engine:
+            engine.save("/eu", "Resposta")
+            engine.field.insert("Antes ")
+            def stale(context, *, accessibility=False):
+                return EditSnapshot(context, engine.field.text, 0, 0)
+            with patch("app.ui.capture_edit", side_effect=stale), \\
+                 patch("app.ui.supports_verified_copy", return_value=True), \\
+                 patch("app.ui.copy_selected_text",
+                       side_effect=lambda: engine.clipboard.setText("texto diferente")):
+                engine.type("/eu")
+                engine.drain()
+            self.assertEqual(engine.field.text, "Antes /eu")
+            self.assertEqual(engine.clipboard.text(), "original")
+            self.assertEqual(engine.host._play_confirmation.call_count, 0)
 
 
 if __name__ == "__main__":
