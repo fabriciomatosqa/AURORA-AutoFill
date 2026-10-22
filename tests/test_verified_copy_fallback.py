@@ -65,7 +65,7 @@ class VerifiedCopyFallbackTests(unittest.TestCase):
                 ))
                 original_consume()
             e.consume = record_paste
-            with patch("app.ui.capture_edit", side_effect=readonly_uia), \\
+            with patch("app.ui.capture_edit", side_effect=readonly_uia), \
                  patch("app.ui.supports_verified_copy", return_value=True):
                 e.type("/lorem")
                 e.drain()
