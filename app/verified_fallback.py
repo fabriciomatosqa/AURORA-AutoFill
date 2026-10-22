@@ -26,30 +26,28 @@ def supports_verified_copy(context) -> bool:
         user32.GetWindowThreadProcessId.argtypes = [
             wintypes.HWND, ctypes.POINTER(wintypes.DWORD)]
         user32.GetWindowThreadProcessId.restype = wintypes.DWORD
-        pid = wintypes.DWORD()
-        if not user32.GetWindowThreadProcessId(context.window, ctypes.byref(pid)):
-            return False
-        kernel32.OpenProcess.argtypes = [
-            wintypes.DWORD, wintypes.BOOL, wintypes.DWORD]
-        kernel32.OpenProcess.restype = wintypes.HANDLE
-        kernel32.QueryFullProcessImageNameW.argtypes = [
-            wintypes.HANDLE, wintypes.DWORD, wintypes.LPWSTR,
-            ctypes.POINTER(wintypes.DWORD)]
-        kernel32.QueryFullProcessImageNameW.restype = wintypes.BOOL
-        kernel32.CloseHandle.argtypes = [wintypes.HANDLE]
-        handle = kernel32.OpenProcess(0x1000, False, pid.value)
-        if not handle:
-            return False
-        try:
-            buffer = ctypes.create_unicode_buffer(32768)
-            size = wintypes.DWORD(len(buffer))
-            if not kernel32.QueryFullProcessImageNameW(
-                    handle, 0, buffer, ctypes.byref(size)):
-                return False
-            name = os.path.basename(buffer.value.replace("\\", "/")).casefold()
-            return name in SAFE_EDITORS
-        finally:
-            kernel32.CloseHandle(handle)
+        # Algumas versões do Teams usam janelas hospedadas: o processo
+        # do HWND principal pode diferir do controle que tem o teclado.
+        # Conferir APENAS esses dois HWNDs, nunca outros processos.
+        for hwnd in dict.fromkeys((context.control, context.window)):
+            pid = wintypes.DWORD()
+            if not user32.GetWindowThreadProcessId(hwnd, ctypes.byref(pid)):
+                continue
+            handle = kernel32.OpenProcess(0x1000, False, pid.value)
+            if not handle:
+                continue
+            try:
+                buffer = ctypes.create_unicode_buffer(32768)
+                size = wintypes.DWORD(len(buffer))
+                if not kernel32.QueryFullProcessImageNameW(
+                        handle, 0, buffer, ctypes.byref(size)):
+                    continue
+                name = os.path.basename(buffer.value.replace("\\\\", "/")).casefold()
+                if name in SAFE_EDITORS:
+                    return True
+            finally:
+                kernel32.CloseHandle(handle)
+        return False
     except (AttributeError, OSError, ValueError, TypeError):
         return False
 

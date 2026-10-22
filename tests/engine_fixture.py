@@ -190,6 +190,12 @@ class EngineFixture:
             elif vk == 37 and not up:
                 # Native baseline established that unextended Left loses selection.
                 self.field.left(self.shift and bool(flags & 1) and not self.ignore_selection)
+            elif vk == 67 and not up and self.ctrl:
+                # Emula Ctrl+C real: apenas uma seleção não vazia substitui
+                # o marcador do clipboard. Não fabrica um atalho selecionado.
+                low, high = sorted((self.field.anchor, self.field.caret))
+                if high > low:
+                    self.clipboard.setText(utf16_slice(self.field.text, low, high))
             elif vk == 86 and not up and self.ctrl:
                 if self.paste_delay:
                     self.schedule(self.paste_delay, self.consume)
