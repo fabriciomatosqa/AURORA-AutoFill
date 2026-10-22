@@ -94,7 +94,9 @@ def interoperable_html(html: str) -> str:
             if color is not None:
                 span = f'<font color="{color.name()}">{span}</font>'
             pieces.append(span)
-        inner = "".join(pieces) or "<br>"
+        # Um parágrafo vazio já representa uma quebra de linha no QTextEdit.
+        # Acrescentar <br> dobraria a separação entre os blocos no Word.
+        inner = "".join(pieces)
         result.append(f'<p style="margin:0">{inner}</p>')
     return "".join(result)
 
