@@ -92,3 +92,10 @@ class ExpansionOperation:
     image_only: bool = False
     images_confirmed: bool = False
     feedback_played: bool = False
+    # Segunda via para Word/Teams: só cola após Ctrl+C confirmar que a seleção
+    # contém exatamente o atalho; não depende da leitura integral por UIA.
+    keyboard_verify: bool = False
+    verify_original: Any = None
+    verify_marker: str = ""
+    verify_sequence: int | None = None
+    verify_select_keyboard: bool = False

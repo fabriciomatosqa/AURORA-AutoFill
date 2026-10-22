@@ -19,9 +19,11 @@ from PySide6.QtWidgets import (
 
 from .core import (Snippet, SnippetStore, application_db_path,
                    render_snippet, validate_shortcut)
-from .hotkeys import GlobalHotkeyListener, replace_shortcut, paste_clipboard
+from .hotkeys import (GlobalHotkeyListener, replace_shortcut, paste_clipboard,
+                      select_previous_characters, copy_selected_text, collapse_selection_to_end)
 from .expansion import ClipboardLease, EditSnapshot, ExpansionCandidate, ExpansionOperation, utf16_slice, prefix_offset
 from .windows_context import ContextUnavailable, FocusMonitor, capture_focus, capture_edit, set_caret, select_text_range
+from .verified_fallback import supports_verified_copy, copied_shortcut_matches
 from .accessibility_context import warm_accessibility
 from time import monotonic
 from .formatting import has_rich_formatting, render_rich_html
@@ -1585,7 +1587,7 @@ class AutoFillWindow(AuroraFeaturesMixin, QMainWindow):
             return
         operation = self._expansion_operation
         lease = self._clipboard_lease
-        if (operation and operation.stage in {"selected", "sent", "moving"}
+        if (operation and operation.stage in {"selected", "verifying", "sent", "moving"}
                 or lease and not lease.consumed and self._owns_clipboard(lease)):
             self._queued_candidate = candidate
             return
@@ -1600,7 +1602,7 @@ class AutoFillWindow(AuroraFeaturesMixin, QMainWindow):
     def _candidate_valid(self, candidate):
         operation = self._expansion_operation
         already_sent = (operation is not None and operation.candidate is candidate
-                        and operation.stage in {"selected", "sent", "moving"})
+                        and operation.stage in {"selected", "verifying", "sent", "moving"})
         # Never expire a sent paste mid-confirmation. Still reject a changed
         # keyboard revision or actual focus change to protect the destination.
         return (self._active_candidate is candidate and self._hotkeys_enabled and not self._quitting
@@ -1644,6 +1646,10 @@ class AutoFillWindow(AuroraFeaturesMixin, QMainWindow):
             if not self._candidate_valid(candidate):
                 raise ValueError("A digitação ou o destino mudou; expansão cancelada.")
             shortcut = candidate.shortcut
+            copy_fallback = (sys.platform == "win32"
+                             and supports_verified_copy(candidate.context)
+                             and not (self.isActiveWindow() and self.focusWidget() is self.test_box))
+            keyboard_verify = False
             snippet = self.store.snippet_by_shortcut(shortcut)
             if not snippet:
                 self._finish_expansion(None)
@@ -1651,16 +1657,19 @@ class AutoFillWindow(AuroraFeaturesMixin, QMainWindow):
             try:
                 before = self._edit_snapshot()
             except ContextUnavailable:
-                if monotonic() - candidate.created < 0.85:
+                if monotonic() - candidate.created < (0.15 if copy_fallback else 0.85):
                     QTimer.singleShot(10, lambda c=candidate: self._perform_expansion(c))
                     return
-                raise
+                if not copy_fallback:
+                    raise
+                before = None
+                keyboard_verify = True
             if before is not None and before.shortcut_range(shortcut) is None:
                 if monotonic() - candidate.created < 0.85:
                     QTimer.singleShot(10, lambda c=candidate: self._perform_expansion(c))
                     return
                 raise ValueError("O atalho não está no intervalo esperado; expansão cancelada.")
-            if before is None and sys.platform == "win32" and not (
+            if before is None and not keyboard_verify and sys.platform == "win32" and not (
                     self.isActiveWindow() and self.focusWidget() is self.test_box):
                 # Campos WebView e controles personalizados podem não expor
                 # texto por Win32. Jamais selecionar caracteres às cegas:
@@ -1670,15 +1679,20 @@ class AutoFillWindow(AuroraFeaturesMixin, QMainWindow):
                 try:
                     before = self._edit_snapshot(accessibility=True)
                 except ContextUnavailable:
-                    if monotonic() - candidate.created < 0.85:
+                    if monotonic() - candidate.created < (0.15 if copy_fallback else 0.85):
                         QTimer.singleShot(20, lambda c=candidate: self._perform_expansion(c))
                         return
-                    raise
-                if before is None:
+                    if not copy_fallback:
+                        raise
+                    before = None
+                    keyboard_verify = True
+                if before is None and copy_fallback:
+                    keyboard_verify = True
+                elif before is None:
                     raise ValueError(
                         "O editor não oferece seleção verificável. "
                         "Atalho preservado; use Copiar para outro aplicativo.")
-                if before.shortcut_range(shortcut) is None:
+                if before is not None and before.shortcut_range(shortcut) is None:
                     if monotonic() - candidate.created < 0.35:
                         QTimer.singleShot(20, lambda c=candidate: self._perform_expansion(c))
                         return
@@ -1699,6 +1713,10 @@ class AutoFillWindow(AuroraFeaturesMixin, QMainWindow):
             # o modelo foi realmente formatado (Word/Outlook podem aproveitar).
             rich = bool(snippet.rich_content and has_rich_formatting(snippet.rich_content)
                         and "{{cursor}}" not in snippet.content)
+            if keyboard_verify and rendered.left_moves:
+                # Sem leitura do documento, {{cursor}} não pode ser colocado
+                # com precisão após a colagem.
+                raise ValueError("Este comando usa {{cursor}} e exige acessibilidade do editor.")
             suffix = rendered.text[-rendered.left_moves:] if rendered.left_moves else ""
             if rendered.left_moves and before is None:
                 try:
@@ -1715,6 +1733,7 @@ class AutoFillWindow(AuroraFeaturesMixin, QMainWindow):
             operation = ExpansionOperation(candidate, before, rendered.text, cursor_steps(suffix),
                                            rendered.text[:-rendered.left_moves] if rendered.left_moves else rendered.text,
                                            render_rich_html(snippet.rich_content, current_text, now) if rich else "")
+            operation.keyboard_verify = keyboard_verify
             self._expansion_operation = operation
             if image_sources(snippet.rich_content):
                 mixed = prepare_mixed_content(snippet.rich_content, current_text, now)
@@ -1727,7 +1746,7 @@ class AutoFillWindow(AuroraFeaturesMixin, QMainWindow):
                 if "\x00" in operation.text:
                     raise ValueError("O texto contém um caractere NUL e não pode ser colado.")
                 operation.text.encode("utf-16-le")
-                if before is None:
+                if before is None and not keyboard_verify:
                     before = self._edit_snapshot(accessibility=True)
                     if before is None or before.shortcut_range(shortcut) is None:
                         raise ValueError("Não é possível verificar o atalho neste campo. Use o menu Copiar para outro aplicativo.")
@@ -1744,6 +1763,9 @@ class AutoFillWindow(AuroraFeaturesMixin, QMainWindow):
         try:
             if not self._candidate_valid(operation.candidate):
                 raise ValueError("Atividade ou foco mudou; colagem cancelada.")
+            if operation.keyboard_verify:
+                self._begin_keyboard_verification(operation, select_keyboard=True)
+                return
             clipboard = QApplication.clipboard()
             backup_sequence = self._clipboard_sequence()
             previous = self._clipboard_lease
@@ -1815,6 +1837,92 @@ class AutoFillWindow(AuroraFeaturesMixin, QMainWindow):
         except Exception as exc:
             self._finish_expansion(operation, f"Não foi possível expandir: {exc}")
 
+    def _begin_keyboard_verification(self, operation, *, select_keyboard: bool):
+        """Seleciona sem apagar e valida Ctrl+C antes de permitir Ctrl+V."""
+        if (self._expansion_operation is not operation
+                or not self._candidate_valid(operation.candidate)
+                or not supports_verified_copy(operation.candidate.context)):
+            raise ValueError("O destino mudou ou não permite a confirmação por cópia.")
+        clipboard = QApplication.clipboard()
+        prior = operation.lease
+        original = prior.original if prior is not None else self._clone_clipboard_mime()
+        from uuid import uuid4
+        operation.verify_original = original
+        operation.verify_marker = "AURORA-VERIFY-" + uuid4().hex
+        operation.verify_select_keyboard = select_keyboard
+        operation.stage = "verifying"
+        clipboard.setText(operation.verify_marker)
+        operation.verify_sequence = self._clipboard_sequence()
+        operation.deadline = monotonic() + 0.45
+        if select_keyboard:
+            select_previous_characters(cursor_steps(operation.candidate.shortcut))
+        copy_selected_text()
+        QTimer.singleShot(10, lambda op=operation: self._confirm_keyboard_verification(op))
+
+    def _confirm_keyboard_verification(self, operation):
+        if self._expansion_operation is not operation or operation.stage != "verifying":
+            return
+        try:
+            if not self._candidate_valid(operation.candidate):
+                raise ValueError("Foco ou digitação mudou durante a confirmação do atalho.")
+            clipboard = QApplication.clipboard()
+            sequence = self._clipboard_sequence()
+            selected = clipboard.text()
+            changed = sequence != operation.verify_sequence
+            if changed and copied_shortcut_matches(selected, operation.candidate.shortcut):
+                from uuid import uuid4
+                token = uuid4().hex.encode("ascii")
+                payload = expansion_mime(operation.text, operation.rich_html,
+                                         image_only=operation.image_only)
+                payload.setData("application/x-aurora-expansion", token)
+                clipboard.setMimeData(payload)
+                lease = ClipboardLease(
+                    operation.candidate.identifier, operation.verify_original,
+                    payload.text(), token, self._clipboard_sequence())
+                operation.lease = self._clipboard_lease = lease
+                self._clipboard_pending = True
+                operation.verify_original = None
+                if not self._candidate_valid(operation.candidate) or not self._owns_clipboard(lease):
+                    raise ValueError("Foco ou clipboard mudou antes da colagem.")
+                operation.stage = "sent"
+                paste_clipboard()
+                self._expansion_sent(operation)
+                return
+            if changed and selected != operation.verify_marker:
+                raise ValueError("A seleção copiada não corresponde ao atalho; colagem cancelada.")
+            if monotonic() < operation.deadline:
+                QTimer.singleShot(20, lambda op=operation: self._confirm_keyboard_verification(op))
+                return
+            raise ValueError("O aplicativo não confirmou a cópia exata do atalho; nenhum texto foi substituído.")
+        except Exception as exc:
+            self._finish_expansion(operation, f"Não foi possível expandir: {exc}")
+
+    def _restore_keyboard_probe(self, operation):
+        """Restaura a área de transferência apenas se ainda for nossa cópia."""
+        original = operation.verify_original
+        if original is None:
+            return
+        try:
+            clipboard = QApplication.clipboard()
+            sequence = self._clipboard_sequence()
+            old = operation.verify_sequence
+            # Um único Ctrl+C pode produzir no máximo duas revisões ao
+            # disponibilizar formatos diferentes. Não sobrescrever cópia nova.
+            copied = (sequence is not None and old is not None
+                      and 0 < sequence - old <= 2)
+            marker = (sequence == old and clipboard.text() == operation.verify_marker)
+            if marker or (copied and self._candidate_valid(operation.candidate)):
+                clipboard.setMimeData(original)
+            if self._candidate_valid(operation.candidate):
+                collapse_selection_to_end()
+        except (OSError, ValueError, RuntimeError):
+            pass
+        finally:
+            operation.verify_original = None
+            if self._clipboard_lease is operation.lease and operation.lease is not None:
+                self._clipboard_lease = None
+                self._clipboard_pending = False
+
     def _paste_verified_selection(self, operation):
         """Confirma que o Teams ainda seleciona somente o atalho antes do Ctrl+V."""
         if self._expansion_operation is not operation or operation.stage != "selected":
@@ -1837,9 +1945,11 @@ class AutoFillWindow(AuroraFeaturesMixin, QMainWindow):
                         and monotonic() < operation.deadline):
                     QTimer.singleShot(10, lambda op=operation: self._paste_verified_selection(op))
                     return
+                if supports_verified_copy(operation.candidate.context):
+                    self._begin_keyboard_verification(operation, select_keyboard=False)
+                    return
                 raise ValueError(
-                    "O Teams não confirmou a seleção do atalho dentro do prazo; "
-                    "nenhum texto foi colado.")
+                    "O editor não confirmou a seleção do atalho; nenhum texto foi colado.")
             if not self._candidate_valid(operation.candidate) or not self._owns_clipboard(operation.lease):
                 raise ValueError("O contexto mudou durante a verificação da seleção.")
             operation.stage = "sent"
@@ -1852,6 +1962,12 @@ class AutoFillWindow(AuroraFeaturesMixin, QMainWindow):
                     and self._candidate_valid(operation.candidate)
                     and self._owns_clipboard(operation.lease)):
                 QTimer.singleShot(10, lambda op=operation: self._paste_verified_selection(op))
+            elif (self._candidate_valid(operation.candidate)
+                  and supports_verified_copy(operation.candidate.context)):
+                try:
+                    self._begin_keyboard_verification(operation, select_keyboard=False)
+                except Exception as error:
+                    self._finish_expansion(operation, f"Não foi possível expandir: {error}")
             else:
                 self._finish_expansion(operation, f"Não foi possível expandir: {exc}")
         except Exception as exc:
@@ -1989,6 +2105,8 @@ class AutoFillWindow(AuroraFeaturesMixin, QMainWindow):
     def _finish_expansion(self, operation, message=""):
         if operation is not None and self._expansion_operation is not operation:
             return
+        if operation is not None and operation.verify_original is not None:
+            self._restore_keyboard_probe(operation)
         if message:
             self._clear_failed_selection(operation)
             self.statusBar().showMessage(message, 8000)

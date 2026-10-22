@@ -453,13 +453,13 @@ def _send_windows_paste(backspaces: int, left_moves: int = 0, *, phase: str = "a
     class INPUT(ctypes.Structure):
         _fields_ = [("type", wintypes.DWORD), ("u", INPUTUNION)]
     KEYUP = 2
-    VK_BACK, VK_CTRL, VK_V, VK_LEFT = 0x08, 0x11, 0x56, 0x25
+    VK_BACK, VK_CTRL, VK_V, VK_LEFT, VK_C, VK_RIGHT = 0x08, 0x11, 0x56, 0x25, 0x43, 0x27
     api = ctypes.windll.user32.SendInput
     api.argtypes = [wintypes.UINT, ctypes.POINTER(INPUT), ctypes.c_int]
     api.restype = wintypes.UINT
 
     def event(vk: int, up: bool = False):
-        flags = (KEYUP if up else 0) | (1 if vk == VK_LEFT else 0)
+        flags = (KEYUP if up else 0) | (1 if vk in (VK_LEFT, VK_RIGHT) else 0)
         return INPUT(1, INPUTUNION(ki=KEYBDINPUT(vk, 0, flags, 0, INJECTION_TAG)))
 
     def submit(events, *, single_batch=False):
@@ -480,6 +480,14 @@ def _send_windows_paste(backspaces: int, left_moves: int = 0, *, phase: str = "a
     if any(ctypes.windll.user32.GetAsyncKeyState(vk) & 0x8000
            for vk in (0x10, 0x11, 0x12, 0x5B, 0x5C)):
         raise OSError("Solte as teclas modificadoras antes de expandir.")
+    if phase == "copy":
+        submit([event(VK_CTRL), event(VK_C), event(VK_C, True), event(VK_CTRL, True)],
+               single_batch=True)
+        return
+    if phase == "collapse":
+        # Right encerra a seleção preservando o texto, no fim do atalho.
+        submit([event(VK_RIGHT), event(VK_RIGHT, True)], single_batch=True)
+        return
     deletion = []
     for _ in range(backspaces):
         deletion.extend((event(VK_LEFT), event(VK_LEFT, True)))
@@ -513,6 +521,22 @@ def select_previous_characters(count: int) -> None:
     with kb.pressed(Key.shift):
         for _ in range(count):
             kb.tap(Key.left)
+
+
+def copy_selected_text() -> None:
+    """Ctrl+C nativo; só usado depois de selecionar o atalho para verificá-lo."""
+    import sys
+    if sys.platform != "win32":
+        raise OSError("Verificação por seleção copiada disponível apenas no Windows.")
+    _send_windows_paste(0, phase="copy")
+
+
+def collapse_selection_to_end() -> None:
+    """Desfaz a seleção temporária sem apagar ou digitar conteúdo."""
+    import sys
+    if sys.platform != "win32":
+        return
+    _send_windows_paste(0, phase="collapse")
 
 
 def replace_shortcut(count: int) -> None:
