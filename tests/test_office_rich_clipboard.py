@@ -117,6 +117,8 @@ class OfficeRichClipboardTests(unittest.TestCase):
     @unittest.skipUnless(sys.platform == "win32", "Clipboard nativo Windows")
     def test_windows_registers_html_and_rtf_formats_for_office(self):
         from PySide6.QtWidgets import QApplication
+        if QApplication.platformName().lower() != "windows":
+            self.skipTest("Qt offscreen não publica no clipboard nativo Win32")
         import ctypes
         from app.clipboard_content import expansion_mime
         mime = expansion_mime("Teste", self.sample_html())
