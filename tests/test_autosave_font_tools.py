@@ -137,9 +137,10 @@ class AutosaveAndFontUiTests(unittest.TestCase):
                 cursor.setPosition(0)
                 cursor.setPosition(6, QTextCursor.KeepAnchor)
                 win.body_input.setTextCursor(cursor)
+                # O Windows CI roda sem sessão gráfica e nem sempre expõe
+                # suas fontes instaladas ao Qt; no desktop real expõe todas.
                 families = QFontDatabase.families()
-                self.assertTrue(families)
-                win._apply_font_family(families[0])
+                win._apply_font_family(families[0] if families else 'Segoe UI')
                 win._apply_font_size(22)
                 win._apply_format('bold', True)
                 win._apply_format('strike', True)
@@ -153,7 +154,8 @@ class AutosaveAndFontUiTests(unittest.TestCase):
                 self.assertIn('Grande', render_rich_html(saved.rich_content, ''))
                 self.assertIn('pequeno', render_rich_html(saved.rich_content, ''))
                 self.assertIn('automaticamente', win.autosave_status.text())
-                self.assertGreater(win.font_family.count(), 0)
+                from PySide6.QtWidgets import QFontComboBox
+                self.assertIsInstance(win.font_family, QFontComboBox)
             finally:
                 self._cleanup(win)
 
