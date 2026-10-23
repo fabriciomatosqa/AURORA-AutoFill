@@ -16,7 +16,7 @@ echo.
 echo [2/3] Gerando icones e compilando o aplicativo...
 py -3 scripts\build_branding.py
 if errorlevel 1 goto error
-py -3 -m PyInstaller --noconfirm --clean --windowed --onedir --name "AURORA AutoFill" --icon "assets\aurora_icon.ico" --add-data "assets;assets" --add-data "app\accessibility_worker.ps1;app" --collect-submodules pynput main.py
+py -3 -m PyInstaller --noconfirm --clean --windowed --onedir --name "AURORA AutoFill" --icon "assets\aurora_icon.ico" --add-data "assets;assets" --add-data "app\accessibility_worker.ps1;app" --add-data "app\accessibility_worker.cs;app" --collect-submodules pynput main.py
 if errorlevel 1 goto error
 py -3 packaging\verify_bundle.py --platform windows
 if errorlevel 1 goto error

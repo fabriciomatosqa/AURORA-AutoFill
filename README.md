@@ -173,3 +173,20 @@ O GitHub Actions também verifica os recursos empacotados, inicia os executávei
 - **Iniciar com Windows** usa a chave `Run` do usuário atual. Ao marcar **Iniciar minimizado** ao lado, o Windows executa o aplicativo com `--minimized`: os atalhos ficam ativos na bandeja do sistema, sem abrir a janela. A abertura manual pelo atalho continua normal. É necessário haver suporte à bandeja do sistema; a posição do ícone, inclusive a área de ícones ocultos, é definida pelo próprio Windows.
 - O instalador Windows não está assinado digitalmente; o Windows pode exibir o aviso do SmartScreen.
 - A fonte em desenvolvimento abre a página da Release para instalar o pacote. A substituição da própria cópia está disponível nos aplicativos empacotados.
+
+
+### Reconhecimento e preenchimento otimizados
+
+O reconhecimento usa a mesma comparação Unicode do cadastro e da recuperação:
+`/AÇÃO` encontra `/ação`, inclusive em perfis com muitos modelos. Os metadados dos
+atalhos ficam separados dos corpos e imagens. Modelos utilizados recentemente
+têm cache limitado, invalidado por edição, exclusão, importação e mudanças do banco.
+Data, hora e clipboard continuam sendo resolvidos novamente em cada expansão.
+
+No Windows, o processo auxiliar de acessibilidade compila o seu motor C# uma vez
+na inicialização. Ele continua isolado, com prazo máximo para resposta, sem gravar
+texto dos documentos. Quando a seleção já foi comprovada pelo worker, a colagem
+usa essa prova imediatamente, sem uma consulta redundante ao documento inteiro.
+Um ACK de seleção ainda pendente nunca autoriza colar sozinho.
+
+Detalhes, verificações e limites: [motor de preenchimento](docs/motor-preenchimento.md).

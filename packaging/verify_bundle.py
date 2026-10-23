@@ -33,11 +33,12 @@ def verify_bundle(dist, platform, source_root=None):
     if not any(internal.glob('PySide6/**/plugins/platforms/' + plugin)):
         raise ValueError('Plugin Qt de plataforma ausente: ' + plugin)
     if platform == 'windows':
-        worker = internal / 'app' / 'accessibility_worker.ps1'
-        expected = source / 'app' / 'accessibility_worker.ps1'
-        if not worker.is_file() or worker.read_bytes() != expected.read_bytes():
-            raise ValueError('Worker UIA ausente ou diferente em _internal/app/accessibility_worker.ps1')
-        hashes['app/accessibility_worker.ps1'] = hashlib.sha256(worker.read_bytes()).hexdigest()
+        for name in ('accessibility_worker.ps1', 'accessibility_worker.cs'):
+            worker = internal / 'app' / name
+            expected = source / 'app' / name
+            if not worker.is_file() or worker.read_bytes() != expected.read_bytes():
+                raise ValueError('Worker UIA ausente ou diferente em _internal/app/' + name)
+            hashes['app/' + name] = hashlib.sha256(worker.read_bytes()).hexdigest()
     for path in dist.rglob('*'):
         relative = path.relative_to(dist)
         names = {part.lower() for part in relative.parts}
