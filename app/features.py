@@ -38,7 +38,7 @@ def confirm_update(parent, text):
 
 class AuroraFeaturesMixin:
     def _initialize_features(self):
-        self.preferences = load_preferences()
+        self.preferences = load_preferences(existing_profile=not self.store._fresh_database, initialize=True)
         self._undo_actions = []
         self._next_undo_id = 0
         self._check_thread = None
@@ -61,6 +61,8 @@ class AuroraFeaturesMixin:
         self.settings_page = SettingsPage(
             self.preferences, startup_supported=windows_startup_supported(),
             startup_enabled=windows_startup_enabled())
+        self.settings_page.theme_changed.connect(
+            lambda value: self._change_preference("theme", value))
         self.settings_page.sound_toggled.connect(
             lambda checked: self._change_preference("sound_enabled", checked))
         self.settings_page.volume_changed.connect(
@@ -96,10 +98,13 @@ class AuroraFeaturesMixin:
                       "sound_volume": self.settings_page.volume,
                       "check_updates": self.settings_page.updates,
                       "include_prereleases": self.settings_page.prereleases,
-                      "start_minimized": self.settings_page.start_minimized}.get(key)
+                      "start_minimized": self.settings_page.start_minimized,
+                      "theme": self.settings_page.theme}.get(key)
             if widget is not None:
                 widget.blockSignals(True)
-                if key == "sound_volume":
+                if key == "theme":
+                    widget.setCurrentIndex(widget.findData(previous))
+                elif key == "sound_volume":
                     widget.setValue(previous)
                 else:
                     widget.setChecked(previous)
@@ -107,7 +112,9 @@ class AuroraFeaturesMixin:
             self._sync_audio_controls()
             QMessageBox.warning(self, "Configurações", f"Não foi possível salvar: {exc}")
             return
-        if key == "check_updates":
+        if key == "theme":
+            self.theme_controller.set_preference(value)
+        elif key == "check_updates":
             if not value and self._update_notice is not None:
                 self._update_notice.hide()
             if value:
@@ -216,6 +223,10 @@ class AuroraFeaturesMixin:
                 widget.blockSignals(True)
                 widget.setChecked(self.preferences[setting])
                 widget.blockSignals(False)
+            self.settings_page.theme.blockSignals(True)
+            self.settings_page.theme.setCurrentIndex(self.settings_page.theme.findData(self.preferences["theme"]))
+            self.settings_page.theme.blockSignals(False)
+            self.theme_controller.set_preference(self.preferences["theme"])
             self.settings_page.volume.blockSignals(True)
             self.settings_page.volume.setValue(self.preferences["sound_volume"])
             self.settings_page.volume.blockSignals(False)

@@ -4,9 +4,9 @@ import hashlib
 import json
 from pathlib import Path
 
-ASSETS = ('aurora_banner.jpg', 'aurora_icon.ico', 'aurora_icon.png',
+ASSETS = ('aurora_banner.jpg', 'aurora_banner_day.png', 'aurora_icon.ico', 'aurora_icon.png',
           'aurora_icon_256.png', 'command_click.wav', 'AUDIO-LICENSE.txt',
-          'checkmark.svg')
+          'checkmark.svg', 'chevron_down.svg')
 ASSETS += tuple('icons/' + name + '.svg' for name in (
     'settings', 'home', 'save', 'trash', 'plus', 'minus', 'export', 'import',
     'undo', 'folder', 'play', 'pause', 'volume', 'update', 'backup', 'restore',

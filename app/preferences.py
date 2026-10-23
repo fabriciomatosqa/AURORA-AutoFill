@@ -16,6 +16,7 @@ DEFAULTS = {
     "check_updates": True,
     "include_prereleases": IS_PRERELEASE,
     "start_minimized": False,
+    "theme": "system",
 }
 RUN_NAME = "AURORAAutoFill"
 RUN_KEY = r"Software\Microsoft\Windows\CurrentVersion\Run"
@@ -28,7 +29,10 @@ def preferences_path() -> Path:
 def normalize_preferences(raw: dict) -> dict:
     """Use the same bounded, typed settings for files, imports and writes."""
     settings = dict(DEFAULTS)
+    settings["theme"] = "dark"
     if isinstance(raw, dict):
+        # A settings file predating themes belongs to an existing dark profile.
+        settings["theme"] = raw.get("theme") if raw.get("theme") in ("light", "dark", "system") else "dark"
         for key in ("sound_enabled", "check_updates", "include_prereleases", "start_minimized"):
             if type(raw.get(key)) is bool:
                 settings[key] = raw[key]
@@ -38,13 +42,29 @@ def normalize_preferences(raw: dict) -> dict:
     return settings
 
 
-def load_preferences(path: Path | None = None) -> dict:
+def load_preferences(path: Path | None = None, *, existing_profile: bool | None = None, initialize: bool = False) -> dict:
     target = Path(path) if path is not None else preferences_path()
     try:
         raw = json.loads(target.read_text(encoding="utf-8"))
-        return normalize_preferences(raw)
+        settings = normalize_preferences(raw)
+        if initialize and isinstance(raw, dict) and "theme" not in raw:
+            try:
+                save_preferences(settings, target)
+            except OSError:
+                pass
+        return settings
     except (OSError, ValueError, UnicodeError):
-        return dict(DEFAULTS)
+        settings = dict(DEFAULTS)
+        if existing_profile is None:
+            existing_profile = (target.parent / "snippets.sqlite3").exists()
+        if existing_profile or target.exists():
+            settings["theme"] = "dark"
+        if initialize and not target.exists():
+            try:
+                save_preferences(settings, target)
+            except OSError:
+                pass  # Read-only profiles still open; explicit changes report errors.
+        return settings
 
 
 def save_preferences(settings: dict, path: Path | None = None) -> None:

@@ -98,6 +98,18 @@ Baixe os instaladores na página oficial de [GitHub Releases](https://github.com
 
 Nenhum comando ou conteúdo pessoal é enviado ao GitHub. A rede é usada para consultar lançamentos e baixar o instalador escolhido. SHA256 verifica a integridade em relação aos arquivos publicados; o instalador ainda não possui assinatura de código.
 
+## Aparência: Claro, Escuro e Seguir o sistema
+
+Em **Configurações → Aparência → Tema do aplicativo**, escolha **Claro**, **Escuro** ou **Seguir o sistema**. A troca é imediata, sem reiniciar, e fica salva em `settings.json`. Instalações novas começam em **Seguir o sistema**; perfis existentes e preferências/backups antigos sem o campo `theme` conservam o visual **Escuro**. O padrão da instalação nova é gravado na primeira abertura, para permanecer igual nas aberturas seguintes.
+
+**Seguir o sistema** consulta `QStyleHints.colorScheme()` e acompanha `colorSchemeChanged` do Qt tanto no Windows quanto no Linux. Quando a plataforma ou o ambiente gráfico não informa a aparência, o fallback é **Escuro**. Claro e Escuro ignoram mudanças do sistema. No Linux, a detecção depende da integração do Qt com o ambiente gráfico utilizado.
+
+O tema claro cobre os painéis, editor, ferramentas, SVGs, menus, configurações, avisos e diálogos Qt. A troca atua nos estilos e na paleta da interface: **não reescreve o HTML nem as cores, realces, fontes ou imagens dos comandos**. Conteúdo pessoal com cores explícitas continua com essas cores em ambos os temas.
+
+O tema escuro mantém `assets/aurora_banner.jpg`. O claro usa a imagem aprovada `assets/aurora_banner_day.png`, preservada integralmente no repositório. Como essa imagem já contém a assinatura AURORA AutoFill, a assinatura desenhada pela interface é ocultada somente no modo claro. O cabeçalho conserva 168 pixels de altura, os botões e a proporção da paisagem. Acima de 1320 pixels de largura, bordas da paisagem são refletidas sem ampliar excessivamente ou repetir a assinatura. A verificação dos bundles exige os dois banners, com hashes iguais aos recursos de origem.
+
+Os testes automatizados cobrem seleção e persistência, migração de perfis, sinal nativo do Qt, fallback, banner em 1060/1320/1920/2560 pixels, diálogos e preservação do conteúdo e da seleção. A entrega de eventos reais de aparência depende do desktop; conferir manualmente a mudança de tema nas configurações do Windows e do ambiente Linux utilizado. Diálogos de arquivo nativos seguem a aparência do próprio sistema operacional.
+
 ## Recursos
 
 - **Pastas e ordenação:** arraste comandos para reorganizar; a ordem permanece salva ao reiniciar. Excluir uma pasta transfere seus comandos para outra pasta.

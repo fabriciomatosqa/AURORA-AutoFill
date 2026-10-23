@@ -1,6 +1,8 @@
 """Janela de cores completa, no tema Aurora, sem seletor nativo inconsistente."""
 from __future__ import annotations
 
+from .themes import set_ui_style, ui_color
+
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor
 from PySide6.QtWidgets import QColorDialog, QDialog, QDialogButtonBox
@@ -65,7 +67,7 @@ class AuroraColorDialog(QColorDialog):
         self.setWindowTitle(f"AURORA AutoFill · {title}")
         self.setOption(QColorDialog.DontUseNativeDialog, True)
         self.setWindowFlag(Qt.WindowContextHelpButtonHint, False)
-        self.setStyleSheet(COLOR_DIALOG_STYLE)
+        set_ui_style(self, COLOR_DIALOG_STYLE)
         self.setMinimumWidth(520)
         for button_box in self.findChildren(QDialogButtonBox):
             apply = button_box.button(QDialogButtonBox.Ok)

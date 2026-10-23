@@ -39,8 +39,6 @@ class AuroraColorButton(QPushButton):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.Antialiasing)
         foreground = self.palette().buttonText().color()
-        if foreground.lightness() < 110:
-            foreground = QColor("#effaff")
         painter.setPen(foreground)
         font = QFont(self.font())
         font.setPointSize(11)

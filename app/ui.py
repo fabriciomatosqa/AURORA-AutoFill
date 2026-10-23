@@ -1,6 +1,8 @@
 """Interface desktop do AURORA AutoFill (PySide6)."""
 from __future__ import annotations
 
+from .themes import set_ui_style, ui_color, ThemeController, current_theme
+
 from pathlib import Path
 from datetime import datetime
 import sys
@@ -204,8 +206,21 @@ class AuroraBanner(QWidget):
 
     def __init__(self, picture: Path, parent=None):
         super().__init__(parent)
-        self._image = QPixmap(str(picture))
+        self._night = QPixmap(str(picture))
+        self._day = QPixmap(str(picture.with_name("aurora_banner_day.png")))
+        self._image = self._night
+        self._theme = "dark"
         self.setObjectName("topbar")
+
+    def set_theme(self, theme):
+        self._theme = theme
+        self._image = self._day if theme == "light" else self._night
+        self.update()
+
+    def panorama_width(self):
+        # Limit magnification on ultrawide displays; reflect the panorama at its
+        # edge instead of zooming until the baked-in day signature is cropped.
+        return min(self.width(), 1320)
 
     @staticmethod
     def source_crop(source_width: int, source_height: int, view_width: int, view_height: int):
@@ -225,10 +240,31 @@ class AuroraBanner(QWidget):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.SmoothPixmapTransform, True)
         if not self._image.isNull():
-            rect = self.source_crop(self._image.width(), self._image.height(), self.width(), self.height())
-            painter.drawPixmap(QRectF(self.rect()), self._image, rect)
+            width = self.panorama_width()
+            rect = self.source_crop(self._image.width(), self._image.height(), width, self.height())
+            painter.drawPixmap(QRectF(0, 0, width, self.height()), self._image, rect)
+            # Reflect only the rightmost scenery, at the same scale as the
+            # main panorama. Alternating strips meet without visible seams and
+            # cannot duplicate the day image's embedded signature on the left.
+            edge = QRectF(rect.right() - rect.width() * .38, rect.y(), rect.width() * .38, rect.height())
+            strip_width = width * .38
+            offset = float(width)
+            mirrored = True
+            while offset < self.width():
+                painter.save()
+                painter.translate(offset + (strip_width if mirrored else 0), 0)
+                if mirrored:
+                    painter.scale(-1, 1)
+                painter.drawPixmap(QRectF(0, 0, strip_width, self.height()), self._image, edge)
+                painter.restore()
+                offset += strip_width
+                mirrored = not mirrored
         else:
             painter.fillRect(self.rect(), QColor("#06152b"))
+        if self._theme == "light":
+            # Approved image contains its own signature/contrast treatment.
+            painter.end()
+            return
         # Gradiente sob a marca e sob o botão; não modifica os pixels da arte.
         left = QLinearGradient(0, 0, self.width() * .56, 0)
         left.setColorAt(0, QColor(2, 11, 29, 220))
@@ -312,7 +348,7 @@ class AuroraMenu(QMenu):
         super().__init__(parent)
         self.setAttribute(Qt.WA_TranslucentBackground, True)
         self.setWindowFlags(self.windowFlags() | Qt.FramelessWindowHint | Qt.NoDropShadowWindowHint)
-        self.setStyleSheet("""
+        set_ui_style(self, """
             QMenu { background: #112f41; color: #ebfaff; border: 1px solid #2f8590;
                 border-radius: 10px; padding: 6px; font-size: 13px; }
             QMenu::item { background: transparent; color: #e5f7ff;
@@ -334,7 +370,7 @@ class AuroraFolderCombo(QComboBox):
         menu = AuroraMenu(self)
         menu.setObjectName("folderSelectionMenu")
         menu.setMinimumWidth(max(self.width(), 210))
-        menu.setStyleSheet(menu.styleSheet() + "QMenu::indicator { width: 0px; height: 0px; }")
+        set_ui_style(menu, menu._aurora_dark_style + "QMenu::indicator { width: 0px; height: 0px; }")
         for i in range(self.count()):
             action = menu.addAction(self.itemText(i))
             action.setCheckable(True)
@@ -355,7 +391,7 @@ class AuroraFolderCombo(QComboBox):
         super().paintEvent(event)
         painter = QPainter(self)
         painter.setRenderHint(QPainter.Antialiasing, True)
-        painter.setPen(QPen(QColor("#8ef7de"), 2.0, Qt.SolidLine, Qt.RoundCap, Qt.RoundJoin))
+        painter.setPen(QPen(ui_color("#8ef7de"), 2.0, Qt.SolidLine, Qt.RoundCap, Qt.RoundJoin))
         x = self.width() - 16
         y = self.height() // 2 - 1
         painter.drawLine(x - 5, y - 2, x, y + 3)
@@ -370,7 +406,7 @@ class AuroraMenuButton(QToolButton):
         super().__init__(parent)
         self.setObjectName("tokenPicker")
         self.setMinimumHeight(40)
-        self.setStyleSheet("QToolButton#tokenPicker { font-weight: 400; }")
+        set_ui_style(self, "QToolButton#tokenPicker { font-weight: 400; }")
         self.setPopupMode(QToolButton.InstantPopup)
 
     def sizeHint(self):
@@ -385,25 +421,25 @@ class AuroraMenuButton(QToolButton):
         path = QPainterPath()
         path.addRoundedRect(bounds, 10, 10)
         active = self.underMouse() or self.isDown() or bool(self.menu() and self.menu().isVisible())
-        painter.fillPath(path, QColor("#184156" if active else "#143345"))
+        painter.fillPath(path, ui_color("#184156" if active else "#143345"))
         painter.save()
         painter.setClipPath(path)
         arrow_left = self.width() - 29
-        painter.fillRect(QRectF(arrow_left, 0, 29, self.height()), QColor("#1b495c"))
-        painter.setPen(QColor("#28586d"))
+        painter.fillRect(QRectF(arrow_left, 0, 29, self.height()), ui_color("#1b495c"))
+        painter.setPen(ui_color("#28586d"))
         painter.drawLine(arrow_left, 0, arrow_left, self.height())
         painter.restore()
         border = "#67e7d5" if self.hasFocus() else "#59dfcf" if active else "#2f7077"
-        painter.setPen(QPen(QColor(border), 1))
+        painter.setPen(QPen(ui_color(border), 1))
         painter.drawPath(path)
         center_y = self.height() // 2
         self.icon().paint(painter, QRect(12, center_y - 9, 18, 18))
         text_rect = QRect(36, 0, max(0, arrow_left - 44), self.height())
-        painter.setPen(QColor("#f0feff" if self.isEnabled() else "#7995ab"))
+        painter.setPen(ui_color("#f0feff" if self.isEnabled() else "#7995ab"))
         painter.setFont(self.font())
         label = self.fontMetrics().elidedText(self.text(), Qt.ElideRight, text_rect.width())
         painter.drawText(text_rect, Qt.AlignLeft | Qt.AlignVCenter, label)
-        painter.setPen(QPen(QColor("#8ef7de"), 2, Qt.SolidLine, Qt.RoundCap, Qt.RoundJoin))
+        painter.setPen(QPen(ui_color("#8ef7de"), 2, Qt.SolidLine, Qt.RoundCap, Qt.RoundJoin))
         x = self.width() - 15
         painter.drawLine(x - 5, center_y - 3, x, center_y + 2)
         painter.drawLine(x, center_y + 2, x + 5, center_y - 3)
@@ -429,6 +465,7 @@ class AutoFillWindow(AuroraFeaturesMixin, QMainWindow):
         self.store = SnippetStore(application_db_path())
         self.store.seed_if_empty()
         self._initialize_features()
+        self.theme_controller = ThemeController(self.preferences["theme"], self)
         self.current_id: int | None = None
         self.dirty = False
         self._loading = False
@@ -462,7 +499,8 @@ class AutoFillWindow(AuroraFeaturesMixin, QMainWindow):
         target_w = min(1320, available.width() - 24) if available else 1320
         target_h = min(900, available.height() - 24) if available else 900
         self.resize(max(1060, target_w), max(min_height, target_h))
-        self.setStyleSheet(STYLESHEET)
+        arrow = (assets / "chevron_down.svg").as_posix()
+        set_ui_style(self, STYLESHEET + '\nQComboBox::down-arrow { image: url("' + arrow + '"); width: 12px; height: 8px; }')
         self._quitting = False
         self._first_tray_hide = True
         self.tray_icon = None
@@ -470,6 +508,8 @@ class AutoFillWindow(AuroraFeaturesMixin, QMainWindow):
         self.tray_toggle_action = None
         self.tray_exit_action = None
         self._build_ui()
+        self.theme_controller.changed.connect(self._apply_banner_theme)
+        self.theme_controller.apply()
         self._setup_tray()
         self.signals = HotkeySignals()
         self.signals.triggered.connect(self._expand_global)
@@ -492,6 +532,11 @@ class AutoFillWindow(AuroraFeaturesMixin, QMainWindow):
         # Consulta no primeiro ciclo Qt; a rede executa em QThread.
         QTimer.singleShot(0, self._initial_release_check)
 
+    def _apply_banner_theme(self, theme):
+        self.banner.set_theme(theme)
+        # The approved day art already includes the whole brand signature.
+        self.banner_brand.setVisible(theme == "dark")
+
     def _play_confirmation(self):
         """Som suave com liga/desliga e volume independente do Windows."""
         self._play_feedback()
@@ -507,7 +552,7 @@ class AutoFillWindow(AuroraFeaturesMixin, QMainWindow):
         # O cenário é uma versão tratada da arte Aurora Utils aprovada.
         # A composição evita reproduzir a interface ou o texto "Utils".
         assets = Path(__file__).resolve().parent.parent / "assets"
-        top = AuroraBanner(assets / "aurora_banner.jpg")
+        top = self.banner = AuroraBanner(assets / "aurora_banner.jpg")
         top.setFixedHeight(168)
         h = QHBoxLayout(top)
         h.setContentsMargins(28, 16, 26, 16)
@@ -515,7 +560,12 @@ class AutoFillWindow(AuroraFeaturesMixin, QMainWindow):
         brand_mark = QLabel()
         brand_mark.setPixmap(self._aurora_logo.scaled(108, 108, Qt.KeepAspectRatio, Qt.SmoothTransformation))
         brand_mark.setFixedSize(108, 108)
-        h.addWidget(brand_mark)
+        self.banner_brand = QWidget()
+        self.banner_brand.setAttribute(Qt.WA_TranslucentBackground)
+        brand_layout = QHBoxLayout(self.banner_brand)
+        brand_layout.setContentsMargins(0, 0, 0, 0)
+        brand_layout.setSpacing(14)
+        brand_layout.addWidget(brand_mark)
         brand_box = QVBoxLayout()
         brand_box.setSpacing(2)
         brand_box.setContentsMargins(0, 0, 0, 0)
@@ -529,7 +579,8 @@ class AutoFillWindow(AuroraFeaturesMixin, QMainWindow):
         cap_font.setLetterSpacing(QFont.AbsoluteSpacing, 1.25)
         caption.setFont(cap_font)
         brand_box.addWidget(caption)
-        h.addLayout(brand_box)
+        brand_layout.addLayout(brand_box)
+        h.addWidget(self.banner_brand)
         h.addStretch(1)
         self.listen_button = apply_icon(QPushButton("Atalhos ativos"), "bolt")
         self.listen_button.setObjectName("headerButton")
@@ -1211,7 +1262,7 @@ class AutoFillWindow(AuroraFeaturesMixin, QMainWindow):
 
     def _set_save_status(self, message: str, *, error: bool = False):
         self.autosave_status.setText(message)
-        self.autosave_status.setStyleSheet(
+        set_ui_style(self.autosave_status,
             "color: #ffc0c8;" if error else "color: #79ead8;")
 
     def _update_current_list_item(self):

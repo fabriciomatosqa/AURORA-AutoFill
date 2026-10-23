@@ -1,16 +1,19 @@
 """Aurora-themed settings page. Signals keep all storage and update actions in ui.py."""
 from __future__ import annotations
 
+from .themes import set_ui_style, ui_color
+
 from pathlib import Path
 
 from PySide6.QtCore import Qt, Signal
-from PySide6.QtWidgets import (QCheckBox, QFrame, QHBoxLayout, QLabel, QPushButton,
+from PySide6.QtWidgets import (QCheckBox, QComboBox, QFrame, QHBoxLayout, QLabel, QPushButton,
                                QScrollArea, QSlider, QVBoxLayout, QWidget)
 from .version import IS_PRERELEASE
 from .icons import apply_icon
 
 
 class SettingsPage(QWidget):
+    theme_changed = Signal(str)
     sound_toggled = Signal(bool)
     volume_changed = Signal(int)
     startup_toggled = Signal(bool)
@@ -33,7 +36,7 @@ class SettingsPage(QWidget):
         # from showing through as an unrelated black rectangle.
         self.setAttribute(Qt.WA_StyledBackground, True)
         check_icon = (Path(__file__).resolve().parents[1] / "assets" / "checkmark.svg").as_posix()
-        self.setStyleSheet("""
+        set_ui_style(self, """
             QWidget#settingsPage, QWidget#settingsContent, QWidget#settingsViewport {
                 background: #091426; color: #eaf4ff;
             }
@@ -82,6 +85,25 @@ class SettingsPage(QWidget):
         back.clicked.connect(self.close_requested.emit)
         head.addWidget(back)
         layout.addLayout(head)
+        self._label(layout, "Aparência")
+        theme_row = QHBoxLayout()
+        theme_label = QLabel("Tema do aplicativo")
+        self.theme = QComboBox()
+        self.theme.setObjectName("themePicker")
+        self.theme.setAccessibleName("Tema do aplicativo")
+        for title, value in (("Claro", "light"), ("Escuro", "dark"), ("Seguir o sistema", "system")):
+            self.theme.addItem(title, value)
+        self.theme.setCurrentIndex(self.theme.findData(prefs.get("theme", "dark")))
+        self.theme.currentIndexChanged.connect(lambda _: self.theme_changed.emit(self.theme.currentData()))
+        theme_label.setBuddy(self.theme)
+        theme_row.addWidget(theme_label)
+        theme_row.addWidget(self.theme, 1)
+        layout.addLayout(theme_row)
+        appearance_hint = QLabel("Aplicado imediatamente. Sem preferência informada pelo sistema, utiliza o tema escuro.")
+        appearance_hint.setObjectName("hint")
+        appearance_hint.setWordWrap(True)
+        layout.addWidget(appearance_hint)
+        self._divider(layout)
         self._label(layout, "ÁUDIO")
         self.sound = QCheckBox("Reproduzir som ao salvar e acionar comandos")
         self.sound.setChecked(prefs["sound_enabled"])
@@ -189,5 +211,5 @@ class SettingsPage(QWidget):
     def _divider(self, layout):
         line = QFrame()
         line.setFixedHeight(1)
-        line.setStyleSheet("border: none; background-color: #24445f;")
+        set_ui_style(line, "border: none; background-color: #24445f;")
         layout.addWidget(line)
