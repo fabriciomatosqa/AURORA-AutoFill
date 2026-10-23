@@ -67,7 +67,7 @@ def main():
         host = SimpleNamespace(
             _expansion_operation=None, _clipboard_lease=None,
             _clipboard_pending=False, _clipboard_revision=0,
-            _active_candidate=None, _queued_candidate=None,
+            _active_candidate=None, _queued_candidate=None, _quitting=False,
             isActiveWindow=lambda: False, focusWidget=lambda: None,
             test_box=object(), statusBar=lambda: Mock(), _play_confirmation=Mock())
         names = ("_submit_expansion", "_begin_keyboard_verification",
@@ -118,7 +118,7 @@ def main():
             if rich and not mismatch:
                 assert js("(() => { const e=(" + doc + ").getElementById('editor');"
                           "return Array.from(e.querySelectorAll('*')).some(n=>"
-                          "Number(n.ownerDocument.defaultView.getComputedStyle(n).fontWeight)>=700);})()")
+                          "Number(n.ownerDocument.defaultView.getComputedStyle(n).fontWeight)>=700);})()"), actual
             assert clipboard.text() == "synthetic original clipboard"
             report.append({"iframe": framed, "rich": rich, "mismatch": mismatch,
                            "pastes": actual["pastes"]})
