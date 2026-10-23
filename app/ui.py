@@ -581,7 +581,9 @@ class AutoFillWindow(AuroraFeaturesMixin, QMainWindow):
         brand_layout.addWidget(brand_mark)
         brand_box = QVBoxLayout()
         brand_box.setSpacing(2)
-        brand_box.setContentsMargins(0, 0, 0, 0)
+        # Baixa o título até o topo visível da logo. Margens simétricas
+        # preservam o centro da legenda e a posição da própria logo.
+        brand_box.setContentsMargins(0, 16, 0, 16)
         wordmark = AuroraWordmark()
         wordmark.setFixedWidth(485)
         title_shadow = QGraphicsDropShadowEffect(wordmark)
