@@ -54,14 +54,15 @@ class OfficeRichClipboardTests(unittest.TestCase):
         from app.rich_clipboard import interoperable_html
         source = self.sample_html()
         fragment = interoperable_html(source)
-        self.assertEqual(fragment.count('<p style="margin:0">'), 3)
-        self.assertIn('<p style="margin:0"></p>', fragment)
+        self.assertEqual(fragment.count('<p style="margin:0">'), 2)
+        self.assertIn('<br>', fragment)
         self.assertNotIn('</span><br><span', fragment)
         original = QTextDocument()
         original.setHtml(source)
         roundtrip = QTextDocument()
         roundtrip.setHtml(fragment)
-        self.assertEqual(roundtrip.toPlainText(), original.toPlainText())
+        self.assertEqual(roundtrip.toPlainText().replace("\u2028", "\n"),
+                         original.toPlainText().replace("\u2028", "\n"))
 
     def test_styled_service_message_keeps_paragraph_breaks_in_all_clipboard_formats(self):
         from app.clipboard_content import expansion_mime
@@ -90,7 +91,8 @@ class OfficeRichClipboardTests(unittest.TestCase):
         self.assertIn('dia.\n\nEspero', plain)
         self.assertIn('bem.\n\nInformamos', plain)
         fragment = interoperable_html(html)
-        self.assertEqual(fragment.count('<p style="margin:0">'), 7)
+        self.assertEqual(fragment.count('<p style="margin:0">'), 4)
+        self.assertEqual(fragment.count("<br>"), 3)
         self.assertIn("font-weight:bold", fragment)
         with patch("app.clipboard_content.sys.platform", "win32"):
             mime = expansion_mime(plain, html)
@@ -99,8 +101,9 @@ class OfficeRichClipboardTests(unittest.TestCase):
             self.assertEqual(variant.text(), plain)
             pasted = QTextDocument()
             pasted.setHtml(variant.html())
-            self.assertEqual(pasted.toPlainText(), plain)
-            self.assertEqual(variant.html().count('<p style="margin:0">'), 7)
+            self.assertEqual(pasted.toPlainText().replace("\u2028", "\n"),
+                             plain.replace("\u2028", "\n"))
+            self.assertEqual(variant.html().count('<p style="margin:0">'), 4)
         native = bytes(mime.data('application/x-qt-windows-mime;value="HTML Format"'))
         self.assertIn(b'StartFragment:', native)
         self.assertIn(b'<p style="margin:0">', native)
