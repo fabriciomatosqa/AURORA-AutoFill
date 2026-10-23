@@ -70,7 +70,7 @@ def main():
                        if (Path(root) / "Google/Chrome/Application/chrome.exe").is_file()), None)
         assert chrome is not None, "Chrome is required on the Windows runner"
         fixture = ("<html><head><meta charset='utf-8'><title>AURORA synthetic editor</title>"
-                           "</head><body><div id='editor' contenteditable='true' style='white-space:pre-wrap'></div>"
+                           "</head><body><div id='editor' contenteditable='true' style='white-space:pre-wrap;min-height:120px'></div>"
                            "<iframe id='frame' srcdoc=\"<div id='editor' contenteditable='true'></div>\">"
                            "</iframe></body></html>")
         profile = Path(temporary.name) / "profile"
@@ -108,6 +108,11 @@ def main():
         wait(lambda: js("Boolean(document.getElementById('editor') && "
                         "document.getElementById('frame')?.contentDocument?.getElementById('editor'))"),
              seconds=20)
+        # Focus the renderer, rather than the browser's initial address bar.
+        command("Input.dispatchMouseEvent", {"type": "mousePressed", "x": 20, "y": 20,
+                                             "button": "left", "clickCount": 1})
+        command("Input.dispatchMouseEvent", {"type": "mouseReleased", "x": 20, "y": 20,
+                                             "button": "left", "clickCount": 1})
         # The production stages run unchanged. Only the disposable host and
         # candidate validity are supplied here; no input/clipboard mocks.
         host = SimpleNamespace(
