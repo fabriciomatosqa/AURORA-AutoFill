@@ -11,11 +11,12 @@ import os
 import sys
 from ctypes import wintypes
 
-SAFE_EDITORS = frozenset({
-    "ms-teams.exe", "teams.exe", "winword.exe", "outlook.exe", "olk.exe",
+WEB_EDITORS = frozenset({
+    "ms-teams.exe", "teams.exe",
     "chrome.exe", "msedge.exe", "msedgewebview2.exe", "firefox.exe",
     "brave.exe", "opera.exe",
 })
+SAFE_EDITORS = WEB_EDITORS | {"winword.exe", "outlook.exe", "olk.exe"}
 
 
 def focused_executable(context) -> str:
@@ -60,6 +61,11 @@ def focused_executable(context) -> str:
 
 def supports_verified_copy(context) -> bool:
     return focused_executable(context) in SAFE_EDITORS
+
+
+def prefers_verified_copy(context) -> bool:
+    """Web editors can expose readable TextPattern but reject range.Select()."""
+    return focused_executable(context) in WEB_EDITORS
 
 
 def is_teams_target(context) -> bool:

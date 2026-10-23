@@ -25,7 +25,8 @@ from .hotkeys import (GlobalHotkeyListener, replace_shortcut, paste_clipboard,
                       select_previous_characters, copy_selected_text, collapse_selection_to_end)
 from .expansion import ClipboardLease, EditSnapshot, ExpansionCandidate, ExpansionOperation, utf16_slice, prefix_offset
 from .windows_context import ContextUnavailable, FocusMonitor, capture_focus, capture_edit, set_caret, select_text_range
-from .verified_fallback import supports_verified_copy, copied_shortcut_matches, is_teams_target
+from .verified_fallback import (supports_verified_copy, prefers_verified_copy,
+                               copied_shortcut_matches, is_teams_target)
 from .accessibility_context import warm_accessibility
 from time import monotonic
 from .formatting import has_rich_formatting, render_rich_html
@@ -1817,7 +1818,12 @@ class AutoFillWindow(AuroraFeaturesMixin, QMainWindow):
             operation = ExpansionOperation(candidate, before, rendered.text, cursor_steps(suffix),
                                            rendered.text[:-rendered.left_moves] if rendered.left_moves else rendered.text,
                                            render_rich_html(snippet.rich_content, current_text, now) if rich else "")
-            operation.keyboard_verify = keyboard_verify
+            # Chromium/Teams podem ler TextPattern e mesmo assim recusar
+            # Select(). Usar a seleção nativa + prova por Ctrl+C desde o início
+            # evita esse erro e a espera de 700 ms por um ACK que não chega.
+            # Manter o snapshot disponível para confirmar resultado/{{cursor}}.
+            operation.keyboard_verify = (keyboard_verify or
+                                         (copy_fallback and prefers_verified_copy(candidate.context)))
             # O Teams aceita conteúdo HTML, mas não deve receber RTF Office
             # como formato concorrente. Sem alteração para Word/outros apps.
             operation.teams_web_html = bool(operation.rich_html and is_teams_target(candidate.context))
@@ -1962,6 +1968,32 @@ class AutoFillWindow(AuroraFeaturesMixin, QMainWindow):
             selected = clipboard.text()
             changed = sequence != operation.verify_sequence
             if changed and copied_shortcut_matches(selected, operation.candidate.shortcut):
+                before = operation.before
+                if before is not None:
+                    # A cópia prova o atalho, mas não a identidade do campo.
+                    # Preservar essa validação quando o provedor ainda lê UIA;
+                    # GetSelection pode continuar mostrando o caret antigo.
+                    try:
+                        current = self._edit_snapshot(accessibility=bool(before.identity))
+                    except ContextUnavailable:
+                        current = None
+                    if current is None:
+                        if operation.left_moves:
+                            raise ValueError("O editor não permite confirmar a posição de {{cursor}}.")
+                        operation.before = None
+                    elif (current.context != before.context or current.identity != before.identity
+                          or current.text != before.text
+                          or (current.start, current.end) not in {
+                              (before.start, before.end),
+                              before.shortcut_range(operation.candidate.shortcut)}):
+                        raise ValueError("O campo ou seu conteúdo mudou durante a confirmação do atalho.")
+                    if self._clipboard_sequence() != sequence or clipboard.text() != selected:
+                        # Já observamos outra cópia após a prova. Não atribuir
+                        # essa nova revisão ao nosso Ctrl+C ao restaurar.
+                        operation.verify_sequence = None
+                        raise ValueError("O clipboard mudou antes da colagem.")
+                    if not self._candidate_valid(operation.candidate):
+                        raise ValueError("Foco ou digitação mudou antes da colagem.")
                 from uuid import uuid4
                 token = uuid4().hex.encode("ascii")
                 payload = expansion_mime(operation.text, operation.rich_html,

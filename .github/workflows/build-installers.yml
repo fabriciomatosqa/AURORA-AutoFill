@@ -82,6 +82,9 @@ jobs:
       - name: Validar CF_HTML, PNG e bitmap nativos com leitor em outro processo
         shell: pwsh
         run: python packaging/smoke_clipboard.py
+      - name: Testar colagem nativa em editor Chromium e iframe
+        shell: pwsh
+        run: python packaging/smoke_web_expansion.py
       - name: Compilar aplicativo Windows com os recursos validados
         shell: pwsh
         run: |
