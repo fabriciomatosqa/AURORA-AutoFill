@@ -12,7 +12,7 @@ from PySide6.QtCore import QObject, Qt, QMimeData, QTimer, Signal, QPoint, QRect
 from PySide6.QtGui import (QAction, QColor, QFont, QFontMetricsF, QIcon, QKeySequence, QPalette,
                            QShortcut, QTextCharFormat, QTextCursor, QPainter, QPainterPath, QLinearGradient, QPen, QPixmap)
 from PySide6.QtWidgets import (
-    QApplication, QAbstractItemView, QComboBox, QFileDialog,
+    QApplication, QAbstractItemView, QComboBox, QFileDialog, QGraphicsDropShadowEffect,
     QFrame, QHBoxLayout, QInputDialog, QLabel, QLineEdit, QListView, QListWidget,
     QListWidgetItem, QMainWindow, QMenu, QMessageBox, QPlainTextEdit, QPushButton,
     QScrollArea, QSpinBox, QSplitter, QStackedWidget, QSystemTrayIcon,
@@ -282,6 +282,9 @@ class AuroraWordmark(QWidget):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.Antialiasing, True)
         painter.setRenderHint(QPainter.TextAntialiasing, True)
+        # A borda pertence às letras; o panorama continua sem filtros.
+        painter.translate(2, 0)
+        outline = QPen(QColor("#071b31"), 3.0, Qt.SolidLine, Qt.RoundCap, Qt.RoundJoin)
         installed = set(QFontDatabase.families())
         family = next((name for name in (
             "Bahnschrift", "Bahnschrift SemiCondensed", "Segoe UI Variable Display",
@@ -295,9 +298,7 @@ class AuroraWordmark(QWidget):
         baseline = 40
         brand = QPainterPath()
         brand.addText(0, baseline, base, "AURORA")
-        # Halo sutil, sem perder a definição das formas.
-        painter.setPen(QPen(QColor(63, 246, 220, 35), 2.2))
-        painter.drawPath(brand)
+        painter.strokePath(brand, outline)
         white = QLinearGradient(0, 5, 0, 43)
         white.setColorAt(0, QColor("#ffffff"))
         white.setColorAt(1, QColor("#d7e8ff"))
@@ -314,6 +315,7 @@ class AuroraWordmark(QWidget):
         color.setColorAt(0, QColor("#8bfbeb"))
         color.setColorAt(.55, QColor("#55e0e0"))
         color.setColorAt(1, QColor("#99acff"))
+        painter.strokePath(accent_path, outline)
         painter.fillPath(accent_path, color)
 
         # Traço de marca, inspirado na linha de luz da aurora.
@@ -322,6 +324,28 @@ class AuroraWordmark(QWidget):
         bar.setColorAt(.50, QColor("#80edd4"))
         bar.setColorAt(1, QColor(102, 160, 255, 0))
         painter.fillRect(QRectF(1, 49, min(self.width() - 8, 398), 2), bar)
+        painter.end()
+
+
+class AuroraBannerCaption(QLabel):
+    """Legenda com contorno nas letras, sem fundo sobre a paisagem."""
+
+    def __init__(self, text, parent=None):
+        super().__init__(text, parent)
+        self.setContentsMargins(2, 2, 3, 2)
+
+    def paintEvent(self, event):
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.Antialiasing, True)
+        painter.setRenderHint(QPainter.TextAntialiasing, True)
+        metrics = QFontMetricsF(self.font())
+        bounds = QRectF(self.contentsRect())
+        baseline = bounds.center().y() + (metrics.ascent() - metrics.descent()) / 2
+        path = QPainterPath()
+        path.addText(bounds.left(), baseline, self.font(), self.text())
+        painter.strokePath(path, QPen(QColor("#071b31"), 2.4,
+                                     Qt.SolidLine, Qt.RoundCap, Qt.RoundJoin))
+        painter.fillPath(path, self.palette().color(QPalette.WindowText))
         painter.end()
 
 
@@ -544,6 +568,11 @@ class AutoFillWindow(AuroraFeaturesMixin, QMainWindow):
         brand_mark = QLabel()
         brand_mark.setPixmap(self._aurora_logo.scaled(108, 108, Qt.KeepAspectRatio, Qt.SmoothTransformation))
         brand_mark.setFixedSize(108, 108)
+        logo_shadow = QGraphicsDropShadowEffect(brand_mark)
+        logo_shadow.setBlurRadius(14)
+        logo_shadow.setOffset(0, 2)
+        logo_shadow.setColor(QColor(2, 12, 30, 240))
+        brand_mark.setGraphicsEffect(logo_shadow)
         self.banner_brand = QWidget()
         self.banner_brand.setAttribute(Qt.WA_TranslucentBackground)
         brand_layout = QHBoxLayout(self.banner_brand)
@@ -555,8 +584,13 @@ class AutoFillWindow(AuroraFeaturesMixin, QMainWindow):
         brand_box.setContentsMargins(0, 0, 0, 0)
         wordmark = AuroraWordmark()
         wordmark.setFixedWidth(485)
+        title_shadow = QGraphicsDropShadowEffect(wordmark)
+        title_shadow.setBlurRadius(9)
+        title_shadow.setOffset(0, 2)
+        title_shadow.setColor(QColor(2, 12, 30, 210))
+        wordmark.setGraphicsEffect(title_shadow)
         brand_box.addWidget(wordmark)
-        caption = QLabel("EXPANSÃO INTELIGENTE DE TEXTOS  ·  MAIS TEMPO PARA VOCÊ")
+        caption = AuroraBannerCaption("EXPANSÃO INTELIGENTE DE TEXTOS  ·  MAIS TEMPO PARA VOCÊ")
         caption.setObjectName("topCaption")
         cap_font = QFont("Segoe UI", 9)
         cap_font.setWeight(QFont.Medium)
