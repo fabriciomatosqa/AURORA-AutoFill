@@ -23,11 +23,11 @@ $form.Text = 'AURORA synthetic accessibility test'
 $form.Width = 600; $form.Height = 300
 $edit = New-Object System.Windows.Forms.RichTextBox
 $edit.Dock = 'Fill'
-$edit.Text = "Synthetic " + [char]::ConvertFromUtf32(128512) + "`nAB /diag`nTail"
+$edit.Text = "/diag earlier`nSynthetic " + [char]::ConvertFromUtf32(128512) + "`nAB /diag`nTail"
 $form.Controls.Add($edit)
 $form.Add_Shown({
     $form.Activate(); $edit.Focus() | Out-Null
-    $edit.SelectionStart = $edit.Text.IndexOf('/diag') + 5
+    $edit.SelectionStart = $edit.Text.LastIndexOf('/diag') + 5
     [Console]::WriteLine((@{ window = $form.Handle.ToInt64(); control = $edit.Handle.ToInt64() } | ConvertTo-Json -Compress))
 })
 $timer = New-Object System.Windows.Forms.Timer
@@ -171,7 +171,16 @@ def main():
             pass
         else:
             raise AssertionError('Stale selection was accepted')
-        print('UIA smoke passed: exact shortcut selection, direct caret, Unicode, stale request rejection')
+        # Warm compiled loop: real cross-process requests, not mocks. Report
+        # observed latency without inventing a universal threshold for runners.
+        measurements = []
+        for _ in range(8):
+            started = time.perf_counter()
+            actual = capture_accessible(context)
+            measurements.append((time.perf_counter() - started) * 1000)
+            assert actual and actual.text == snapshot.text and actual.start == actual.end == begin
+        print('Warm UIA snapshots (ms):', ', '.join('%.1f' % item for item in measurements))
+        print('UIA smoke passed: repeated shortcuts, direct caret, Unicode, stale request rejection')
     finally:
         stop_accessibility()
         if fixture is not None:

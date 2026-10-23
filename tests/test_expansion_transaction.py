@@ -90,9 +90,9 @@ class ExpansionTransactionTests(EngineTestCase):
             self.assertEqual(self.engine.field.text, '/web')
             self.engine.until(0)
             self.assertEqual(self.engine.field.text, 'Conteúdo pronto')
-            # Captura + seleção UIA + confirmação da seleção estabilizada,
-            # antes de enviar Ctrl+V ao editor WebView.
-            self.assertEqual(len(calls), 3)
+            # Captura + seleção que já devolve prova estabilizada. Não reler
+            # todo o documento entre essa prova e o envio de Ctrl+V.
+            self.assertEqual(len(calls), 2)
             self.engine.drain()
             self.assertEqual(self.clipboard.text(), 'original')
 

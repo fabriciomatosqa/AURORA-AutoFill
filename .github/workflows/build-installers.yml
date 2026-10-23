@@ -85,7 +85,7 @@ jobs:
       - name: Compilar aplicativo Windows com os recursos validados
         shell: pwsh
         run: |
-          python -m PyInstaller --noconfirm --clean --windowed --onedir --name "AURORA AutoFill" --icon "assets/aurora_icon.ico" --add-data "assets;assets" --add-data "app/accessibility_worker.ps1;app" --collect-submodules pynput main.py
+          python -m PyInstaller --noconfirm --clean --windowed --onedir --name "AURORA AutoFill" --icon "assets/aurora_icon.ico" --add-data "assets;assets" --add-data "app/accessibility_worker.ps1;app" --add-data "app/accessibility_worker.cs;app" --collect-submodules pynput main.py
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Verificar recursos compilados
         shell: pwsh

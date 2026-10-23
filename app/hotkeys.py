@@ -11,6 +11,7 @@ import os
 from time import monotonic
 
 from .expansion import ExpansionCandidate
+from .core import shortcut_key
 from .windows_context import capture_focus
 
 # Only our events are ignored; injected events from other tools are still input.
@@ -35,9 +36,9 @@ class ShortcutMatcher:
         # Compila uma vez o índice dos comandos. O hook de teclado não deve
         # varrer toda a lista (nem carregar imagens) a cada caractere digitado.
         with self._lock:
-            self._shortcuts = {shortcut.lower() for shortcut in shortcuts}
-            self._prefixes = {shortcut[:end].lower()
-                              for shortcut in shortcuts
+            self._shortcuts = {shortcut_key(shortcut) for shortcut in shortcuts}
+            self._prefixes = {shortcut[:end]
+                              for shortcut in self._shortcuts
                               for end in range(1, len(shortcut))}
             self._buffer = ""
 
@@ -62,11 +63,11 @@ class ShortcutMatcher:
             typed = self._buffer[pos:]
             if character == " ":
                 candidate = typed[:-1]
-                if candidate.lower() in self._shortcuts:
+                if shortcut_key(candidate) in self._shortcuts:
                     self._buffer = ""
                     return typed
                 return None
-            lowered = typed.lower()
+            lowered = shortcut_key(typed)
             if lowered in self._shortcuts and lowered not in self._prefixes:
                 self._buffer = ""
                 return typed
@@ -79,7 +80,7 @@ class ShortcutMatcher:
             if pos < 0:
                 return None
             typed = self._buffer[pos:]
-            normalized = typed.lower()
+            normalized = shortcut_key(typed)
             return typed if normalized in self._shortcuts and normalized in self._prefixes else None
 
     def consume_ambiguous(self, shortcut: str) -> bool:
@@ -87,8 +88,8 @@ class ShortcutMatcher:
         with self._lock:
             pos = self._buffer.rfind("/")
             if (pos < 0 or self._buffer[pos:] != shortcut
-                    or shortcut.lower() not in self._shortcuts
-                    or shortcut.lower() not in self._prefixes):
+                    or shortcut_key(shortcut) not in self._shortcuts
+                    or shortcut_key(shortcut) not in self._prefixes):
                 return False
             self._buffer = ""
             return True

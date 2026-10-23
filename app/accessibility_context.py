@@ -15,6 +15,7 @@ import sys
 from ctypes import wintypes
 from pathlib import Path
 from threading import Lock, Thread
+from time import monotonic
 
 from .expansion import EditSnapshot, utf16_length, utf16_slice
 
@@ -54,8 +55,12 @@ class AccessibilityClient:
             process = subprocess.Popen(
                 [str(executable), '-NoLogo', '-NoProfile', '-NonInteractive', '-MTA', '-Command', script],
                 stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
-                text=True, encoding='utf-8', creationflags=subprocess.CREATE_NO_WINDOW)
+                text=True, encoding='utf-8', creationflags=subprocess.CREATE_NO_WINDOW,
+                env=dict(os.environ, AURORA_UIA_SOURCE=str(
+                    Path(__file__).with_name('accessibility_worker.cs'))))
             responses = queue.Queue(maxsize=2)
+            process._aurora_started = monotonic()
+            process._aurora_ready = False
             with self._lock:
                 if self._closed:
                     return
@@ -65,7 +70,13 @@ class AccessibilityClient:
                 if len(line) > 1048576:
                     break
                 try:
-                    responses.put_nowait(json.loads(line))
+                    response = json.loads(line)
+                    if not process._aurora_ready:
+                        if response != {'ready': True}:
+                            break
+                        process._aurora_ready = True
+                    else:
+                        responses.put_nowait(response)
                 except (ValueError, queue.Full):
                     break
         except (OSError, ValueError):
@@ -93,12 +104,15 @@ class AccessibilityClient:
             if (process is None or process.poll() is not None
                     or getattr(process, '_aurora_invalid', False)):
                 raise AccessibilityUnavailable('Leitura de acessibilidade inicializando.')
+            # Compilation/assembly loading happens in the warm-up thread. Never
+            # spend a UI request timeout waiting for startup, then kill/recompile
+            # the worker on every early keystroke.
+            if not getattr(process, '_aurora_ready', False):
+                if monotonic() - process._aurora_started > 15:
+                    process._aurora_invalid = True
+                    process.kill()
+                raise AccessibilityUnavailable('Leitura de acessibilidade inicializando.')
             try:
-                # Read the startup handshake once; do not put document data in argv.
-                if not getattr(process, '_aurora_ready', False):
-                    if responses.get(timeout=timeout) != {'ready': True}:
-                        raise ValueError('handshake')
-                    process._aurora_ready = True
                 process.stdin.write(json.dumps({'process': process_id, **fields}) + '\n')
                 process.stdin.flush()
                 return responses.get(timeout=timeout)

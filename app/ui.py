@@ -1422,8 +1422,7 @@ class AutoFillWindow(AuroraFeaturesMixin, QMainWindow):
 
     def _update_listener_shortcuts(self):
         if hasattr(self, "hotkeys"):
-            snippets = self.store.snippets()
-            self.hotkeys.update_shortcuts([s.shortcut for s in snippets])
+            self.hotkeys.update_shortcuts(self.store.shortcuts())
 
     def _get_snippet(self, snippet_id: int | None) -> Snippet | None:
         return next((s for s in self.store.snippets() if s.id == snippet_id), None)
@@ -1908,14 +1907,18 @@ class AutoFillWindow(AuroraFeaturesMixin, QMainWindow):
                 # before sending paste, rather than racing Shift+Left with Ctrl+V.
                 begin, end = operation.before.shortcut_range(operation.candidate.shortcut)
                 operation.stage = "selected"
-                select_text_range(operation.before, begin, end)
+                selected = select_text_range(operation.before, begin, end)
                 if not self._candidate_valid(operation.candidate) or not self._owns_clipboard(lease):
                     raise ValueError("Contexto ou clipboard mudou após selecionar o atalho.")
                 # O TextPatternRange.Select do Teams pode concluir antes de a
                 # seleção aparecer no GetSelection. Só uma solicitação é enviada:
                 # até 700 ms para confirmar, SEM selecionar ou colar de novo.
                 operation.deadline = monotonic() + 0.7
-                QTimer.singleShot(0, lambda op=operation: self._paste_verified_selection(op))
+                # Um snapshot devolvido pelo worker já comprova a seleção
+                # aplicada. Usá-lo no mesmo turno evita reler o documento inteiro.
+                # ACK assíncrono continua exigindo consulta antes de colar.
+                self._paste_verified_selection(
+                    operation, selected if isinstance(selected, EditSnapshot) else None)
                 return
             else:
                 if sys.platform == "win32" and operation.before is None:
@@ -2013,7 +2016,7 @@ class AutoFillWindow(AuroraFeaturesMixin, QMainWindow):
                 self._clipboard_lease = None
                 self._clipboard_pending = False
 
-    def _paste_verified_selection(self, operation):
+    def _paste_verified_selection(self, operation, selected=None):
         """Confirma que o Teams ainda seleciona somente o atalho antes do Ctrl+V."""
         if self._expansion_operation is not operation or operation.stage != "selected":
             return
@@ -2022,7 +2025,8 @@ class AutoFillWindow(AuroraFeaturesMixin, QMainWindow):
                 raise ValueError("Foco, digitação ou clipboard alterado após selecionar o atalho.")
             before = operation.before
             begin, end = before.shortcut_range(operation.candidate.shortcut)
-            selected = self._edit_snapshot(accessibility=bool(before.identity))
+            if selected is None:
+                selected = self._edit_snapshot(accessibility=bool(before.identity))
             if (selected is None or selected.context != before.context
                     or selected.identity != before.identity
                     or selected.text != before.text):

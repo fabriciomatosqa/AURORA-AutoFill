@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from collections import OrderedDict
 
 from .data_paths import application_db_path
 from .welcome import initial_snippets
@@ -16,6 +17,11 @@ import tempfile
 
 SHORTCUT_PATTERN = re.compile(r"^/[^\s/]{1,30}$")
 VARIABLE_PATTERN = re.compile(r"\{\{([a-zA-Z_]+)\}\}")
+
+
+def shortcut_key(shortcut: str) -> str:
+    """Uma única regra Unicode para cadastro, reconhecimento e recuperação."""
+    return shortcut.casefold()
 
 
 @dataclass(frozen=True)
@@ -125,6 +131,10 @@ class SnippetStore:
         if "sort_order" not in columns:
             self.connection.execute("ALTER TABLE snippets ADD COLUMN sort_order INTEGER NOT NULL DEFAULT 0")
         self.connection.commit()
+        self._shortcut_version = None
+        self._shortcut_ids = {}
+        self._snippet_cache = OrderedDict()
+        self._snippet_cache_size = 0
 
     def folders(self) -> list[tuple[int, str]]:
         return [(int(r["id"]), str(r["name"])) for r in self.connection.execute(
@@ -196,20 +206,59 @@ class SnippetStore:
         return [Snippet(**dict(row)) for row in self.connection.execute(sql, params)]
 
     def snippet_by_shortcut(self, shortcut: str) -> Snippet | None:
-        """Busca indexada sem carregar todos os comandos ou seus prints.
+        """Índice Unicode leve + cache limitado, sem reler imagens a cada uso.
 
-        A restrição UNIQUE COLLATE NOCASE do SQLite já mantém um índice sobre
-        shortcut: a leitura de um único item é rápida mesmo com muitos blobs
-        HTML/Base64 armazenados em outros comandos.
+        NOCASE do SQLite só cobre ASCII. O índice em memória usa a mesma chave
+        do matcher e recusa colisões legadas em vez de escolher o texto errado.
+        total_changes/data_version invalidam edições locais e de outra conexão.
         """
         if not shortcut:
             return None
+        self._refresh_shortcut_index()
+        identifier = self._shortcut_ids.get(shortcut_key(shortcut.strip()))
+        if identifier is None:
+            return None
+        cached = self._snippet_cache.get(identifier)
+        if cached is not None:
+            self._snippet_cache.move_to_end(identifier)
+            return cached
         row = self.connection.execute(
             "SELECT id, folder_id, title, shortcut, content, rich_content "
-            "FROM snippets WHERE shortcut = ? COLLATE NOCASE LIMIT 1",
-            (shortcut.strip(),),
+            "FROM snippets WHERE id = ?", (identifier,),
         ).fetchone()
-        return Snippet(**dict(row)) if row else None
+        if row is None:
+            return None
+        snippet = Snippet(**dict(row))
+        weight = len(snippet.content) + len(snippet.rich_content)
+        # Até 16 modelos / 4 milhões de caracteres (~16 MB no pior caso).
+        # Um modelo enorme ainda funciona, mas não ocupa o cache inteiro.
+        if weight <= 4_000_000:
+            self._snippet_cache[identifier] = snippet
+            self._snippet_cache_size += weight
+            while len(self._snippet_cache) > 16 or self._snippet_cache_size > 4_000_000:
+                _, old = self._snippet_cache.popitem(last=False)
+                self._snippet_cache_size -= len(old.content) + len(old.rich_content)
+        return snippet
+
+    def _refresh_shortcut_index(self) -> None:
+        version = (self.connection.total_changes,
+                   self.connection.execute("PRAGMA data_version").fetchone()[0],
+                   self.connection.in_transaction)
+        if version == self._shortcut_version:
+            return
+        ids = {}
+        for row in self.connection.execute("SELECT id, shortcut FROM snippets ORDER BY id"):
+            key = shortcut_key(str(row["shortcut"]))
+            ids[key] = int(row["id"]) if key not in ids else None
+        self._shortcut_ids = ids
+        self._shortcut_version = version
+        self._snippet_cache.clear()
+        self._snippet_cache_size = 0
+
+    def shortcuts(self) -> list[str]:
+        """Metadados para o hook: nunca carrega corpos ou imagens."""
+        self._refresh_shortcut_index()
+        return [key for key, identifier in self._shortcut_ids.items() if identifier is not None]
 
     def shortcut_conflict(self, shortcut: str, excluding_id: int | None = None) -> ShortcutConflict | None:
         """Compara só metadados, sem carregar HTML/base64 ou conteúdo de snippets.
@@ -218,7 +267,7 @@ class SnippetStore:
         de maiúsculas/minúsculas) e mesmo que pertençam a pastas diferentes.
         Ignora o registro atual ao editar o próprio atalho.
         """
-        needle = shortcut.casefold()
+        needle = shortcut_key(shortcut)
         rows = self.connection.execute(
             "SELECT s.id, s.shortcut, s.title, f.name AS folder "
             "FROM snippets AS s JOIN folders AS f ON f.id = s.folder_id"
@@ -226,7 +275,7 @@ class SnippetStore:
         for row in rows:
             if excluding_id is not None and int(row["id"]) == excluding_id:
                 continue
-            existing = str(row["shortcut"]).casefold()
+            existing = shortcut_key(str(row["shortcut"]))
             if needle.startswith(existing) or existing.startswith(needle):
                 return ShortcutConflict(
                     int(row["id"]), str(row["shortcut"]), str(row["title"]), str(row["folder"]))
@@ -416,7 +465,7 @@ class SnippetStore:
         # A validação de importação usa somente as chaves dos atalhos: O(n * L)
         # em vez de reler todos os registros para cada novo item.
         shortcuts = {
-            str(row[0]).casefold() for row in
+            shortcut_key(str(row[0])) for row in
             self.connection.execute("SELECT shortcut FROM snippets")
         }
         prefixes = {
@@ -460,7 +509,7 @@ class SnippetStore:
                     validate_shortcut(shortcut.strip())
                     # Atalhos idênticos e prefixos sobrepostos são ignorados sem
                     # criar pastas vazias nem alterar dados já cadastrados.
-                    key = shortcut.strip().casefold()
+                    key = shortcut_key(shortcut.strip())
                     if is_conflicting(key):
                         skipped += 1
                         continue
