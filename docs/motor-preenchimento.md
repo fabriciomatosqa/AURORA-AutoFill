@@ -25,6 +25,11 @@ para separar reconhecimento, preparação, seleção, inserção e confirmação
 - Se `Select()` já refletiu a seleção exata, o worker devolve snapshot validado;
   a GUI cola no mesmo turno, sem outra leitura integral. Se o editor ainda mostra
   o caret antigo, recebe ACK e aguarda confirmação, sem selecionar/colar de novo.
+- Teams e navegadores identificados usam seleção nativa + Ctrl+C para confirmar
+  o atalho antes de Ctrl+V, mesmo quando a leitura UIA funciona. Esses editores
+  podem oferecer `TextPattern` legível e recusar `Select()`. A prova exige o
+  atalho literal e preserva HTML, sem apagar texto previamente. Quando disponível,
+  o snapshot continua servindo para confirmar o resultado e posicionar `{{cursor}}`.
 
 ## Contratos preservados
 
@@ -49,6 +54,13 @@ concorrentes, clipboard, colagem única, ACK atrasado e posicionamento do cursor
 uma janela WinForms descartável com Unicode, múltiplas ocorrências do atalho e
 várias linhas. Confere seleção exata, movimentação do caret e rejeição de seleção
 obsoleta, e registra tempos de consultas aquecidas. Não utiliza documentos reais.
+
+`tests/test_verified_copy_fallback.py` reproduz leitura UIA disponível com seleção
+indisponível e verifica recusa de cópia incorreta, HTML e cursor. O smoke
+`packaging/smoke_web_expansion.py` executa as etapas reais de seleção, cópia e
+colagem com `SendInput` e clipboard do Windows em Chromium descartável, incluindo
+`contenteditable`, iframe, Unicode, HTML e recusa de seleção incorreta. Confere
+o conteúdo e conta eventos de colagem; não abre contas ou documentos do usuário.
 
 Os tempos máximos de proteção não são pausas impostas a toda expansão. Não há
 promessa de um percentual de ganho sem comparar em hardware e aplicativos iguais.

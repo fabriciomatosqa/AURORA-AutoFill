@@ -11,11 +11,12 @@ import os
 import sys
 from ctypes import wintypes
 
-SAFE_EDITORS = frozenset({
-    "ms-teams.exe", "teams.exe", "winword.exe", "outlook.exe", "olk.exe",
+WEB_EDITORS = frozenset({
+    "ms-teams.exe", "teams.exe",
     "chrome.exe", "msedge.exe", "msedgewebview2.exe", "firefox.exe",
     "brave.exe", "opera.exe",
 })
+SAFE_EDITORS = WEB_EDITORS | {"winword.exe", "outlook.exe", "olk.exe"}
 
 
 def focused_executable(context) -> str:
@@ -60,6 +61,33 @@ def focused_executable(context) -> str:
 
 def supports_verified_copy(context) -> bool:
     return focused_executable(context) in SAFE_EDITORS
+
+
+def clipboard_owned_by_target(context) -> bool:
+    """Prova de origem para Ctrl+C que publica vários formatos no Windows."""
+    if sys.platform != "win32" or not context.window or not context.control:
+        return False
+    try:
+        api = ctypes.windll.user32
+        api.GetClipboardOwner.restype = wintypes.HWND
+        api.GetWindowThreadProcessId.argtypes = [wintypes.HWND, ctypes.POINTER(wintypes.DWORD)]
+        owner = api.GetClipboardOwner()
+        if not owner:
+            return False
+        def process(window):
+            pid = wintypes.DWORD()
+            if not api.GetWindowThreadProcessId(window, ctypes.byref(pid)):
+                return 0
+            return pid.value
+        source = process(owner)
+        return bool(source and source in {process(context.window), process(context.control)})
+    except (AttributeError, OSError, ValueError, TypeError):
+        return False
+
+
+def prefers_verified_copy(context) -> bool:
+    """Web editors can expose readable TextPattern but reject range.Select()."""
+    return focused_executable(context) in WEB_EDITORS
 
 
 def is_teams_target(context) -> bool:
