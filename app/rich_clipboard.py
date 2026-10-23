@@ -104,7 +104,9 @@ def interoperable_html(html: str) -> str:
         # contenteditable podem remover esses <br> ao sanitizar o clipboard.
         # Parágrafos sem conteúdo continuam com um <br> próprio, preservando
         # exatamente as linhas em branco (sem margem CSS extra).
-        body = "".join(pieces) or "<br>"
+        # Um <br> no parágrafo vazio conta como quebra suave ADICIONAL
+        # no importador Qt; o próprio <p> já representa a linha vazia.
+        body = "".join(pieces)
         result.append(f'<p style="margin:0">{body}</p>')
     return "<div>" + "".join(result) + "</div>"
 
