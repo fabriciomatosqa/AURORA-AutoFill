@@ -8,6 +8,8 @@ from __future__ import annotations
 
 import sys
 
+from .themes import ui_color
+
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor, QFontDatabase, QPainter, QPen
 from PySide6.QtWidgets import QApplication, QComboBox, QCompleter
@@ -94,7 +96,7 @@ class AuroraFontCombo(QComboBox):
         # A seta é desenhada pelo próprio Aurora, independente do estilo host.
         painter = QPainter(self)
         painter.setRenderHint(QPainter.Antialiasing)
-        painter.setPen(QPen(QColor("#81e9d9"), 1.7))
+        painter.setPen(QPen(ui_color("#81e9d9"), 1.7))
         x = self.width() - 15
         y = self.height() // 2
         painter.drawLine(x - 5, y - 2, x, y + 3)

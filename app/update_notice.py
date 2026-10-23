@@ -6,6 +6,8 @@ principal ou bloquear outros programas.
 """
 from __future__ import annotations
 
+from .themes import set_ui_style, ui_color
+
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QGuiApplication
 from PySide6.QtWidgets import (QFrame, QHBoxLayout, QLabel, QPushButton,
@@ -27,7 +29,7 @@ class UpdateNotice(QWidget):
         outside.setContentsMargins(3, 3, 3, 3)
         panel = QFrame()
         panel.setObjectName("updatePanel")
-        panel.setStyleSheet("""
+        set_ui_style(panel, """
             QFrame#updatePanel {
                 background: #0d2238;
                 border: 1px solid #4c9baf;

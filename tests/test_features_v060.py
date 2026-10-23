@@ -106,7 +106,7 @@ class PreferencesTests(unittest.TestCase):
             preferences.save_preferences({"sound_enabled": False, "sound_volume": 250,
                                           "check_updates": False}, config)
             restored = preferences.load_preferences(config)
-            self.assertEqual(restored, {**preferences.DEFAULTS, "sound_enabled": False,
+            self.assertEqual(restored, {**preferences.DEFAULTS, "theme": "dark", "sound_enabled": False,
                                         "sound_volume": 100, "check_updates": False})
             config.write_text('{"sound_volume":"evil","sound_enabled":123}', encoding="utf-8")
             self.assertEqual(preferences.load_preferences(config)["sound_volume"], 65)

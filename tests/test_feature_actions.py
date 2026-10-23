@@ -19,9 +19,10 @@ class Harness(AuroraFeaturesMixin):
         self._quitting = True
         self.settings_page = SimpleNamespace(check_button=Mock(), sound=Mock(), updates=Mock(),
                                              volume=Mock(), volume_label=Mock(), sample_button=Mock(),
-                                             prereleases=Mock(), start_minimized=Mock())
+                                             prereleases=Mock(), start_minimized=Mock(), theme=Mock())
+        self.theme_controller = Mock()
         self.preferences = {"sound_enabled": True, "sound_volume": 65, "check_updates": True,
-                            "include_prereleases": True, "start_minimized": False}
+                            "include_prereleases": True, "start_minimized": False, "theme": "dark"}
         self.store = Mock()
         self.status = Mock()
         self._confirm_change = Mock(return_value=True)

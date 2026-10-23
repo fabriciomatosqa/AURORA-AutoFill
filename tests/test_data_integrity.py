@@ -206,7 +206,7 @@ class ProfileSafetyTests(unittest.TestCase):
     def test_preferences_use_the_same_validation_for_saving_and_loading(self):
         preferences.save_preferences({"sound_enabled": "false", "sound_volume": "invalid",
                                       "check_updates": 0})
-        self.assertEqual(preferences.load_preferences(), preferences.DEFAULTS)
+        self.assertEqual(preferences.load_preferences(), {**preferences.DEFAULTS, "theme": "dark"})
 
     def test_prerelease_channel_is_persisted_as_an_explicit_choice(self):
         for choice in (False, True):

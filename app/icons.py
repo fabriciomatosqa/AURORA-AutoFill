@@ -35,15 +35,25 @@ class VectorIconEngine(QIconEngine):
 
 
 @lru_cache(maxsize=96)
-def icon(name, color='#d7f5ff'):
+def _icon(name, color='#d7f5ff'):
     if name not in ICON_NAMES:
         raise ValueError('Unknown icon: ' + name)
     data = (ROOT / (name + '.svg')).read_bytes().replace(b'#d7f5ff', color.encode('ascii'))
     return QIcon(VectorIconEngine(data))
 
 
+def icon(name, color='#d7f5ff'):
+    from .themes import current_theme, ui_color
+    if current_theme() == 'light':
+        color = '#16324f' if color == '#d7f5ff' else ui_color(color).name()
+    return _icon(name, color)
+
+
 def apply_icon(widget, name, *, color='#d7f5ff', label=None):
-    widget.setIcon(icon(name, color))
+    widget._aurora_icon = (name, color)
+    from .themes import current_theme
+    rendered_color = '#f1fffd' if current_theme() == 'light' and widget.objectName() == 'headerButton' else color
+    widget.setIcon(icon(name, rendered_color))
     if hasattr(widget, 'setIconSize'):
         widget.setIconSize(QSize(18, 18))
     if label:
