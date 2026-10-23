@@ -65,15 +65,27 @@ class OfficeRichClipboardTests(unittest.TestCase):
 
     def test_styled_service_message_keeps_paragraph_breaks_in_all_clipboard_formats(self):
         from app.clipboard_content import expansion_mime
-        from PySide6.QtGui import QTextDocument
+        from PySide6.QtGui import QTextCharFormat, QTextCursor, QTextDocument
         from app.rich_clipboard import cf_html_bytes, interoperable_html
-        html = ('<p>Prezado(a), bom dia.</p><p><br></p>'
-                '<p>Espero que esteja bem.</p><p><br></p>'
-                '<p>Informamos que a <b>Sede já realizou a correção necessária</b> '
-                'no sistema.</p><p><br></p>'
-                '<p>Manteremos o acompanhamento do caso.</p>')
+        # Mesmo caminho da interface real: Enter duas vezes gera um QTextBlock
+        # vazio. <p><br></p> importado por Qt seria uma quebra suave extra.
         doc = QTextDocument()
-        doc.setHtml(html)
+        cursor = QTextCursor(doc)
+        cursor.insertText("Prezado(a), bom dia.")
+        cursor.insertBlock()
+        cursor.insertBlock()
+        cursor.insertText("Espero que esteja bem.")
+        cursor.insertBlock()
+        cursor.insertBlock()
+        cursor.insertText("Informamos que a ")
+        bold = QTextCharFormat()
+        bold.setFontWeight(700)
+        cursor.insertText("Sede já realizou a correção necessária", bold)
+        cursor.insertText(" no sistema.")
+        cursor.insertBlock()
+        cursor.insertBlock()
+        cursor.insertText("Manteremos o acompanhamento do caso.")
+        html = doc.toHtml()
         plain = doc.toPlainText()
         self.assertIn('dia.\n\nEspero', plain)
         self.assertIn('bem.\n\nInformamos', plain)
