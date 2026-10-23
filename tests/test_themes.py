@@ -170,10 +170,15 @@ class AppearanceTests(unittest.TestCase):
 
     def test_banner_geometry_and_shared_overlay_at_multiple_sizes(self):
         banner = self.win.banner
+        # Day and night show the same landscape. Different source dimensions
+        # would change the crop/scale and move the mountains on a theme switch.
+        self.assertEqual(banner._night.size(), banner._day.size())
+        self.assertEqual((banner._night.width(), banner._night.height()), (2048, 768))
         for width in (1060, 1320, 1920, 2560):
             self.win.resize(width, 900)
             self.app.processEvents()
             brand_geometry = None
+            landscape_crop = None
             for mode in ("light", "dark"):
                 self.choose(mode)
                 source = banner._image
@@ -181,6 +186,10 @@ class AppearanceTests(unittest.TestCase):
                 crop = banner.source_crop(source.width(), source.height(), banner.panorama_width(), banner.height())
                 self.assertLessEqual(crop.right(), source.width())
                 self.assertLessEqual(crop.bottom(), source.height())
+                if landscape_crop is None:
+                    landscape_crop = crop
+                else:
+                    self.assertEqual(crop, landscape_crop)
                 self.assertTrue(self.win.banner_brand.isVisible())
                 if brand_geometry is None:
                     brand_geometry = self.win.banner_brand.geometry()
