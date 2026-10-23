@@ -3,6 +3,7 @@
 Exercises contenteditable and iframe editors, not a Teams account or a public
 site. UIA is deliberately unavailable; copy proof must guard the only paste.
 """
+import base64
 import json
 import os
 from pathlib import Path
@@ -68,16 +69,15 @@ def main():
                                     os.environ.get("PROGRAMFILES(X86)", ""))
                        if (Path(root) / "Google/Chrome/Application/chrome.exe").is_file()), None)
         assert chrome is not None, "Chrome is required on the Windows runner"
-        fixture = Path(temporary.name) / "editor.html"
-        fixture.write_text("<html><head><meta charset='utf-8'><title>AURORA synthetic editor</title>"
-                           "</head><body><div id='editor' contenteditable='true'></div>"
+        fixture = ("<html><head><meta charset='utf-8'><title>AURORA synthetic editor</title>"
+                           "</head><body><div id='editor' contenteditable='true' style='white-space:pre-wrap'></div>"
                            "<iframe id='frame' srcdoc=\"<div id='editor' contenteditable='true'></div>\">"
-                           "</iframe></body></html>", encoding="utf-8")
+                           "</iframe></body></html>")
         profile = Path(temporary.name) / "profile"
         browser = subprocess.Popen([str(chrome), "--user-data-dir=" + str(profile),
                                     "--remote-debugging-port=0", "--remote-allow-origins=*",
                                     "--no-first-run", "--no-default-browser-check",
-                                    "--disable-background-networking", fixture.as_uri()],
+                                    "--disable-background-networking", "about:blank"],
                                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         port_file = profile / "DevToolsActivePort"
         wait(lambda: port_file.exists(), seconds=20)
@@ -86,12 +86,14 @@ def main():
             with urlopen(f"http://127.0.0.1:{port}/json/list", timeout=5) as response:
                 return json.load(response)
         def fixture_page():
-            return next((t for t in targets() if t.get("url") == fixture.as_uri()), None)
+            return next((t for t in targets() if t.get("url") == "about:blank"), None)
         wait(lambda: fixture_page() is not None)
         page = fixture_page()
         connection = websocket.create_connection(page["webSocketDebuggerUrl"], timeout=8,
                                                  suppress_origin=True)
         command("Page.bringToFront")
+        command("Page.navigate", {"url": "data:text/html;base64," +
+                                 base64.b64encode(fixture.encode("utf-8")).decode("ascii")})
         # Accept only this owned Chrome process before sending any input.
         import ctypes
         from ctypes import wintypes
@@ -103,7 +105,9 @@ def main():
             api.GetWindowThreadProcessId(context.window, ctypes.byref(pid))
             return bool(context.window and context.control and pid.value == browser.pid)
         wait(owned_focus)
-        wait(lambda: js("document.readyState") == "complete")
+        wait(lambda: js("Boolean(document.getElementById('editor') && "
+                        "document.getElementById('frame')?.contentDocument?.getElementById('editor'))"),
+             seconds=20)
         # The production stages run unchanged. Only the disposable host and
         # candidate validity are supplied here; no input/clipboard mocks.
         host = SimpleNamespace(
@@ -154,7 +158,9 @@ def main():
                         "return JSON.stringify({text:e.textContent,html:e.innerHTML,pastes:window.pastes,"
                         "pasteHTML:window.pasteHTML,pasteTypes:window.pasteTypes});})()")
             actual = json.loads(actual)
-            assert actual["text"] == (initial if mismatch else prefix + "Resposta 😀 tail"), actual
+            # Chromium may preserve boundary spaces with NBSP during rich paste.
+            assert actual["text"].replace("\u00a0", " ") == (
+                initial if mismatch else prefix + "Resposta 😀 tail"), actual
             assert actual["pastes"] == (0 if mismatch else 1), actual
             if rich and not mismatch:
                 bold = js("(() => { const e=(" + doc + ").getElementById('editor');"
