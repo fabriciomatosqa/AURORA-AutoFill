@@ -260,17 +260,6 @@ class AuroraBanner(QWidget):
                 mirrored = not mirrored
         else:
             painter.fillRect(self.rect(), QColor("#06152b"))
-        # Gradiente sob a marca e sob o botão; não modifica os pixels da arte.
-        left = QLinearGradient(0, 0, self.width() * .56, 0)
-        left.setColorAt(0, QColor(2, 11, 29, 220))
-        left.setColorAt(.57, QColor(3, 17, 38, 120))
-        left.setColorAt(1, QColor(4, 18, 36, 0))
-        painter.fillRect(self.rect(), left)
-        shade = QLinearGradient(0, 0, 0, self.height())
-        shade.setColorAt(0, QColor(2, 8, 28, 90))
-        shade.setColorAt(.65, QColor(3, 11, 29, 0))
-        shade.setColorAt(1, QColor(2, 9, 25, 95))
-        painter.fillRect(self.rect(), shade)
         painter.end()
 
 

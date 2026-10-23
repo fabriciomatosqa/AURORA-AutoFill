@@ -8,7 +8,7 @@ from unittest.mock import patch
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 from PySide6.QtCore import QCoreApplication, QEvent, Qt
-from PySide6.QtGui import QColor, QPalette, QTextCursor
+from PySide6.QtGui import QColor, QPalette, QPixmap, QTextCursor
 from PySide6.QtWidgets import QApplication, QLabel, QPushButton
 from app import preferences
 from app.themes import ThemeController, current_theme, resolved_theme
@@ -167,6 +167,28 @@ class AppearanceTests(unittest.TestCase):
         menu.deleteLater()
         color.deleteLater()
         notice.deleteLater()
+
+    def test_banner_preserves_source_colors_without_darkening(self):
+        banner = AuroraBanner(ROOT / "assets" / "aurora_banner.jpg")
+        try:
+            colors = {"light": QColor("#8ac6ef"), "dark": QColor("#29618c")}
+            for mode, color in colors.items():
+                source = QPixmap(2048, 768)
+                source.fill(color)
+                if mode == "light":
+                    banner._day = source
+                else:
+                    banner._night = source
+                banner.set_theme(mode)
+                for width in (1060, 1320, 1920, 2560):
+                    banner.resize(width, 168)
+                    rendered = banner.grab().toImage()
+                    for x in (2, width // 2, width - 3):
+                        for y in (2, 84, 165):
+                            with self.subTest(mode=mode, width=width, x=x, y=y):
+                                self.assertEqual(rendered.pixelColor(x, y), color)
+        finally:
+            banner.deleteLater()
 
     def test_banner_geometry_and_shared_overlay_at_multiple_sizes(self):
         banner = self.win.banner
