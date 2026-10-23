@@ -55,7 +55,7 @@ class OfficeRichClipboardTests(unittest.TestCase):
         source = self.sample_html()
         fragment = interoperable_html(source)
         self.assertEqual(fragment.count('<p style="margin:0">'), 3)
-        self.assertIn('<p style="margin:0"><br></p>', fragment)
+        self.assertIn('<p style="margin:0"></p>', fragment)
         self.assertNotIn('</span><br><span', fragment)
         original = QTextDocument()
         original.setHtml(source)
