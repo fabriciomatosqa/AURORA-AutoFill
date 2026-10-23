@@ -80,6 +80,7 @@ def main():
         host._clone_clipboard_mime = AutoFillWindow._clone_clipboard_mime
         host._normal_text = AutoFillWindow._normal_text
         report = []
+        failures = []
         for framed, rich, mismatch in ((False, False, False), (False, True, False),
                                        (True, False, False), (True, True, False),
                                        (True, True, True)):
@@ -92,7 +93,9 @@ def main():
                "e.textContent = " + json.dumps(initial) + "; e.focus();"
                "const r = d.createRange(); r.setStart(e.firstChild," + str(caret) + ");"
                "r.collapse(true); const s = d.getSelection(); s.removeAllRanges(); s.addRange(r);"
-               "window.pastes=0; e.onpaste=()=>window.pastes++; return true; })()")
+               "window.pastes=0; e.onpaste=x=>{window.pastes++;"
+               "window.pasteHTML=x.clipboardData.getData('text/html');"
+               "window.pasteTypes=Array.from(x.clipboardData.types);}; return true; })()")
             context = capture_focus()
             assert context.window == int(view.winId()) and context.control
             clipboard.setText("synthetic original clipboard")
@@ -111,18 +114,22 @@ def main():
                 host._submit_expansion(operation)
                 wait(lambda: host._expansion_operation is None and host._clipboard_lease is None)
             actual = js("(() => { const e=(" + doc + ").getElementById('editor');"
-                        "return JSON.stringify({text:e.textContent,html:e.innerHTML,pastes:window.pastes});})()")
+                        "return JSON.stringify({text:e.textContent,html:e.innerHTML,pastes:window.pastes,"
+                        "pasteHTML:window.pasteHTML,pasteTypes:window.pasteTypes});})()")
             actual = json.loads(actual)
             assert actual["text"] == (initial if mismatch else prefix + "Resposta 😀 tail"), actual
             assert actual["pastes"] == (0 if mismatch else 1), actual
             if rich and not mismatch:
-                assert js("(() => { const e=(" + doc + ").getElementById('editor');"
+                bold = js("(() => { const e=(" + doc + ").getElementById('editor');"
                           "return Array.from(e.querySelectorAll('*')).some(n=>"
-                          "Number(n.ownerDocument.defaultView.getComputedStyle(n).fontWeight)>=700);})()"), actual
+                          "Number(n.ownerDocument.defaultView.getComputedStyle(n).fontWeight)>=700);})()")
+                if not bold:
+                    failures.append({"iframe": framed, **actual})
             assert clipboard.text() == "synthetic original clipboard"
             report.append({"iframe": framed, "rich": rich, "mismatch": mismatch,
                            "pastes": actual["pastes"]})
         print("Chromium native expansion passed:", json.dumps(report))
+        assert not failures, failures
     finally:
         clipboard.setMimeData(original)
         app.processEvents()
