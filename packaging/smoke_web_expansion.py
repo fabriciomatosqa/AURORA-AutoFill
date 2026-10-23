@@ -6,10 +6,15 @@ site. UIA is deliberately unavailable; copy proof must guard the only paste.
 import json
 import os
 from pathlib import Path
+import subprocess
 import sys
+import tempfile
 import time
 from types import MethodType, SimpleNamespace
 from unittest.mock import Mock
+from urllib.request import urlopen
+
+import websocket
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
@@ -19,9 +24,6 @@ def main():
     if sys.platform != "win32":
         raise SystemExit("This smoke test requires Windows")
     os.environ["QT_QPA_PLATFORM"] = "windows"
-    os.environ["QTWEBENGINE_CHROMIUM_FLAGS"] = "--disable-gpu"
-    from PySide6.QtCore import Qt
-    from PySide6.QtWebEngineWidgets import QWebEngineView
     from PySide6.QtWidgets import QApplication
     from app.clipboard_content import clone_mime
     from app.expansion import ExpansionCandidate, ExpansionOperation
@@ -29,11 +31,10 @@ def main():
     from app.windows_context import capture_focus
 
     app = QApplication([])
-    view = QWebEngineView()
-    view.resize(800, 500)
-    view.setWindowTitle("AURORA synthetic Chromium expansion test")
     clipboard = app.clipboard()
     original = clone_mime(clipboard.mimeData())
+    browser = connection = None
+    temporary = tempfile.TemporaryDirectory()
 
     def wait(predicate, seconds=8):
         deadline = time.monotonic() + seconds
@@ -43,25 +44,66 @@ def main():
             app.processEvents()
             time.sleep(.005)
 
+    request_id = 0
+    def command(method, params=None):
+        nonlocal request_id
+        request_id += 1
+        connection.send(json.dumps({"id": request_id, "method": method, "params": params or {}}))
+        while True:
+            result = json.loads(connection.recv())
+            if result.get("id") == request_id:
+                assert "error" not in result, result
+                return result["result"]
+
     def js(source):
-        result = []
-        view.page().runJavaScript(source, lambda value: result.append(value))
-        wait(lambda: bool(result))
-        return result[0]
+        result = command("Runtime.evaluate", {"expression": source, "returnByValue": True})
+        assert "exceptionDetails" not in result, result
+        return result["result"].get("value")
 
     try:
-        loaded = []
-        view.loadFinished.connect(lambda ok: loaded.append(ok))
-        view.setHtml("<html><body><div id='editor' contenteditable='true'></div>"
-                     "<iframe id='frame' srcdoc=\"<div id='editor' contenteditable='true'></div>\">"
-                     "</iframe></body></html>")
-        view.show()
-        view.activateWindow()
-        view.raise_()
-        view.setFocus(Qt.OtherFocusReason)
-        wait(lambda: bool(loaded))
-        assert loaded[-1], "Synthetic page did not load"
-        wait(lambda: capture_focus().window == int(view.winId()))
+        # An external Chrome process exercises the same OS clipboard boundary
+        # as the user's browser. QtWebEngine in the writer process does not.
+        chrome = next((Path(root) / "Google/Chrome/Application/chrome.exe"
+                       for root in (os.environ.get("PROGRAMFILES", ""),
+                                    os.environ.get("PROGRAMFILES(X86)", ""))
+                       if (Path(root) / "Google/Chrome/Application/chrome.exe").is_file()), None)
+        assert chrome is not None, "Chrome is required on the Windows runner"
+        fixture = Path(temporary.name) / "editor.html"
+        fixture.write_text("<html><head><meta charset='utf-8'><title>AURORA synthetic editor</title>"
+                           "</head><body><div id='editor' contenteditable='true'></div>"
+                           "<iframe id='frame' srcdoc=\"<div id='editor' contenteditable='true'></div>\">"
+                           "</iframe></body></html>", encoding="utf-8")
+        profile = Path(temporary.name) / "profile"
+        browser = subprocess.Popen([str(chrome), "--user-data-dir=" + str(profile),
+                                    "--remote-debugging-port=0", "--remote-allow-origins=*",
+                                    "--no-first-run", "--no-default-browser-check",
+                                    "--disable-background-networking", fixture.as_uri()],
+                                   stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        port_file = profile / "DevToolsActivePort"
+        wait(lambda: port_file.exists(), seconds=20)
+        port = int(port_file.read_text().splitlines()[0])
+        def targets():
+            with urlopen(f"http://127.0.0.1:{port}/json/list", timeout=5) as response:
+                return json.load(response)
+        def fixture_page():
+            return next((t for t in targets() if t.get("url") == fixture.as_uri()), None)
+        wait(lambda: fixture_page() is not None)
+        page = fixture_page()
+        connection = websocket.create_connection(page["webSocketDebuggerUrl"], timeout=8,
+                                                 suppress_origin=True)
+        command("Page.bringToFront")
+        # Accept only this owned Chrome process before sending any input.
+        import ctypes
+        from ctypes import wintypes
+        api = ctypes.windll.user32
+        api.GetWindowThreadProcessId.argtypes = [wintypes.HWND, ctypes.POINTER(wintypes.DWORD)]
+        def owned_focus():
+            context = capture_focus()
+            pid = wintypes.DWORD()
+            api.GetWindowThreadProcessId(context.window, ctypes.byref(pid))
+            return bool(context.window and context.control and pid.value == browser.pid)
+        wait(owned_focus)
+        wait(lambda: js("document.readyState") == "complete")
         # The production stages run unchanged. Only the disposable host and
         # candidate validity are supplied here; no input/clipboard mocks.
         host = SimpleNamespace(
@@ -97,22 +139,17 @@ def main():
                "window.pasteHTML=x.clipboardData.getData('text/html');"
                "window.pasteTypes=Array.from(x.clipboardData.types);}; return true; })()")
             context = capture_focus()
-            assert context.window == int(view.winId()) and context.control
+            assert owned_focus()
             clipboard.setText("synthetic original clipboard")
             candidate = ExpansionCandidate(len(report) + 1, shortcut, 0, context)
-            host._candidate_valid = lambda c: capture_focus() == c.context
+            host._candidate_valid = lambda c: owned_focus() and capture_focus() == c.context
             host._active_candidate = candidate
             operation = ExpansionOperation(candidate, None, "Resposta 😀", 0,
                                            rich_html="<b>Resposta 😀</b>" if rich else "",
                                            keyboard_verify=True, teams_web_html=framed and rich)
             host._expansion_operation = operation
-            # Permit only our owned test HWND. python.exe is intentionally not
-            # added to production's supported-app list.
-            from unittest.mock import patch
-            with patch("app.ui.supports_verified_copy",
-                       side_effect=lambda c: c == context and capture_focus() == context):
-                host._submit_expansion(operation)
-                wait(lambda: host._expansion_operation is None and host._clipboard_lease is None)
+            host._submit_expansion(operation)
+            wait(lambda: host._expansion_operation is None and host._clipboard_lease is None)
             actual = js("(() => { const e=(" + doc + ").getElementById('editor');"
                         "return JSON.stringify({text:e.textContent,html:e.innerHTML,pastes:window.pastes,"
                         "pasteHTML:window.pasteHTML,pasteTypes:window.pasteTypes});})()")
@@ -136,7 +173,13 @@ def main():
     finally:
         clipboard.setMimeData(original)
         app.processEvents()
-        view.close()
+        if connection is not None:
+            connection.close()
+        if browser is not None:
+            subprocess.run(["taskkill", "/PID", str(browser.pid), "/T", "/F"],
+                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=10)
+            browser.wait(timeout=10)
+        temporary.cleanup()
 
 
 if __name__ == "__main__":
