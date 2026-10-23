@@ -1,4 +1,5 @@
 """Performance contracts with real data/query counts, not wall-clock guesses."""
+from contextlib import closing
 import queue
 import sqlite3
 import tempfile
@@ -58,7 +59,7 @@ class FastExpansionTests(unittest.TestCase):
                 folder = store.create_folder('Teste')
                 identifier = store.save(folder, 'Modelo', '/x', 'Antes')
                 self.assertEqual(store.snippet_by_shortcut('/x').content, 'Antes')
-                with sqlite3.connect(db) as external:
+                with closing(sqlite3.connect(db)) as external, external:
                     external.execute('UPDATE snippets SET content=? WHERE id=?', ('Externo', identifier))
                 self.assertEqual(store.snippet_by_shortcut('/x').content, 'Externo')
                 try:
