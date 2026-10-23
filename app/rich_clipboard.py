@@ -49,12 +49,18 @@ def _family(fmt: QTextCharFormat) -> str | None:
 
 
 def interoperable_html(html: str) -> str:
-    """HTML simples com cores em spans e atributos legados para Word/Teams.
+    """HTML interoperável com parágrafos reais e estilos por fragmento.
 
-    Não gera novos espaços, bitmap, nem quebra a edição dos caracteres.
-    Imagens são tratadas pela rota antiga, que conserva recursos independentes.
+    Blocos com texto viram parágrafos reais; blocos vazios viram
+    quebras dentro do parágrafo adjacente. Assim os destinos WebView/Office
+    recebem blocos sem <br> soltos e Qt não duplica os espaçamentos.
+    Imagens continuam na rota independente, sem rasterizar o texto.
     """
-    result = []
+    # O Qt interpreta <p><br></p> como *duas* quebras e ignora <p></p>.
+    # Guardar os blocos vazios como quebras INTERNAS do parágrafo anterior
+    # preserva a contagem sem depender de <br> soltos entre divs.
+    paragraphs = []
+    pending_empty = 0
     for row in _runs(html):
         pieces = []
         for text, fmt in row:
@@ -87,18 +93,35 @@ def interoperable_html(html: str) -> str:
                 decorations.append("line-through")
             if decorations:
                 styles.append("text-decoration:" + " ".join(decorations))
-            escaped = escape(text)
+            # Quebras suaves (Shift+Enter/\u2028) devem viajar dentro do
+            # mesmo parágrafo como <br>, não como caracteres invisíveis.
+            escaped = escape(text).replace("\r\n", "\n").replace("\r", "\n")
+            for separator in ("\n", "\u2028", "\u2029"):
+                escaped = escaped.replace(separator, "<br>")
             span = f'<span style="{";".join(styles)}">{escaped}</span>' if styles else escaped
             # Alguns editores Office antigos utilizam <font color> em vez de
             # color CSS. Fornecer ambos sem alterar a semântica do fragmento.
             if color is not None:
                 span = f'<font color="{color.name()}">{span}</font>'
             pieces.append(span)
-        # Blocos vazios entre textos devem continuar como uma linha vazia.
-        # Qt ignora <p></p>, mas <p><br></p> introduz uma quebra EXTRA;
-        # separar os blocos com <br> mantém exatamente a sequência original.
-        result.append("".join(pieces))
-    return '<div style="white-space:pre-wrap">' + '<br>'.join(result) + '</div>'
+        body = "".join(pieces)
+        if not body:
+            pending_empty += 1
+            continue
+        if paragraphs:
+            if pending_empty:
+                paragraphs[-1] += "<br>" * pending_empty
+        elif pending_empty:
+            body = "<br>" * pending_empty + body
+        paragraphs.append(body)
+        pending_empty = 0
+    if not paragraphs:
+        # Apenas blocos vazios. O primeiro não introduz quebra por si só.
+        paragraphs.append("<br>" * max(0, pending_empty - 1))
+    elif pending_empty:
+        paragraphs[-1] += "<br>" * pending_empty
+    return "<div>" + "".join(f'<p style="margin:0">{body}</p>'
+                           for body in paragraphs) + "</div>"
 
 
 def _rtf_escape(text: str) -> str:
