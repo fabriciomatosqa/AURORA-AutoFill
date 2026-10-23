@@ -26,7 +26,7 @@ from .hotkeys import (GlobalHotkeyListener, replace_shortcut, paste_clipboard,
 from .expansion import ClipboardLease, EditSnapshot, ExpansionCandidate, ExpansionOperation, utf16_slice, prefix_offset
 from .windows_context import ContextUnavailable, FocusMonitor, capture_focus, capture_edit, set_caret, select_text_range
 from .verified_fallback import (supports_verified_copy, prefers_verified_copy,
-                               copied_shortcut_matches, is_teams_target)
+                               copied_shortcut_matches, is_teams_target, clipboard_owned_by_target)
 from .accessibility_context import warm_accessibility
 from time import monotonic
 from .formatting import has_rich_formatting, render_rich_html
@@ -2031,10 +2031,13 @@ class AutoFillWindow(AuroraFeaturesMixin, QMainWindow):
             clipboard = QApplication.clipboard()
             sequence = self._clipboard_sequence()
             old = operation.verify_sequence
-            # Um único Ctrl+C pode produzir no máximo duas revisões ao
-            # disponibilizar formatos diferentes. Não sobrescrever cópia nova.
+            # Ctrl+C rico pode publicar mais de duas revisões no Windows.
+            # Nesse caso, exigir também o proprietário nativo do clipboard.
+            # verify_sequence=None marca uma cópia posterior já observada.
             copied = (sequence is not None and old is not None
-                      and 0 < sequence - old <= 2)
+                      and sequence > old
+                      and (sequence - old <= 2
+                           or clipboard_owned_by_target(operation.candidate.context)))
             marker = (sequence == old and clipboard.text() == operation.verify_marker)
             if marker or (copied and self._candidate_valid(operation.candidate)):
                 clipboard.setMimeData(original)

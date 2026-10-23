@@ -160,6 +160,39 @@ class VerifiedCopyFallbackTests(unittest.TestCase):
             self.assertEqual(sum(vk == 86 and not flags & 2 for vk, flags, _ in e.sent), 1)
             self.assertEqual(e.clipboard.text(), "original")
 
+    def test_rich_copy_with_many_revisions_restores_only_target_owned_clipboard(self):
+        for owned in (False, True):
+            with self.subTest(owned=owned), EngineFixture() as e:
+                e.save("/teste", "Resposta")
+                def rich_copy():
+                    for _ in range(4):
+                        e.clipboard.setText("other")
+                with patch("app.ui.capture_edit", side_effect=readonly_uia), \
+                     patch("app.ui.supports_verified_copy", return_value=True), \
+                     patch("app.ui.copy_selected_text", side_effect=rich_copy), \
+                     patch("app.ui.clipboard_owned_by_target", return_value=owned):
+                    e.type("/teste")
+                    e.drain()
+                self.assertEqual(e.field.text, "/teste")
+                self.assertFalse(any(vk == 86 for vk, _, _ in e.sent))
+                self.assertEqual(e.clipboard.text(), "original" if owned else "other")
+
+    def test_clipboard_owner_must_match_the_target_process(self):
+        import ctypes
+        from types import SimpleNamespace
+        from app.expansion import FocusContext
+        from app.verified_fallback import clipboard_owned_by_target
+        for source, expected in ((11, True), (22, True), (33, False), (0, False)):
+            with self.subTest(source=source):
+                def pid(window, pointer):
+                    pointer._obj.value = {123: 11, 456: 22, 789: source}[window]
+                    return 1
+                api = SimpleNamespace(GetClipboardOwner=Mock(return_value=789),
+                                      GetWindowThreadProcessId=Mock(side_effect=pid))
+                with patch("sys.platform", "win32"), \
+                     patch.object(ctypes, "windll", SimpleNamespace(user32=api), create=True):
+                    self.assertEqual(clipboard_owned_by_target(FocusContext(123, 456)), expected)
+
     def test_unavailable_uia_expands_only_after_real_copy_matches_shortcut(self):
         with EngineFixture() as e:
             e.save("/eu", "Mensagem com formatação")

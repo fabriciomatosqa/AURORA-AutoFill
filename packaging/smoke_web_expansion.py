@@ -125,11 +125,14 @@ def main():
                           "Number(n.ownerDocument.defaultView.getComputedStyle(n).fontWeight)>=700);})()")
                 if not bold:
                     failures.append({"iframe": framed, **actual})
-            assert clipboard.text() == "synthetic original clipboard"
+            if clipboard.text() != "synthetic original clipboard":
+                failures.append({"iframe": framed, "mismatch": mismatch,
+                                 "clipboard": clipboard.text()})
             report.append({"iframe": framed, "rich": rich, "mismatch": mismatch,
                            "pastes": actual["pastes"]})
-        print("Chromium native expansion passed:", json.dumps(report))
+        print("Chromium native expansion cases:", json.dumps(report))
         assert not failures, failures
+        print("Chromium native expansion passed")
     finally:
         clipboard.setMimeData(original)
         app.processEvents()
