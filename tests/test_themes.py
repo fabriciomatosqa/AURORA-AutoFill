@@ -9,7 +9,7 @@ from unittest.mock import patch
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 from PySide6.QtCore import QCoreApplication, QEvent, Qt
 from PySide6.QtGui import QColor, QPalette, QTextCursor
-from PySide6.QtWidgets import QApplication, QPushButton
+from PySide6.QtWidgets import QApplication, QLabel, QPushButton
 from app import preferences
 from app.themes import ThemeController, current_theme, resolved_theme
 from app.ui import AutoFillWindow, AuroraBanner, AuroraMenu
@@ -101,7 +101,7 @@ class AppearanceTests(unittest.TestCase):
             self.assertEqual(preferences.load_preferences(self.settings)["theme"], mode)
             self.assertEqual(self.win.banner._image.cacheKey(),
                              (self.win.banner._day if expected == "light" else self.win.banner._night).cacheKey())
-            self.assertEqual(self.win.banner_brand.isHidden(), expected == "light")
+            self.assertFalse(self.win.banner_brand.isHidden())
             color = self.app.palette().color(QPalette.Text)
             self.assertEqual(color.name(), "#16324f" if expected == "light" else "#f5faff")
             self.assertEqual(self.win.banner.height(), 168)
@@ -168,11 +168,12 @@ class AppearanceTests(unittest.TestCase):
         color.deleteLater()
         notice.deleteLater()
 
-    def test_banner_geometry_and_embedded_signature_at_multiple_sizes(self):
+    def test_banner_geometry_and_shared_overlay_at_multiple_sizes(self):
         banner = self.win.banner
         for width in (1060, 1320, 1920, 2560):
             self.win.resize(width, 900)
             self.app.processEvents()
+            brand_geometry = None
             for mode in ("light", "dark"):
                 self.choose(mode)
                 source = banner._image
@@ -180,7 +181,11 @@ class AppearanceTests(unittest.TestCase):
                 crop = banner.source_crop(source.width(), source.height(), banner.panorama_width(), banner.height())
                 self.assertLessEqual(crop.right(), source.width())
                 self.assertLessEqual(crop.bottom(), source.height())
-                if mode == "light":
-                    self.assertLessEqual(crop.top(), 258)
-                    self.assertGreaterEqual(crop.bottom(), 430)
+                self.assertTrue(self.win.banner_brand.isVisible())
+                if brand_geometry is None:
+                    brand_geometry = self.win.banner_brand.geometry()
+                else:
+                    self.assertEqual(self.win.banner_brand.geometry(), brand_geometry)
+                caption = self.win.banner_brand.findChild(QLabel, "topCaption")
+                self.assertEqual(caption.palette().color(QPalette.WindowText).name(), "#d2eafa")
                 self.assertFalse(banner.grab().isNull())

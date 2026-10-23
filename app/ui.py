@@ -219,7 +219,7 @@ class AuroraBanner(QWidget):
 
     def panorama_width(self):
         # Limit magnification on ultrawide displays; reflect the panorama at its
-        # edge instead of zooming until the baked-in day signature is cropped.
+        # edge to preserve the landscape framing at the fixed header height.
         return min(self.width(), 1320)
 
     @staticmethod
@@ -244,8 +244,7 @@ class AuroraBanner(QWidget):
             rect = self.source_crop(self._image.width(), self._image.height(), width, self.height())
             painter.drawPixmap(QRectF(0, 0, width, self.height()), self._image, rect)
             # Reflect only the rightmost scenery, at the same scale as the
-            # main panorama. Alternating strips meet without visible seams and
-            # cannot duplicate the day image's embedded signature on the left.
+            # main panorama. Alternating strips meet without visible seams.
             edge = QRectF(rect.right() - rect.width() * .38, rect.y(), rect.width() * .38, rect.height())
             strip_width = width * .38
             offset = float(width)
@@ -261,10 +260,6 @@ class AuroraBanner(QWidget):
                 mirrored = not mirrored
         else:
             painter.fillRect(self.rect(), QColor("#06152b"))
-        if self._theme == "light":
-            # Approved image contains its own signature/contrast treatment.
-            painter.end()
-            return
         # Gradiente sob a marca e sob o botão; não modifica os pixels da arte.
         left = QLinearGradient(0, 0, self.width() * .56, 0)
         left.setColorAt(0, QColor(2, 11, 29, 220))
@@ -534,8 +529,8 @@ class AutoFillWindow(AuroraFeaturesMixin, QMainWindow):
 
     def _apply_banner_theme(self, theme):
         self.banner.set_theme(theme)
-        # The approved day art already includes the whole brand signature.
-        self.banner_brand.setVisible(theme == "dark")
+        # Both resources are scenery only; reuse the same live brand overlay.
+        self.banner_brand.show()
 
     def _play_confirmation(self):
         """Som suave com liga/desliga e volume independente do Windows."""

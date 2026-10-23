@@ -38,6 +38,7 @@ QFrame#fontToolbar QToolButton#fontTool:checked { color: #ffffff; }
 QLineEdit, QTextEdit, QPlainTextEdit, QComboBox { selection-color: #ffffff; }
 QToolTip { color: #16324f; }
 QPushButton#headerButton { color: #f1fffd; }
+QLabel#topCaption { color: #d2eafa; }
 """
 
 
