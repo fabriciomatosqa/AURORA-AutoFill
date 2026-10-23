@@ -114,7 +114,8 @@ def clipboard_part_mime(part: ClipboardPart) -> QMimeData:
 
 
 
-def expansion_mime(text: str, html: str = "", *, image_only: bool = False) -> QMimeData:
+def expansion_mime(text: str, html: str = "", *, image_only: bool = False,
+                   web_html_only: bool = False) -> QMimeData:
     if image_only:
         sources = image_sources(html)
         if len(sources) != 1:
@@ -136,9 +137,11 @@ def expansion_mime(text: str, html: str = "", *, image_only: bool = False) -> QM
             payload.setHtml(
                 '<html><head><meta charset="utf-8"></head><body>'
                 + fragment + '</body></html>')
-            if sys.platform == "win32":
-                # Word pode preferir Rich Text Format ao HTML. Disponibilizar
-                # CF_HTML e RTF nativos além do CF_UNICODETEXT já existente.
+            if sys.platform == "win32" and not web_html_only:
+                # Office recebe CF_HTML e RTF nativos; Teams recebe somente
+                # text/html + Unicode, evitando anunciar formatos Office que
+                # podem competir com o HTML no editor de mensagens WebView.
+                # Qt converte text/html em CF_HTML no clipboard Windows.
                 payload.setData(
                     'application/x-qt-windows-mime;value="HTML Format"',
                     QByteArray(cf_html_bytes(fragment)))

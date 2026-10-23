@@ -94,6 +94,19 @@ class OfficeRichClipboardTests(unittest.TestCase):
         self.assertEqual(mime.data(html_mime).data().count(b"StartFragment:"), 1)
         self.assertIn(b"\\highlight", bytes(mime.data(rtf_mime)))
 
+    def test_teams_web_html_only_retains_html_and_text_without_office_formats(self):
+        from app.clipboard_content import expansion_mime
+        with patch("app.clipboard_content.sys.platform", "win32"):
+            mime = expansion_mime("CADASTRO\ntexto em destaque", self.sample_html(),
+                                  web_html_only=True)
+        self.assertTrue(mime.hasText())
+        self.assertTrue(mime.hasHtml())
+        self.assertIn("#b345e2", mime.html())
+        self.assertIn("background-color:#36d119", mime.html())
+        self.assertFalse(any("Rich Text Format" in x or "HTML Format" in x
+                             for x in mime.formats()))
+        self.assertFalse(mime.hasImage())
+
     def test_plain_snippet_does_not_acquire_rtf_or_html(self):
         from app.clipboard_content import expansion_mime
         with patch("app.clipboard_content.sys.platform", "win32"):

@@ -18,9 +18,14 @@ SAFE_EDITORS = frozenset({
 })
 
 
-def supports_verified_copy(context) -> bool:
+def focused_executable(context) -> str:
+    """Executable da janela focada, somente se o Windows permitir a consulta.
+
+    Não usar títulos de janela para identificar Teams: são controlados pelo
+    usuário e podem coincidir com aplicativos não relacionados.
+    """
     if sys.platform != "win32" or not context.window or not context.control:
-        return False
+        return ""
     try:
         user32, kernel32 = ctypes.windll.user32, ctypes.windll.kernel32
         user32.GetWindowThreadProcessId.argtypes = [
@@ -28,7 +33,7 @@ def supports_verified_copy(context) -> bool:
         user32.GetWindowThreadProcessId.restype = wintypes.DWORD
         pid = wintypes.DWORD()
         if not user32.GetWindowThreadProcessId(context.window, ctypes.byref(pid)):
-            return False
+            return ""
         kernel32.OpenProcess.argtypes = [
             wintypes.DWORD, wintypes.BOOL, wintypes.DWORD]
         kernel32.OpenProcess.restype = wintypes.HANDLE
@@ -39,19 +44,27 @@ def supports_verified_copy(context) -> bool:
         kernel32.CloseHandle.argtypes = [wintypes.HANDLE]
         handle = kernel32.OpenProcess(0x1000, False, pid.value)
         if not handle:
-            return False
+            return ""
         try:
             buffer = ctypes.create_unicode_buffer(32768)
             size = wintypes.DWORD(len(buffer))
             if not kernel32.QueryFullProcessImageNameW(
                     handle, 0, buffer, ctypes.byref(size)):
-                return False
-            name = os.path.basename(buffer.value.replace("\\", "/")).casefold()
-            return name in SAFE_EDITORS
+                return ""
+            return os.path.basename(buffer.value.replace("\\", "/")).casefold()
         finally:
             kernel32.CloseHandle(handle)
     except (AttributeError, OSError, ValueError, TypeError):
-        return False
+        return ""
+
+
+def supports_verified_copy(context) -> bool:
+    return focused_executable(context) in SAFE_EDITORS
+
+
+def is_teams_target(context) -> bool:
+    """Perfil HTML simples somente para a janela desktop identificada do Teams."""
+    return focused_executable(context) in {"teams.exe", "ms-teams.exe"}
 
 
 def copied_shortcut_matches(selected: str, shortcut: str) -> bool:

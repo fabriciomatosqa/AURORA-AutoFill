@@ -99,3 +99,5 @@ class ExpansionOperation:
     verify_marker: str = ""
     verify_sequence: int | None = None
     verify_select_keyboard: bool = False
+    # Teams/WebView: não anunciar RTF Office junto com o HTML ao colar.
+    teams_web_html: bool = False

@@ -123,6 +123,43 @@ class VerifiedCopyFallbackTests(unittest.TestCase):
             assert e.clipboard.text() == "original"
     
     
+    def test_teams_profile_requires_exact_windows_executable(self):
+        from app.verified_fallback import is_teams_target, supports_verified_copy
+        from app.expansion import FocusContext
+        context = FocusContext(123, 456)
+        for executable in ("teams.exe", "ms-teams.exe"):
+            with self.subTest(executable=executable), \
+                 patch("app.verified_fallback.focused_executable", return_value=executable):
+                self.assertTrue(is_teams_target(context))
+                self.assertTrue(supports_verified_copy(context))
+        for executable in ("winword.exe", "chrome.exe", "msedgewebview2.exe", ""):
+            with self.subTest(executable=executable), \
+                 patch("app.verified_fallback.focused_executable", return_value=executable):
+                self.assertFalse(is_teams_target(context))
+
+    def test_teams_rich_snippet_keeps_html_on_keyboard_verified_fallback(self):
+        from app.clipboard_content import expansion_mime
+        html = '<p><span style="background-color:#ffff00;color:#ff0000">Texto importante</span></p>'
+        with EngineFixture() as e:
+            e.save("/teste", "Texto importante", html)
+            captured = []
+            def record_mime(*args, **kwargs):
+                payload = expansion_mime(*args, **kwargs)
+                captured.append((payload, dict(kwargs)))
+                return payload
+            with patch("app.ui.capture_edit", side_effect=readonly_uia), \
+                 patch("app.ui.supports_verified_copy", return_value=True), \
+                 patch("app.ui.is_teams_target", return_value=True), \
+                 patch("app.ui.copy_selected_text", side_effect=lambda: copied_selection(e)), \
+                 patch("app.ui.expansion_mime", side_effect=record_mime):
+                e.type("/teste")
+                e.drain()
+            self.assertEqual(e.field.text, "Texto importante")
+            self.assertEqual(e.clipboard.text(), "original")
+            self.assertEqual(len(captured), 1)
+            self.assertTrue(captured[0][1]["web_html_only"])
+            self.assertTrue(captured[0][0].hasHtml())
+
     def test_unknown_app_never_runs_keyboard_fallback(self):
         with EngineFixture() as e:
             e.save("/eu", "Mensagem")

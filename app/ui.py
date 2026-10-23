@@ -23,7 +23,7 @@ from .hotkeys import (GlobalHotkeyListener, replace_shortcut, paste_clipboard,
                       select_previous_characters, copy_selected_text, collapse_selection_to_end)
 from .expansion import ClipboardLease, EditSnapshot, ExpansionCandidate, ExpansionOperation, utf16_slice, prefix_offset
 from .windows_context import ContextUnavailable, FocusMonitor, capture_focus, capture_edit, set_caret, select_text_range
-from .verified_fallback import supports_verified_copy, copied_shortcut_matches
+from .verified_fallback import supports_verified_copy, copied_shortcut_matches, is_teams_target
 from .accessibility_context import warm_accessibility
 from time import monotonic
 from .formatting import has_rich_formatting, render_rich_html
@@ -1748,6 +1748,9 @@ class AutoFillWindow(AuroraFeaturesMixin, QMainWindow):
                                            rendered.text[:-rendered.left_moves] if rendered.left_moves else rendered.text,
                                            render_rich_html(snippet.rich_content, current_text, now) if rich else "")
             operation.keyboard_verify = keyboard_verify
+            # O Teams aceita conteúdo HTML, mas não deve receber RTF Office
+            # como formato concorrente. Sem alteração para Word/outros apps.
+            operation.teams_web_html = bool(operation.rich_html and is_teams_target(candidate.context))
             self._expansion_operation = operation
             if image_sources(snippet.rich_content):
                 mixed = prepare_mixed_content(snippet.rich_content, current_text, now)
@@ -1788,7 +1791,8 @@ class AutoFillWindow(AuroraFeaturesMixin, QMainWindow):
             from uuid import uuid4
             token = uuid4().hex.encode("ascii")
             payload = expansion_mime(operation.text, operation.rich_html,
-                                     image_only=operation.image_only)
+                                     image_only=operation.image_only,
+                                     web_html_only=operation.teams_web_html)
             payload.setData("application/x-aurora-expansion", token)
             if self._clipboard_sequence() != backup_sequence:
                 raise ValueError("O clipboard mudou durante a preparação; colagem cancelada.")
@@ -1887,7 +1891,8 @@ class AutoFillWindow(AuroraFeaturesMixin, QMainWindow):
                 from uuid import uuid4
                 token = uuid4().hex.encode("ascii")
                 payload = expansion_mime(operation.text, operation.rich_html,
-                                         image_only=operation.image_only)
+                                     image_only=operation.image_only,
+                                     web_html_only=operation.teams_web_html)
                 payload.setData("application/x-aurora-expansion", token)
                 clipboard.setMimeData(payload)
                 lease = ClipboardLease(
