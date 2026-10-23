@@ -51,12 +51,16 @@ def _family(fmt: QTextCharFormat) -> str | None:
 def interoperable_html(html: str) -> str:
     """HTML interoperável com parágrafos reais e estilos por fragmento.
 
-    Cada bloco do QTextDocument vira <p>, inclusive blocos vazios. Isso
-    preserva Enter/linhas em branco quando editores WebView/TinyMCE limpam
-    estilos ou ignoram <br> soltos entre fragmentos de um único <div>.
+    Blocos com texto viram parágrafos reais; blocos vazios viram
+    quebras dentro do parágrafo adjacente. Assim os destinos WebView/Office
+    recebem blocos sem <br> soltos e Qt não duplica os espaçamentos.
     Imagens continuam na rota independente, sem rasterizar o texto.
     """
-    result = []
+    # O Qt interpreta <p><br></p> como *duas* quebras e ignora <p></p>.
+    # Guardar os blocos vazios como quebras INTERNAS do parágrafo anterior
+    # preserva a contagem sem depender de <br> soltos entre divs.
+    paragraphs = []
+    pending_empty = 0
     for row in _runs(html):
         pieces = []
         for text, fmt in row:
@@ -100,15 +104,24 @@ def interoperable_html(html: str) -> str:
             if color is not None:
                 span = f'<font color="{color.name()}">{span}</font>'
             pieces.append(span)
-        # Não usar um único <div> com <br> entre todos os blocos: editores
-        # contenteditable podem remover esses <br> ao sanitizar o clipboard.
-        # Parágrafos sem conteúdo continuam com um <br> próprio, preservando
-        # exatamente as linhas em branco (sem margem CSS extra).
-        # Um <br> no parágrafo vazio conta como quebra suave ADICIONAL
-        # no importador Qt; o próprio <p> já representa a linha vazia.
         body = "".join(pieces)
-        result.append(f'<p style="margin:0">{body}</p>')
-    return "<div>" + "".join(result) + "</div>"
+        if not body:
+            pending_empty += 1
+            continue
+        if paragraphs:
+            if pending_empty:
+                paragraphs[-1] += "<br>" * pending_empty
+        elif pending_empty:
+            body = "<br>" * pending_empty + body
+        paragraphs.append(body)
+        pending_empty = 0
+    if not paragraphs:
+        # Apenas blocos vazios. O primeiro não introduz quebra por si só.
+        paragraphs.append("<br>" * max(0, pending_empty - 1))
+    elif pending_empty:
+        paragraphs[-1] += "<br>" * pending_empty
+    return "<div>" + "".join(f'<p style="margin:0">{body}</p>'
+                           for body in paragraphs) + "</div>"
 
 
 def _rtf_escape(text: str) -> str:
