@@ -49,10 +49,12 @@ def _family(fmt: QTextCharFormat) -> str | None:
 
 
 def interoperable_html(html: str) -> str:
-    """HTML simples com cores em spans e atributos legados para Word/Teams.
+    """HTML interoperável com parágrafos reais e estilos por fragmento.
 
-    Não gera novos espaços, bitmap, nem quebra a edição dos caracteres.
-    Imagens são tratadas pela rota antiga, que conserva recursos independentes.
+    Cada bloco do QTextDocument vira <p>, inclusive blocos vazios. Isso
+    preserva Enter/linhas em branco quando editores WebView/TinyMCE limpam
+    estilos ou ignoram <br> soltos entre fragmentos de um único <div>.
+    Imagens continuam na rota independente, sem rasterizar o texto.
     """
     result = []
     for row in _runs(html):
@@ -87,18 +89,24 @@ def interoperable_html(html: str) -> str:
                 decorations.append("line-through")
             if decorations:
                 styles.append("text-decoration:" + " ".join(decorations))
-            escaped = escape(text)
+            # Quebras suaves (Shift+Enter/\u2028) devem viajar dentro do
+            # mesmo parágrafo como <br>, não como caracteres invisíveis.
+            escaped = escape(text).replace("\r\n", "\n").replace("\r", "\n")
+            for separator in ("\n", "\u2028", "\u2029"):
+                escaped = escaped.replace(separator, "<br>")
             span = f'<span style="{";".join(styles)}">{escaped}</span>' if styles else escaped
             # Alguns editores Office antigos utilizam <font color> em vez de
             # color CSS. Fornecer ambos sem alterar a semântica do fragmento.
             if color is not None:
                 span = f'<font color="{color.name()}">{span}</font>'
             pieces.append(span)
-        # Blocos vazios entre textos devem continuar como uma linha vazia.
-        # Qt ignora <p></p>, mas <p><br></p> introduz uma quebra EXTRA;
-        # separar os blocos com <br> mantém exatamente a sequência original.
-        result.append("".join(pieces))
-    return '<div style="white-space:pre-wrap">' + '<br>'.join(result) + '</div>'
+        # Não usar um único <div> com <br> entre todos os blocos: editores
+        # contenteditable podem remover esses <br> ao sanitizar o clipboard.
+        # Parágrafos sem conteúdo continuam com um <br> próprio, preservando
+        # exatamente as linhas em branco (sem margem CSS extra).
+        body = "".join(pieces) or "<br>"
+        result.append(f'<p style="margin:0">{body}</p>')
+    return "<div>" + "".join(result) + "</div>"
 
 
 def _rtf_escape(text: str) -> str:

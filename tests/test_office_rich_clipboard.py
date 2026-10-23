@@ -49,6 +49,63 @@ class OfficeRichClipboardTests(unittest.TestCase):
         self.assertEqual(fmt.foreground().color().name(), "#b345e2")
         self.assertEqual(fmt.background().color().name(), "#36d119")
 
+    def test_clipboard_html_has_real_paragraphs_and_keeps_empty_lines(self):
+        from PySide6.QtGui import QTextDocument
+        from app.rich_clipboard import interoperable_html
+        source = self.sample_html()
+        fragment = interoperable_html(source)
+        self.assertEqual(fragment.count('<p style="margin:0">'), 3)
+        self.assertIn('<p style="margin:0"><br></p>', fragment)
+        self.assertNotIn('</span><br><span', fragment)
+        original = QTextDocument()
+        original.setHtml(source)
+        roundtrip = QTextDocument()
+        roundtrip.setHtml(fragment)
+        self.assertEqual(roundtrip.toPlainText(), original.toPlainText())
+
+    def test_styled_service_message_keeps_paragraph_breaks_in_all_clipboard_formats(self):
+        from app.clipboard_content import expansion_mime
+        from PySide6.QtGui import QTextDocument
+        from app.rich_clipboard import cf_html_bytes, interoperable_html
+        html = ('<p>Prezado(a), bom dia.</p><p><br></p>'
+                '<p>Espero que esteja bem.</p><p><br></p>'
+                '<p>Informamos que a <b>Sede já realizou a correção necessária</b> '
+                'no sistema.</p><p><br></p>'
+                '<p>Manteremos o acompanhamento do caso.</p>')
+        doc = QTextDocument()
+        doc.setHtml(html)
+        plain = doc.toPlainText()
+        self.assertIn('dia.\n\nEspero', plain)
+        self.assertIn('bem.\n\nInformamos', plain)
+        fragment = interoperable_html(html)
+        self.assertEqual(fragment.count('<p style="margin:0">'), 7)
+        self.assertIn("font-weight:bold", fragment)
+        with patch("app.clipboard_content.sys.platform", "win32"):
+            mime = expansion_mime(plain, html)
+            web_mime = expansion_mime(plain, html, web_html_only=True)
+        for variant in (mime, web_mime):
+            self.assertEqual(variant.text(), plain)
+            pasted = QTextDocument()
+            pasted.setHtml(variant.html())
+            self.assertEqual(pasted.toPlainText(), plain)
+            self.assertEqual(variant.html().count('<p style="margin:0">'), 7)
+        native = bytes(mime.data('application/x-qt-windows-mime;value="HTML Format"'))
+        self.assertIn(b'StartFragment:', native)
+        self.assertIn(b'<p style="margin:0">', native)
+        self.assertGreaterEqual(bytes(mime.data('application/x-qt-windows-mime;value="Rich Text Format"')).count(b'\\par '), 6)
+
+    def test_soft_line_break_remains_inside_same_paragraph(self):
+        from PySide6.QtGui import QTextDocument
+        from app.rich_clipboard import interoperable_html
+        html = "<p>Linha inicial<br>continuação formatada</p>"
+        fragment = interoperable_html(html)
+        self.assertEqual(fragment.count('<p style="margin:0">'), 1)
+        self.assertIn("<br>", fragment)
+        result = QTextDocument()
+        result.setHtml(fragment)
+        self.assertEqual(result.toPlainText().replace("\u2028", "\n"),
+                         "Linha inicial\ncontinuação formatada")
+
     def test_windows_rtf_contains_color_table_and_highlight(self):
         from app.rich_clipboard import rich_text_rtf
         result = rich_text_rtf(self.sample_html()).decode("ascii")
