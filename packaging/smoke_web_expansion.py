@@ -12,6 +12,7 @@ import subprocess
 import sys
 import tempfile
 import time
+from threading import Thread
 from types import MethodType, SimpleNamespace
 from unittest.mock import Mock
 from urllib.request import urlopen
@@ -53,12 +54,25 @@ def main():
     def command(method, params=None):
         nonlocal request_id
         request_id += 1
-        connection.send(json.dumps({"id": request_id, "method": method, "params": params or {}}))
-        while True:
-            result = json.loads(connection.recv())
-            if result.get("id") == request_id:
-                assert "error" not in result, result
-                return result["result"]
+        current_id = request_id
+        response, errors = [], []
+        def exchange():
+            try:
+                connection.send(json.dumps({"id": current_id, "method": method, "params": params or {}}))
+                while True:
+                    result = json.loads(connection.recv())
+                    if result.get('id') == current_id:
+                        response.append(result)
+                        return
+            except Exception as exc:
+                errors.append(exc)
+        thread=Thread(target=exchange,daemon=True)
+        thread.start()
+        wait(lambda:not thread.is_alive(),seconds=10)
+        if errors:raise errors[0]
+        result=response[0]
+        assert 'error' not in result,result
+        return result['result']
 
     def js(source):
         result = command("Runtime.evaluate", {"expression": source, "returnByValue": True})
@@ -208,7 +222,9 @@ def main():
                "e.textContent = " + json.dumps(initial) + "; e.focus();"
                "const r = d.createRange(); r.setStart(e.firstChild," + str(caret) + ");"
                "r.collapse(true); const s = d.getSelection(); s.removeAllRanges(); s.addRange(r);"
-               "window.pastes=0;window.copies=0;"
+               "window.pastes=0;window.copies=0;window.edits=[];"
+               "e.onbeforeinput=x=>window.edits.push(['before',x.inputType,x.data,x.defaultPrevented]);"
+               "e.oninput=x=>window.edits.push(['input',x.inputType,x.data,e.textContent]);"
                "e.oncopy=x=>{window.copies++;x.preventDefault();x.clipboardData.setData('text/plain','WRONG COPY');};"
                "e.onkeydown=x=>{if(x.shiftKey&&x.key==='ArrowLeft')x.preventDefault();};"
                "e.onpaste=x=>{window.pastes++;"
@@ -232,8 +248,11 @@ def main():
             wait(lambda: host._expansion_operation is None and host._clipboard_lease is None)
             actual = js("(() => { const e=(" + doc + ").getElementById('editor');"
                         "return JSON.stringify({text:e.textContent,html:e.innerHTML,pastes:window.pastes,"
-                        "pasteHTML:window.pasteHTML,pasteText:window.pasteText,pasteTypes:window.pasteTypes,copies:window.copies});})()")
+                        "pasteHTML:window.pasteHTML,pasteText:window.pasteText,pasteTypes:window.pasteTypes,copies:window.copies,"
+                        "edits:window.edits,doc:e.ownerDocument.body.innerText});})()")
             actual = json.loads(actual)
+            actual['engine']=messages[marker:]
+            actual['case']=[framed,rich,mismatch]
             # Chromium may preserve boundary spaces with NBSP during rich paste.
             assert actual["text"].replace("\u00a0", " ") == (
                 prefix+shortcut+'X tail' if mismatch else prefix + body+" tail"), actual
