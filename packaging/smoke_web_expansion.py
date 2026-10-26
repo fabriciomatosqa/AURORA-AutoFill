@@ -39,12 +39,13 @@ def main():
     original = clone_mime(clipboard.mimeData())
     browser = connection = listener = store = focus_monitor = None
     temporary = tempfile.TemporaryDirectory()
+    messages = []
 
     def wait(predicate, seconds=8):
         deadline = time.monotonic() + seconds
         while not predicate():
             if time.monotonic() >= deadline:
-                raise AssertionError("Synthetic Chromium operation timed out")
+                raise AssertionError("Synthetic Chromium operation timed out; engine status: " + repr(messages[-3:]))
             app.processEvents()
             time.sleep(.005)
 
@@ -124,7 +125,8 @@ def main():
             _active_candidate=None, _queued_candidate=None, _quitting=False,
             _hotkeys_enabled=True,
             isActiveWindow=lambda: False, focusWidget=lambda: None,
-            test_box=object(), statusBar=lambda: Mock(), _play_confirmation=Mock())
+            test_box=object(), statusBar=lambda: SimpleNamespace(showMessage=lambda text,*_:messages.append(text)),
+            _play_confirmation=Mock())
         for name in AutoFillWindow.__dict__:
             if name.startswith(('_expand', '_expansion_', '_candidate', '_edit_snapshot', '_owns_clipboard',
                                 '_clipboard_', '_perform_', '_submit_', '_begin_', '_poll_',
@@ -136,7 +138,11 @@ def main():
         class Signals(QObject):
             triggered = Signal(object)
         signals = Signals()
-        signals.triggered.connect(host._expand_global, Qt.QueuedConnection)
+        received = []
+        def receive(candidate):
+            received.append(candidate)
+            host._expand_global(candidate)
+        signals.triggered.connect(receive, Qt.QueuedConnection)
         listener = GlobalHotkeyListener(signals.triggered.emit)
         host.hotkeys = listener
         store = SnippetStore(Path(temporary.name)/'synthetic.db')
@@ -211,12 +217,17 @@ def main():
             context = capture_focus()
             assert owned_focus()
             clipboard.setText("synthetic original clipboard")
+            marker = len(messages)
             type_raw(shortcut + ('X' if mismatch else ''))
             if mismatch:
                 deadline=time.monotonic()+.3
                 wait(lambda:time.monotonic()>=deadline)
             else:
-                wait(lambda: js('window.pastes')==1)
+                # Do not block this GUI with a synchronous CDP call while
+                # Chrome is waiting for this process to render OLE clipboard
+                # formats. Observe the engine first, inspect DOM afterwards.
+                wait(lambda: len(messages)>marker and host._expansion_operation is None
+                     and host._clipboard_lease is None)
             wait(lambda: host._expansion_operation is None and host._clipboard_lease is None)
             actual = js("(() => { const e=(" + doc + ").getElementById('editor');"
                         "return JSON.stringify({text:e.textContent,html:e.innerHTML,pastes:window.pastes,"
