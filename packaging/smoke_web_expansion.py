@@ -207,9 +207,9 @@ def main():
                                        (True, False, False), (True, True, False),
                                        (True, True, True)):
             doc = "document.getElementById('frame').contentDocument" if framed else "document"
-            prefix = "Earlier /teste\nSynthetic 😀 "
+            prefix = "Earlier /teste\nSynthetic 😀|"
             shortcut = "/teste"
-            initial = prefix + " tail"
+            initial = prefix + "|tail"
             caret = len(prefix.encode("utf-16-le")) // 2
             body = "Resposta colorida 😀"
             html = '<span style="color:#ff0000;background-color:#00ff00;font-family:Arial;font-size:14pt;font-weight:700">'+body+'</span>'
@@ -217,8 +217,8 @@ def main():
             store.save(folder,'Synthetic',shortcut,body,prior.id if prior else None, html if rich else '')
             listener.update_shortcuts([shortcut])
             listener.invalidate()
-            js("(() => { const d = " + doc + "; const e = d.getElementById('editor');"
-               + ("d.designMode='on';" if framed else "") +
+            js("(() => { const d = " + doc + "; const e = " + ("d.body" if framed else "d.getElementById('editor')") + ";"
+               + ("d.designMode='on';e.id='editor';e.style.whiteSpace='pre-wrap';" if framed else "") +
                "e.textContent = " + json.dumps(initial) + "; e.focus();"
                "const r = d.createRange(); r.setStart(e.firstChild," + str(caret) + ");"
                "r.collapse(true); const s = d.getSelection(); s.removeAllRanges(); s.addRange(r);"
@@ -270,7 +270,7 @@ def main():
             actual['case']=[framed,rich,mismatch]
             # Chromium may preserve boundary spaces with NBSP during rich paste.
             assert actual["text"].replace("\u00a0", " ") == (
-                prefix+shortcut+'X tail' if mismatch else prefix + body+" tail"), actual
+                prefix+shortcut+'X|tail' if mismatch else prefix + body+"|tail"), actual
             assert actual["pastes"] == (0 if mismatch else 1), actual
             assert actual['copies']==0,actual
             if rich and not mismatch:
