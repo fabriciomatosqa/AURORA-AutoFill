@@ -223,14 +223,29 @@ def main():
                "const r = d.createRange(); r.setStart(e.firstChild," + str(caret) + ");"
                "r.collapse(true); const s = d.getSelection(); s.removeAllRanges(); s.addRange(r);"
                "window.pastes=0;window.copies=0;window.edits=[];"
-               "e.onbeforeinput=x=>window.edits.push(['before',x.inputType,x.data,x.defaultPrevented]);"
-               "e.oninput=x=>window.edits.push(['input',x.inputType,x.data,e.textContent]);"
-               "e.oncopy=x=>{window.copies++;x.preventDefault();x.clipboardData.setData('text/plain','WRONG COPY');};"
-               "e.onkeydown=x=>{if(x.shiftKey&&x.key==='ArrowLeft')x.preventDefault();};"
-               "e.onpaste=x=>{window.pastes++;"
+               "d.onbeforeinput=x=>window.edits.push(['before',x.inputType,x.data,x.defaultPrevented]);"
+               "d.oninput=x=>window.edits.push(['input',x.inputType,x.data,e.textContent]);"
+               "d.oncopy=x=>{window.copies++;x.preventDefault();x.clipboardData.setData('text/plain','WRONG COPY');};"
+               "d.onkeydown=x=>{if(x.shiftKey&&x.key==='ArrowLeft')x.preventDefault();};"
+               "d.onpaste=x=>{window.pastes++;"
                "window.pasteText=x.clipboardData.getData('text/plain');"
                "window.pasteHTML=x.clipboardData.getData('text/html');"
                "window.pasteTypes=Array.from(x.clipboardData.types);}; return true; })()")
+            # A selection in contentDocument does not activate the iframe's
+            # native keyboard routing. Focus its browsing context by clicking,
+            # then set the exact synthetic caret again.
+            rect = json.loads(js("JSON.stringify(document.getElementById(" +
+                                 ("'frame'" if framed else "'editor'") + ").getBoundingClientRect())"))
+            point = {'x':rect['x']+15,'y':rect['y']+10,'button':'left','clickCount':1}
+            command('Input.dispatchMouseEvent',{'type':'mousePressed',**point})
+            command('Input.dispatchMouseEvent',{'type':'mouseReleased',**point})
+            js("(() => {const d="+doc+";const e=d.getElementById('editor');"
+               "d.defaultView.focus();e.focus();const r=d.createRange();"
+               "r.setStart(e.firstChild,"+str(caret)+");r.collapse(true);"
+               "const s=d.getSelection();s.removeAllRanges();s.addRange(r);return true;})()")
+            assert js("document.activeElement===document.getElementById("+
+                      ("'frame'" if framed else "'editor'")+")"), 'Synthetic browsing context did not gain focus'
+            listener.invalidate()
             context = capture_focus()
             assert owned_focus()
             clipboard.setText("synthetic original clipboard")
