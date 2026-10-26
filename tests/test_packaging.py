@@ -33,7 +33,7 @@ class PackagingTests(unittest.TestCase):
         (plugins / plugin).write_bytes(b'synthetic-test-only')
         if platform == 'windows':
             (dist / '_internal/app').mkdir()
-            for name in ('accessibility_worker.ps1', 'accessibility_worker.cs'):
+            for name in ('accessibility_worker.ps1', 'accessibility_worker.cs', 'word_worker.ps1', 'word_worker.cs'):
                 shutil.copy2(ROOT / 'app' / name, dist / '_internal/app' / name)
         return dist
 
@@ -42,7 +42,7 @@ class PackagingTests(unittest.TestCase):
             with self.subTest(platform=platform), tempfile.TemporaryDirectory() as temporary:
                 result = bundle.verify_bundle(self.fixture(temporary, platform), platform)
                 self.assertEqual(result['local_data_scan'], 'passed')
-                self.assertEqual(len(result['resources_sha256']), len(bundle.ASSETS) + 2 * (platform == 'windows'))
+                self.assertEqual(len(result['resources_sha256']), len(bundle.ASSETS) + 4 * (platform == 'windows'))
 
     def test_windows_requires_worker_at_runtime_path(self):
         with tempfile.TemporaryDirectory() as temporary:

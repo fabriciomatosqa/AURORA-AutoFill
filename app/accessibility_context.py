@@ -30,7 +30,8 @@ SELECTION_SUBMITTED = object()
 
 
 class AccessibilityClient:
-    def __init__(self):
+    def __init__(self, script='accessibility_worker.ps1', source='accessibility_worker.cs', apartment='MTA'):
+        self._script, self._source, self._apartment = script, source, apartment
         self._lock = Lock()
         self._call_lock = Lock()
         self._process = None
@@ -51,13 +52,13 @@ class AccessibilityClient:
         process = None
         try:
             executable = Path(os.environ.get('SystemRoot', r'C:\Windows')) / 'System32/WindowsPowerShell/v1.0/powershell.exe'
-            script = Path(__file__).with_name('accessibility_worker.ps1').read_text(encoding='utf-8')
+            script = Path(__file__).with_name(self._script).read_text(encoding='utf-8')
             process = subprocess.Popen(
-                [str(executable), '-NoLogo', '-NoProfile', '-NonInteractive', '-MTA', '-Command', script],
+                [str(executable), '-NoLogo', '-NoProfile', '-NonInteractive', '-' + self._apartment, '-Command', script],
                 stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
                 text=True, encoding='utf-8', creationflags=subprocess.CREATE_NO_WINDOW,
                 env=dict(os.environ, AURORA_UIA_SOURCE=str(
-                    Path(__file__).with_name('accessibility_worker.cs'))))
+                    Path(__file__).with_name(self._source))))
             responses = queue.Queue(maxsize=2)
             process._aurora_started = monotonic()
             process._aurora_ready = False
@@ -124,6 +125,13 @@ class AccessibilityClient:
                 raise AccessibilityUnavailable('O campo não respondeu à leitura de acessibilidade.') from None
         finally:
             self._call_lock.release()
+
+    @property
+    def ready(self):
+        with self._lock:
+            return bool(self._process is not None and self._process.poll() is None
+                        and getattr(self._process, '_aurora_ready', False)
+                        and not getattr(self._process, '_aurora_invalid', False))
 
     def stop(self):
         with self._lock:

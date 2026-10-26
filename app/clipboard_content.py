@@ -16,6 +16,30 @@ from .rich_clipboard import interoperable_html, rich_text_rtf, cf_html_bytes
 from .inline_images import decode_embedded_image, image_sources, validate_inline_html
 
 
+def materialize_clipboard():
+    """Publish OLE formats eagerly, before another process handles Ctrl+V.
+
+    A delayed Qt IDataObject needs this GUI to serve its formats. UIA queries
+    or keyboard hooks can otherwise compete with that reentrant request.
+    Capture the clipboard sequence AFTER this call, since rendering advances it.
+    """
+    if sys.platform != 'win32':
+        return
+    import ctypes
+    from time import sleep
+    flush = ctypes.windll.ole32.OleFlushClipboard
+    flush.argtypes = []
+    flush.restype = ctypes.c_long
+    result = 0
+    for attempt in range(5):
+        result = flush()
+        if result == 0:
+            return
+        if attempt < 4:
+            sleep(.01)
+    raise OSError(f'O Windows não disponibilizou o clipboard (0x{result & 0xffffffff:08X}).')
+
+
 @dataclass(frozen=True)
 class MixedContent:
     html: str
