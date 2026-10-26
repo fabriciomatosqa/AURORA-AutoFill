@@ -199,6 +199,7 @@ QToolTip { background: #17354c; color: #fff; border: 1px solid #4eb9b2; }
 
 class HotkeySignals(QObject):
     triggered = Signal(object)
+    listener_state = Signal(str)
 
 
 class AuroraBanner(QWidget):
@@ -525,7 +526,8 @@ class AutoFillWindow(AuroraFeaturesMixin, QMainWindow):
         self._setup_tray()
         self.signals = HotkeySignals()
         self.signals.triggered.connect(self._expand_global)
-        self.hotkeys = GlobalHotkeyListener(self.signals.triggered.emit)
+        self.signals.listener_state.connect(self._listener_state_changed, Qt.QueuedConnection)
+        self.hotkeys = GlobalHotkeyListener(self.signals.triggered.emit, self.signals.listener_state.emit)
         self._update_listener_shortcuts()
         started, message = self.hotkeys.start()
         self._hotkeys_enabled = started
@@ -1641,6 +1643,21 @@ class AutoFillWindow(AuroraFeaturesMixin, QMainWindow):
         if self.tray_toggle_action is not None:
             self.tray_toggle_action.setText("Pausar atalhos" if self._hotkeys_enabled else "Retomar atalhos")
         self.statusBar().showMessage("Expansão ativa." if self._hotkeys_enabled else "Expansão pausada.", 4000)
+
+    def _listener_state_changed(self, _state):
+        if self._quitting:
+            return
+        # Signals may be queued across a click on Pause. Render the current
+        # requested state, never reactivate from an older recovery notification.
+        if not self._hotkeys_enabled:
+            self.listen_button.setText("Atalhos pausados")
+            apply_icon(self.listen_button, "pause")
+            return
+        recovering = self.hotkeys.status == "recovering"
+        self.listen_button.setText("Reconectando atalhos" if recovering else "Atalhos ativos")
+        apply_icon(self.listen_button, "bolt")
+        if recovering:
+            self.statusBar().showMessage("Restabelecendo a captura dos atalhos…", 4000)
 
     @staticmethod
     def _clone_clipboard_mime() -> QMimeData:

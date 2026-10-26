@@ -5,7 +5,7 @@ No Linux, pynput exige sessão X11; Wayland não suporta esta integração globa
 """
 from __future__ import annotations
 
-from threading import RLock, Timer
+from threading import Event, RLock, Thread, Timer, current_thread
 from typing import Callable
 import os
 from time import monotonic
@@ -13,6 +13,7 @@ from time import monotonic
 from .expansion import ExpansionCandidate
 from .core import shortcut_key
 from .windows_context import capture_focus
+from .input_health import CHECK_INTERVAL, HookHealth, windows_input_snapshot, windows_modifiers
 
 # Only our events are ignored; injected events from other tools are still input.
 INJECTION_TAG = 0xA6700000 | (os.getpid() & 0xFFFF)
@@ -100,8 +101,10 @@ class ShortcutMatcher:
 
 
 class GlobalHotkeyListener:
-    def __init__(self, on_trigger: Callable[[ExpansionCandidate], None]):
+    def __init__(self, on_trigger: Callable[[ExpansionCandidate], None],
+                 on_state: Callable[[str], None] | None = None):
         self._on_trigger = on_trigger
+        self._on_state = on_state
         self._matcher = ShortcutMatcher()
         self._listener = None
         self._mouse_listener = None
@@ -117,11 +120,23 @@ class GlobalHotkeyListener:
         self._context = None
         self._ambiguity_timer = None
         self._ambiguity_token = 0
+        self._lifecycle_lock = RLock()
+        self._running = False
+        self._generation = 0
+        self._supervisor = None
+        self._wake = Event()
+        self._needs_rearm = False
+        self._callback_failed = False
+        self._health = HookHealth()
+        self._status = "stopped"
 
     def update_shortcuts(self, shortcuts: list[str]) -> None:
+        # Compile outside the hook's lock; large catalogs must not hold up
+        # Windows' message loop long enough for the OS to remove its hook.
+        matcher = ShortcutMatcher(shortcuts)
         with self._state_lock:
             self.invalidate()
-            self._matcher.configure(shortcuts)
+            self._matcher = matcher
 
     def _cancel_ambiguity(self) -> None:
         """Chamado sempre com _state_lock; invalida também callback já agendado."""
@@ -156,8 +171,47 @@ class GlobalHotkeyListener:
 
     def set_enabled(self, enabled: bool) -> None:
         with self._state_lock:
-            self._enabled = enabled
+            self._enabled = bool(enabled)
             self.invalidate()
+            self._modifiers.clear()
+            if enabled and self._running:
+                self._needs_rearm = True
+        self._report_state("recovering" if enabled and self._running else "paused")
+        self._wake.set()
+
+    def _report_state(self, state: str) -> None:
+        if self._status == state:
+            return
+        self._status = state
+        if self._on_state is not None:
+            try:
+                self._on_state(state)
+            except Exception:
+                pass
+
+    @property
+    def status(self) -> str:
+        return self._status
+
+    def _dispatch(self, generation: int, callback, *args) -> None:
+        with self._state_lock:
+            if (generation != self._generation or not self._running
+                    or not self._enabled or self._needs_rearm):
+                return
+            try:
+                callback(*args)
+            except Exception:
+                # A provider/key translation error must not permanently kill
+                # pynput's listener. Invalidate this input and rearm separately.
+                self.invalidate()
+                self._callback_failed = True
+                self._wake.set()
+
+    def _native_filter(self, generation: int, device: str, message, data):
+        if generation != self._generation:
+            return False
+        self._health.observe(device, int(data.time))
+        return self._win32_event_filter(message, data) if device == "keyboard" else True
 
     def _win32_event_filter(self, _message, data):
         return int(data.dwExtraInfo or 0) != INJECTION_TAG
@@ -172,21 +226,109 @@ class GlobalHotkeyListener:
         if sys.platform.startswith("linux") and os.environ.get("XDG_SESSION_TYPE", "").lower() == "wayland":
             return False, "Wayland restringe atalhos globais. Use uma sessão X11/Xorg para essa função."
         try:
-            from pynput import keyboard, mouse
-            self._keyboard = keyboard
-            self._listener = keyboard.Listener(on_press=self._on_press, on_release=self._on_release,
-                                               win32_event_filter=self._win32_event_filter)
-            self._listener.start()
-            self._mouse_listener = mouse.Listener(on_click=self._on_click,
-                                                  on_scroll=lambda *_: self.invalidate())
-            self._mouse_listener.start()
+            with self._lifecycle_lock:
+                if self._running:
+                    return True, "Atalhos globais ativados"
+                self._running = True
+                self._enabled = True
+                self._install_hooks()
+                self._supervisor = Thread(target=self._supervise, name="AuroraInputHealth", daemon=True)
+                self._supervisor.start()
+            self._report_state("active")
             return True, "Atalhos globais ativados"
         except Exception as exc:
             self.stop()
             return False, f"Atalhos globais indisponíveis: {exc}"
 
+    def _retire_hooks(self) -> None:
+        listeners = self._listener, self._mouse_listener
+        self._listener = self._mouse_listener = None
+        for listener in listeners:
+            if listener is not None:
+                try:
+                    listener.stop()
+                except Exception:
+                    pass
+        for listener in listeners:
+            if listener is not None and listener is not current_thread():
+                try:
+                    listener.join(timeout=0.2)
+                except Exception:
+                    # pynput rethrows callback errors on join. The retired
+                    # generation is already inert even if it cannot terminate.
+                    pass
+
+    def _install_hooks(self) -> None:
+        """Only the lifecycle owner may replace listeners; never enable here."""
+        from pynput import keyboard, mouse
+        with self._state_lock:
+            self._generation += 1
+            generation = self._generation
+            self.invalidate()
+            self._modifiers.clear()
+            self._needs_rearm = False
+            self._callback_failed = False
+        self._retire_hooks()
+        self._health.reset(windows_input_snapshot())
+        self._keyboard = keyboard
+        self._listener = keyboard.Listener(
+            on_press=lambda key: self._dispatch(generation, self._on_press, key),
+            on_release=lambda key: self._dispatch(generation, self._on_release, key),
+            win32_event_filter=lambda msg, data: self._native_filter(generation, "keyboard", msg, data))
+        self._mouse_listener = mouse.Listener(
+            on_click=lambda *args: self._dispatch(generation, self._on_click, *args),
+            on_scroll=lambda *_: self._dispatch(generation, self.invalidate),
+            win32_event_filter=lambda msg, data: self._native_filter(generation, "mouse", msg, data))
+        try:
+            self._listener.start()
+            self._mouse_listener.start()
+        except Exception:
+            with self._state_lock:
+                self._generation += 1
+                self.invalidate()
+            self._retire_hooks()
+            raise
+
+    def _check_health(self) -> None:
+        with self._lifecycle_lock:
+            if not self._running:
+                return
+            snapshot = windows_input_snapshot()
+            if not self._enabled:
+                self._health.reset(snapshot)
+                return
+            reason = self._health.recovery_reason(snapshot)
+            # Secure desktop / lock screen: wait for our desktop to return.
+            if snapshot is not None and not snapshot.desktop_available:
+                with self._state_lock:
+                    self._needs_rearm = True
+                    self.invalidate()
+                    self._modifiers.clear()
+                self._report_state("recovering")
+                return
+            if (not self._needs_rearm and not self._callback_failed and not reason
+                    and all(listener is not None and listener.is_alive() and listener.running
+                            for listener in (self._listener, self._mouse_listener))):
+                return
+            self._report_state("recovering")
+            self._install_hooks()
+            self._report_state("active" if self._enabled else "paused")
+
+    def _supervise(self) -> None:
+        while self._running:
+            self._wake.wait(CHECK_INTERVAL)
+            self._wake.clear()
+            try:
+                self._check_health()
+            except Exception:
+                # Keep trying while enabled; a temporary failure must not
+                # require the user to restart Aurora or re-enable shortcuts.
+                self._report_state("recovering" if self._enabled else "paused")
+
     def _on_press(self, key: object) -> None:
         with self._state_lock:
+            if not self._enabled:
+                return
             self._cancel_ambiguity()
             self._revision += 1
             context = capture_focus()
@@ -206,6 +348,9 @@ class GlobalHotkeyListener:
             return
         if not self._enabled:
             return
+        physical = windows_modifiers()
+        if physical is not None:
+            self._modifiers = physical
         if self._pending is not None:
             # Outra tecla chegou antes da expansão: não editar texto incerto.
             self._pending = self._pending_key = None
@@ -288,6 +433,9 @@ class GlobalHotkeyListener:
 
     def _release(self, key: object) -> str | None:
         self._modifiers.discard(getattr(key, "name", ""))
+        physical = windows_modifiers()
+        if physical is not None:
+            self._modifiers = physical
         if not self._enabled or self._pending is None:
             return
         # Keyup ends recognition; the destination still needs its own validation.
@@ -305,11 +453,17 @@ class GlobalHotkeyListener:
         return matched
 
     def stop(self) -> None:
-        self.set_enabled(False)
-        if self._listener is not None:
-            self._listener.stop()
-        if self._mouse_listener is not None:
-            self._mouse_listener.stop()
+        with self._lifecycle_lock:
+            self._running = False
+            self.set_enabled(False)
+            with self._state_lock:
+                self._generation += 1
+            self._retire_hooks()
+        self._wake.set()
+        supervisor, self._supervisor = self._supervisor, None
+        if supervisor is not None and supervisor is not current_thread():
+            supervisor.join(timeout=0.5)
+        self._report_state("stopped")
 
 
 def type_backspace_and_paste(backspaces: int, cursor_left_moves: int = 0) -> None:

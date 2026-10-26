@@ -85,7 +85,7 @@ jobs:
       - name: Testar conector STA do Word e propriedade do clipboard
         shell: pwsh
         run: python packaging/smoke_word_bridge.py
-      - name: Testar colagem nativa em editor Chromium e iframe
+      - name: Testar colagem Chromium, iframe e recuperação da captura de atalhos
         shell: pwsh
         run: python packaging/smoke_web_expansion.py
       - name: Compilar aplicativo Windows com os recursos validados
