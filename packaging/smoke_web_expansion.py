@@ -14,7 +14,7 @@ import tempfile
 import time
 from threading import Thread
 from types import MethodType, SimpleNamespace
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 from urllib.request import urlopen
 
 import websocket
@@ -140,7 +140,7 @@ def main():
             _hotkeys_enabled=True,
             isActiveWindow=lambda: False, focusWidget=lambda: None,
             test_box=object(), statusBar=lambda: SimpleNamespace(showMessage=lambda text,*_:messages.append(text)),
-            _play_confirmation=Mock())
+            _play_confirmation=Mock(), listen_button=Mock(), tray_toggle_action=None)
         for name in AutoFillWindow.__dict__:
             if name.startswith(('_expand', '_expansion_', '_candidate', '_edit_snapshot', '_owns_clipboard',
                                 '_clipboard_', '_perform_', '_submit_', '_begin_', '_poll_',
@@ -149,6 +149,7 @@ def main():
                 setattr(host, name, MethodType(getattr(AutoFillWindow, name), host))
         host._clone_clipboard_mime = AutoFillWindow._clone_clipboard_mime
         host._normal_text = AutoFillWindow._normal_text
+        host._toggle_listener = MethodType(AutoFillWindow._toggle_listener, host)
         class Signals(QObject):
             triggered = Signal(object)
         signals = Signals()
@@ -185,6 +186,12 @@ def main():
         api.SendInput.restype=wintypes.UINT
         api.VkKeyScanW.argtypes=[wintypes.WCHAR]
         api.VkKeyScanW.restype=ctypes.c_short
+        def raw_key(vk, up=False):
+            assert owned_focus()
+            data=(I*1)(I(1,U(ki=KI(vk,api.MapVirtualKeyW(vk,0)&255,2 if up else 0,0,0))))
+            api.SendInput.argtypes=[wintypes.UINT,ctypes.POINTER(I),ctypes.c_int]
+            assert api.SendInput(1,data,ctypes.sizeof(I))==1
+
         def type_raw(text):
             assert owned_focus()
             events=[]
@@ -203,9 +210,17 @@ def main():
 
         report = []
         failures = []
-        for framed, rich, mismatch in ((False, False, False), (False, True, False),
-                                       (True, False, False), (True, True, False),
-                                       (True, True, True)):
+        cases = ((False, False, False, ""), (False, True, False, ""),
+                 (True, False, False, ""), (True, True, False, ""),
+                 (True, True, True, ""),
+                 (False, True, False, "keyboard_stopped"),
+                 (True, True, False, "mouse_stopped"),
+                 (True, True, False, "hook_removed"),
+                 (False, True, False, "callback_error"),
+                 (True, True, False, "stale_modifier"),
+                 (False, True, False, "held_shift"),
+                 (True, True, False, "pause_resume"))
+        for framed, rich, mismatch, fault in cases:
             doc = "document.getElementById('frame').contentDocument" if framed else "document"
             prefix = "Earlier /teste\nSynthetic 😀|"
             shortcut = "/teste"
@@ -249,8 +264,65 @@ def main():
             context = capture_focus()
             assert owned_focus()
             clipboard.setText("synthetic original clipboard")
+            if fault:
+                generation = listener._generation
+                prior_received = len(received)
+                if fault in {"keyboard_stopped", "mouse_stopped"}:
+                    getattr(listener, "_listener" if fault == "keyboard_stopped" else "_mouse_listener").stop()
+                elif fault == "hook_removed":
+                    # Reproduce silent Windows removal: the Python thread
+                    # remains alive, so is_alive() alone cannot fix this.
+                    from pynput._util.win32 import SystemHook
+                    hook = SystemHook._HOOKS[listener._listener.ident]
+                    api.UnhookWindowsHookEx.argtypes = [wintypes.HHOOK]
+                    assert api.UnhookWindowsHookEx(hook._hook), "Could not remove owned test hook"
+                    assert listener._listener.is_alive()
+                    deadline = time.monotonic() + .06
+                    wait(lambda: time.monotonic() >= deadline)
+                    type_raw("x")  # Activity in this owned page, not a production health probe.
+                elif fault == "callback_error":
+                    with patch("app.hotkeys.capture_focus", side_effect=RuntimeError("synthetic transient failure")):
+                        type_raw("x")
+                        wait(lambda: listener._callback_failed or listener._generation > generation)
+                elif fault == "stale_modifier":
+                    listener._modifiers.add("ctrl_l")  # A key-up lost on another desktop.
+                elif fault == "pause_resume":
+                    host._toggle_listener()
+                    assert not host._hotkeys_enabled
+                    listener._listener.stop()
+                    type_raw(shortcut)
+                    deadline = time.monotonic() + 2.5
+                    wait(lambda: time.monotonic() >= deadline)
+                    assert listener._generation == generation, "Recovered while user paused"
+                    assert len(received) == prior_received, "Expanded while user paused"
+                    assert js("window.pastes") == 0
+                    host._toggle_listener()
+                    assert host._hotkeys_enabled
+                if fault not in {"stale_modifier", "held_shift"}:
+                    wait(lambda: listener._generation > generation and listener.status == "active")
+                    assert len(received) == prior_received
+                    assert js("window.pastes") == 0
+                # Remove fault-witness input and restore the precise synthetic
+                # caret before exercising a real command through the new hook.
+                js("(() => {const d=" + doc + ";const e=d.getElementById('editor');"
+                   "e.textContent=" + json.dumps(initial) + ";e.focus();"
+                   "const r=d.createRange();r.setStart(e.firstChild," + str(caret) + ");r.collapse(true);"
+                   "const s=d.getSelection();s.removeAllRanges();s.addRange(r);return true;})()")
+                listener.invalidate()
             marker = len(messages)
-            type_raw(shortcut + ('X' if mismatch else ''))
+            if fault == "held_shift":
+                type_raw("/")
+                raw_key(0x10)
+                try:
+                    type_raw("teste")
+                    deadline = time.monotonic() + .15
+                    wait(lambda: time.monotonic() >= deadline)
+                    assert len(received) == prior_received, "Expanded before physical Shift release"
+                    assert js("window.pastes") == 0
+                finally:
+                    raw_key(0x10, up=True)
+            else:
+                type_raw(shortcut + ('X' if mismatch else ''))
             if mismatch:
                 deadline=time.monotonic()+.3
                 wait(lambda:time.monotonic()>=deadline)
@@ -267,7 +339,7 @@ def main():
                         "edits:window.edits,doc:e.ownerDocument.body.innerText});})()")
             actual = json.loads(actual)
             actual['engine']=messages[marker:]
-            actual['case']=[framed,rich,mismatch]
+            actual['case']=[framed,rich,mismatch,fault]
             # Chromium may preserve boundary spaces with NBSP during rich paste.
             assert actual["text"].replace("\u00a0", " ") == (
                 prefix+shortcut+'X|tail' if mismatch else prefix + body+"|tail"), actual
@@ -285,7 +357,7 @@ def main():
                 failures.append({"iframe": framed, "mismatch": mismatch,
                                  "clipboard": clipboard.text()})
             report.append({"iframe": framed, "rich": rich, "mismatch": mismatch,
-                           "pastes": actual["pastes"]})
+                           "recovery": fault, "pastes": actual["pastes"]})
         print("Chromium native expansion cases:", json.dumps(report))
         assert not failures, failures
         print("Chromium native expansion passed")

@@ -15,6 +15,13 @@ def key(char=None, name=""):
 
 
 class RecognitionTests(unittest.TestCase):
+    def setUp(self):
+        # These tests feed synthetic callbacks directly, without physical key
+        # events. Their held modifiers must not come from the CI keyboard.
+        state = patch('app.hotkeys.windows_modifiers', return_value=None)
+        state.start()
+        self.addCleanup(state.stop)
+
     def test_longer_shortcut_is_not_preempted(self):
         matcher = ShortcutMatcher(['/oi', '/oie'])
         self.assertEqual([matcher.feed(c) for c in '/oie'], [None, None, None, '/oie'])

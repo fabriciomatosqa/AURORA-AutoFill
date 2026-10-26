@@ -38,6 +38,19 @@ para separar reconhecimento, preparação, seleção, inserção e confirmação
 - O conector Word roda fora da GUI. A interface continua atendendo OLE enquanto
   o Word lê os formatos do clipboard. O ACK nativo permite reconhecer a revisão
   causada pela materialização atrasada, mantendo token, conteúdo e contexto.
+- Um supervisor independente verifica os listeners de teclado e mouse a cada
+  segundo. Recria a captura se uma thread terminar, um callback falhar, a sessão
+  retornar de suspensão/bloqueio ou a atividade de `GetLastInputInfo` deixar de
+  chegar aos hooks por dois ciclos. Essa última verificação detecta também
+  a remoção silenciosa do hook pelo Windows, mesmo com a thread ainda viva.
+  Não injeta teclas nem move o mouse para testar a captura.
+- Reconectar invalida candidatos antigos, comandos parciais e modificadores.
+  A geração anterior não pode mais emitir expansões. Os modificadores também
+  são reconciliados com o estado físico no Windows, para que perder um key-up
+  de Ctrl/Alt/Windows/Shift não bloqueie os próximos atalhos indefinidamente.
+- A pausa é a intenção do usuário, independente da saúde da captura. O supervisor
+  não reconecta enquanto pausado e nunca chama `set_enabled(True)` ao recuperar.
+  Retomar rearma os listeners; a interface sinaliza uma recuperação em andamento.
 
 ## Contratos preservados
 
@@ -83,6 +96,13 @@ com perfil descartável, `contenteditable` e iframe em `designMode`. Digita o at
 com eventos reais do Windows; o editor bloqueia Shift+Left e produz cópia incorreta.
 Confere uma colagem, zero cópias, fonte/cor/realce, Unicode e cancelamento quando o
 usuário continua digitando. Não fabrica candidato nem substitui `is_current`.
+Também encerra as threads de teclado/mouse e remove o hook nativo mantendo a
+thread viva, para exigir recuperação automática antes de expandir novamente.
+Verifica pausa durante uma falha, retomada e recuperação de modificador preso.
+`tests/test_listener_health.py` cobre inatividade prolongada, wrap dos timestamps,
+retorno de desktop/suspensão, erro transitório e cancelamento da geração anterior.
+Uma janela de detecção de alguns segundos pode existir após uma falha nativa;
+o teste não equivale a deixar um computador real suspenso por horas.
 
 `packaging/smoke_word_bridge.py` compila o conector STA, lê token, HTML e RTF reais
 em outro processo, verifica cores/realce/fonte e exercita o contrato do modelo de
