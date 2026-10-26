@@ -12,6 +12,14 @@ public static class AuroraWordWorker
     private delegate bool EnumWindow(IntPtr hwnd, IntPtr data);
     [DllImport("user32.dll")] private static extern IntPtr GetForegroundWindow();
     [DllImport("user32.dll")] private static extern IntPtr GetAncestor(IntPtr hwnd, uint flag);
+    [DllImport("user32.dll")] private static extern bool IsChild(IntPtr parent, IntPtr child);
+    [StructLayout(LayoutKind.Sequential)] private struct GuiInfo
+    {
+        public uint size, flags;
+        public IntPtr active, focus, capture, menu, move, caret;
+        public int left, top, right, bottom;
+    }
+    [DllImport("user32.dll")] private static extern bool GetGUIThreadInfo(uint thread, ref GuiInfo info);
     [DllImport("user32.dll", CharSet=CharSet.Unicode)] private static extern int GetClassName(IntPtr hwnd, StringBuilder text, int size);
     [DllImport("user32.dll")] private static extern bool EnumChildWindows(IntPtr hwnd, EnumWindow callback, IntPtr data);
     [DllImport("oleacc.dll")] private static extern int AccessibleObjectFromWindow(IntPtr hwnd, uint id, ref Guid iid, [MarshalAs(UnmanagedType.Interface)] out object value);
@@ -140,15 +148,19 @@ public static class AuroraWordWorker
 
     private static object Handle(Request request)
     {
-        long raw;
-        if (request == null || !Int64.TryParse(request.window, out raw)) return new { status = "changed" };
+        long raw, rawControl;
+        if (request == null || !Int64.TryParse(request.window, out raw)
+            || !Int64.TryParse(request.control, out rawControl)) return new { status = "changed" };
         IntPtr root = new IntPtr(raw);
+        IntPtr control = new IntPtr(rawControl);
         if (GetForegroundWindow() != root) return new { status = "changed" };
         object native = null;
         EnumChildWindows(root, delegate(IntPtr child, IntPtr unused) {
             var name = new StringBuilder(128);
             GetClassName(child, name, name.Capacity);
-            if (name.ToString() != "_WwG") return true;
+            // Never use the document's old selection when typing in Find,
+            // a ribbon input, or another control in the same Word window.
+            if (name.ToString() != "_WwG" || (child != control && !IsChild(child, control))) return true;
             Guid iid = new Guid("00020400-0000-0000-C000-000000000046");
             return AccessibleObjectFromWindow(child, 0xfffffff0, ref iid, out native) != 0 || native == null;
         }, IntPtr.Zero);
@@ -156,7 +168,9 @@ public static class AuroraWordWorker
         try
         {
             Func<bool> valid = delegate {
+                var info = new GuiInfo { size = (uint)Marshal.SizeOf(typeof(GuiInfo)) };
                 return GetForegroundWindow() == root
+                    && GetGUIThreadInfo(0, ref info) && info.focus == control
                     && GetAncestor(new IntPtr(HandleValue(Get(native, "Hwnd"))), 2) == root
                     && OwnsClipboard(request.token);
             };
