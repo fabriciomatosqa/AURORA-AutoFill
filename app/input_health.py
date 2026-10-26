@@ -25,18 +25,21 @@ class InputSnapshot:
     desktop_available: bool = True
 
 
+class _LastInputInfo(ctypes.Structure):
+    # ctypes caches pointer types. Reuse this type across every poll instead
+    # of retaining a new Structure/POINTER class each second for the app's life.
+    _fields_ = [("size", wintypes.UINT), ("tick", wintypes.DWORD)]
+
+
 def windows_input_snapshot() -> InputSnapshot | None:
     if sys.platform != "win32":
         return None
     try:
         api = ctypes.windll.user32
 
-        class LastInput(ctypes.Structure):
-            _fields_ = [("size", wintypes.UINT), ("tick", wintypes.DWORD)]
-
-        api.GetLastInputInfo.argtypes = [ctypes.POINTER(LastInput)]
+        api.GetLastInputInfo.argtypes = [ctypes.POINTER(_LastInputInfo)]
         api.GetLastInputInfo.restype = wintypes.BOOL
-        info = LastInput(ctypes.sizeof(LastInput), 0)
+        info = _LastInputInfo(ctypes.sizeof(_LastInputInfo), 0)
         read = api.GetLastInputInfo(ctypes.byref(info))
         tick = int(info.tick) if read else None
         api.OpenInputDesktop.argtypes = [wintypes.DWORD, wintypes.BOOL, wintypes.DWORD]
