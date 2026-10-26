@@ -461,7 +461,9 @@ def _send_windows_paste(backspaces: int, left_moves: int = 0, *, phase: str = "a
 
     def event(vk: int, up: bool = False):
         flags = (KEYUP if up else 0) | (1 if vk in (VK_LEFT, VK_RIGHT) else 0)
-        return INPUT(1, INPUTUNION(ki=KEYBDINPUT(vk, 0, flags, 0, INJECTION_TAG)))
+        mapper = getattr(ctypes.windll.user32, 'MapVirtualKeyW', None)
+        scan = (mapper(vk, 0) & 0xff) if mapper is not None else 0
+        return INPUT(1, INPUTUNION(ki=KEYBDINPUT(vk, scan, flags, 0, INJECTION_TAG)))
 
     def submit(events, *, single_batch=False):
         # Replacement must not expose a selected shortcut between API calls.
@@ -488,6 +490,18 @@ def _send_windows_paste(backspaces: int, left_moves: int = 0, *, phase: str = "a
     if phase == "collapse":
         # Right encerra a seleção preservando o texto, no fim do atalho.
         submit([event(VK_RIGHT), event(VK_RIGHT, True)], single_batch=True)
+        return
+    if phase == "tracked":
+        if not 1 <= backspaces <= 64:
+            raise ValueError("Tamanho de atalho fora do limite de substituição.")
+        # Apenas o sufixo recebido pelo hook, no mesmo campo e revisão.
+        # Uma chamada mantém a ordem Backspace -> Ctrl+V. Nunca repetir se
+        # SendInput aceitar somente parte do lote.
+        events = []
+        for _ in range(backspaces):
+            events.extend((event(VK_BACK), event(VK_BACK, True)))
+        submit([*events, event(VK_CTRL), event(VK_V), event(VK_V, True), event(VK_CTRL, True)],
+               single_batch=True)
         return
     deletion = []
     for _ in range(backspaces):
@@ -522,6 +536,14 @@ def select_previous_characters(count: int) -> None:
     with kb.pressed(Key.shift):
         for _ in range(count):
             kb.tap(Key.left)
+
+
+def replace_tracked_shortcut(count: int) -> None:
+    """Só chamar para candidato recente validado pelo hook, nunca como retry."""
+    import sys
+    if sys.platform != 'win32':
+        raise OSError('Substituição acompanhada disponível apenas no Windows.')
+    _send_windows_paste(count, phase='tracked')
 
 
 def copy_selected_text() -> None:

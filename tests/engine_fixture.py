@@ -62,6 +62,11 @@ class Field:
         if not select:
             self.anchor = self.caret
 
+    def backspace(self):
+        if self.anchor == self.caret:
+            self.left(True)
+        self.insert('')
+
 
 class EngineFixture:
     def __init__(self):
@@ -109,6 +114,7 @@ class EngineFixture:
                 setattr(self.host, name, value.__func__)
             elif name.startswith(('_expand', '_expansion_succeeded', '_candidate', '_edit_snapshot', '_owns_clipboard',
                                   '_clipboard_', '_perform_expansion', '_submit_expansion', '_begin_keyboard_verification',
+                                  '_begin_word_expansion', '_poll_word_expansion',
                                   '_confirm_', '_check_cursor', '_set_caret', '_clear_failed_selection', '_paste_verified_selection', '_expansion_sent', '_finish_', '_resume_', '_restore_', '_toggle_listener')):
                 setattr(self.host, name, MethodType(value, self.host))
 
@@ -190,6 +196,8 @@ class EngineFixture:
             elif vk == 37 and not up:
                 # Native baseline established that unextended Left loses selection.
                 self.field.left(self.shift and bool(flags & 1) and not self.ignore_selection)
+            elif vk == 8 and not up:
+                self.field.backspace()
             elif vk == 86 and not up and self.ctrl:
                 if self.paste_delay:
                     self.schedule(self.paste_delay, self.consume)

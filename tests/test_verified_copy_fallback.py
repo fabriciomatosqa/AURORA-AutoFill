@@ -5,7 +5,7 @@ import unittest
 from unittest.mock import patch, Mock
 
 from engine_fixture import EngineFixture
-from app.expansion import EditSnapshot, utf16_slice
+from app.expansion import EditSnapshot, ExpansionOperation, utf16_slice
 from app.windows_context import ContextUnavailable
 from app.accessibility_context import SELECTION_SUBMITTED
 
@@ -50,18 +50,19 @@ class VerifiedCopyFallbackTests(unittest.TestCase):
                 self.assertEqual(sum(vk == 86 and not flags & 2
                                      for vk, flags, _ in e.sent), 1)
 
-    def test_readable_web_editor_rejects_inexact_copy_without_pasting(self):
+    def test_web_editor_does_not_depend_on_copy_handler(self):
         with EngineFixture() as e:
             e.save("/teste", "Resposta")
             with patch("app.ui.capture_edit", side_effect=accessible_ui_snapshot(e)), \
                  patch("app.verified_fallback.focused_executable", return_value="chrome.exe"), \
                  patch("app.ui.copy_selected_text",
-                       side_effect=lambda: e.clipboard.setText(" /teste")):
+                       side_effect=AssertionError('A rota web não deve chamar Ctrl+C')) as copy:
                 e.type("/teste")
                 e.drain()
-            self.assertEqual(e.field.text, "/teste")
+            self.assertEqual(e.field.text, "Resposta")
             e.selection.assert_not_called()
-            self.assertFalse(any(vk == 86 for vk, _, _ in e.sent))
+            copy.assert_not_called()
+            self.assertEqual(sum(vk == 86 and not flags & 2 for vk, flags, _ in e.sent), 1)
             self.assertEqual(e.clipboard.text(), "original")
 
     def test_readable_web_editor_keeps_rich_payload_and_confirms_result(self):
@@ -86,7 +87,7 @@ class VerifiedCopyFallbackTests(unittest.TestCase):
                 self.assertTrue(captured[0][0].hasHtml())
                 self.assertEqual(captured[0][1]["web_html_only"], executable == "ms-teams.exe")
                 e.selection.assert_not_called()
-                self.assertTrue(any("Expandido:" in call.args[0]
+                self.assertTrue(any("Enviado:" in call.args[0]
                                     for call in e.status.showMessage.call_args_list))
 
     def test_readable_web_editor_can_position_cursor_after_copy_verified_paste(self):
@@ -104,15 +105,15 @@ class VerifiedCopyFallbackTests(unittest.TestCase):
             self.assertEqual(e.clipboard.text(), "original")
 
     def test_copy_preference_requires_an_identified_web_executable(self):
-        from app.verified_fallback import prefers_verified_copy
+        from app.verified_fallback import uses_tracked_replacement
         for executable in ("teams.exe", "chrome.exe", "msedge.exe", "firefox.exe",
                            "winword.exe", "unknown.exe", "not-chrome.exe", ""):
             with self.subTest(executable=executable), \
                  patch("app.verified_fallback.focused_executable", return_value=executable):
-                self.assertEqual(prefers_verified_copy(None),
+                self.assertEqual(uses_tracked_replacement(None),
                                  executable in {"teams.exe", "chrome.exe", "msedge.exe", "firefox.exe"})
 
-    def test_web_copy_proof_rejects_changed_document_before_paste(self):
+    def test_legacy_copy_probe_still_rejects_changed_document_before_paste(self):
         for mutation in ("identity", "text", "selection", "clipboard"):
             with self.subTest(mutation=mutation), EngineFixture() as e:
                 e.save("/teste", "Resposta")
@@ -135,7 +136,15 @@ class VerifiedCopyFallbackTests(unittest.TestCase):
                 with patch("app.ui.capture_edit", side_effect=snapshot), \
                      patch("app.verified_fallback.focused_executable", return_value="chrome.exe"), \
                      patch("app.ui.copy_selected_text", side_effect=lambda: copied_selection(e)):
+                    e.defer_signal = True
                     e.type("/teste")
+                    candidate = e.received[-1]
+                    self.assertTrue(e.listener.claim(candidate))
+                    before = normal(candidate.context)
+                    operation = ExpansionOperation(candidate, before, 'Resposta', 0)
+                    e.host._active_candidate = candidate
+                    e.host._expansion_operation = operation
+                    e.host._begin_keyboard_verification(operation, select_keyboard=True)
                     e.drain()
                 self.assertEqual(e.field.text, "/teste")
                 self.assertFalse(any(vk == 86 for vk, _, _ in e.sent))

@@ -82,13 +82,16 @@ jobs:
       - name: Validar CF_HTML, PNG e bitmap nativos com leitor em outro processo
         shell: pwsh
         run: python packaging/smoke_clipboard.py
+      - name: Testar conector STA do Word e propriedade do clipboard
+        shell: pwsh
+        run: python packaging/smoke_word_bridge.py
       - name: Testar colagem nativa em editor Chromium e iframe
         shell: pwsh
         run: python packaging/smoke_web_expansion.py
       - name: Compilar aplicativo Windows com os recursos validados
         shell: pwsh
         run: |
-          python -m PyInstaller --noconfirm --clean --windowed --onedir --name "AURORA AutoFill" --icon "assets/aurora_icon.ico" --add-data "assets;assets" --add-data "app/accessibility_worker.ps1;app" --add-data "app/accessibility_worker.cs;app" --collect-submodules pynput main.py
+          python -m PyInstaller --noconfirm --clean --windowed --onedir --name "AURORA AutoFill" --icon "assets/aurora_icon.ico" --add-data "assets;assets" --add-data "app/accessibility_worker.ps1;app" --add-data "app/accessibility_worker.cs;app" --add-data "app/word_worker.ps1;app" --add-data "app/word_worker.cs;app" --collect-submodules pynput main.py
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Verificar recursos compilados
         shell: pwsh

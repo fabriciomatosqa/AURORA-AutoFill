@@ -85,9 +85,13 @@ def clipboard_owned_by_target(context) -> bool:
         return False
 
 
-def prefers_verified_copy(context) -> bool:
-    """Web editors can expose readable TextPattern but reject range.Select()."""
+def uses_tracked_replacement(context) -> bool:
+    """Destinos com substituição pela sequência recém-digitada do hook."""
     return focused_executable(context) in WEB_EDITORS
+
+
+def is_word_target(context) -> bool:
+    return focused_executable(context) == "winword.exe"
 
 
 def is_teams_target(context) -> bool:

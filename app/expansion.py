@@ -101,3 +101,6 @@ class ExpansionOperation:
     verify_select_keyboard: bool = False
     # Teams/WebView: não anunciar RTF Office junto com o HTML ao colar.
     teams_web_html: bool = False
+    tracked_replace: bool = False
+    word_native: bool = False
+    word_request: Any = None

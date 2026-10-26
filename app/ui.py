@@ -22,12 +22,15 @@ from PySide6.QtWidgets import (
 from .core import (Snippet, SnippetStore, application_db_path,
                    render_snippet, validate_shortcut)
 from .hotkeys import (GlobalHotkeyListener, replace_shortcut, paste_clipboard,
-                      select_previous_characters, copy_selected_text, collapse_selection_to_end)
+                      select_previous_characters, copy_selected_text, collapse_selection_to_end,
+                      replace_tracked_shortcut)
 from .expansion import ClipboardLease, EditSnapshot, ExpansionCandidate, ExpansionOperation, utf16_slice, prefix_offset
 from .windows_context import ContextUnavailable, FocusMonitor, capture_focus, capture_edit, set_caret, select_text_range
-from .verified_fallback import (supports_verified_copy, prefers_verified_copy,
-                               copied_shortcut_matches, is_teams_target, clipboard_owned_by_target)
+from .verified_fallback import (supports_verified_copy,
+                               copied_shortcut_matches, is_teams_target, clipboard_owned_by_target,
+                               uses_tracked_replacement, is_word_target)
 from .accessibility_context import warm_accessibility
+from .word_context import submit_word, warm_word, stop_word
 from time import monotonic
 from .formatting import has_rich_formatting, render_rich_html
 from .features import AuroraFeaturesMixin
@@ -531,6 +534,7 @@ class AutoFillWindow(AuroraFeaturesMixin, QMainWindow):
         # justamente quando o usuário digita o primeiro atalho no navegador.
         if started:
             warm_accessibility()
+            warm_word()
         self.listen_button.setText("Atalhos ativos" if started else "Atalhos indisponíveis")
         apply_icon(self.listen_button, "bolt" if started else "pause")
         self.listen_button.setEnabled(started)
@@ -1659,6 +1663,7 @@ class AutoFillWindow(AuroraFeaturesMixin, QMainWindow):
         operation = self._expansion_operation
         lease = self._clipboard_lease
         if (operation and operation.stage in {"selected", "verifying", "sent", "moving"}
+                or operation and operation.stage == 'word'
                 or lease and not lease.consumed and self._owns_clipboard(lease)):
             self._queued_candidate = candidate
             return
@@ -1673,7 +1678,7 @@ class AutoFillWindow(AuroraFeaturesMixin, QMainWindow):
     def _candidate_valid(self, candidate):
         operation = self._expansion_operation
         already_sent = (operation is not None and operation.candidate is candidate
-                        and operation.stage in {"selected", "verifying", "sent", "moving"})
+                        and operation.stage in {"selected", "verifying", "sent", "moving", "word"})
         # Never expire a sent paste mid-confirmation. Still reject a changed
         # keyboard revision or actual focus change to protect the destination.
         return (self._active_candidate is candidate and self._hotkeys_enabled and not self._quitting
@@ -1725,8 +1730,12 @@ class AutoFillWindow(AuroraFeaturesMixin, QMainWindow):
             if not snippet:
                 self._finish_expansion(None)
                 return
+            external = not (self.isActiveWindow() and self.focusWidget() is self.test_box)
+            tracked = sys.platform == 'win32' and external and uses_tracked_replacement(candidate.context)
+            word_native = sys.platform == 'win32' and external and is_word_target(candidate.context)
+            direct = word_native or (tracked and '{{cursor}}' not in snippet.content)
             try:
-                before = self._edit_snapshot()
+                before = None if direct else self._edit_snapshot()
             except ContextUnavailable:
                 if monotonic() - candidate.created < (0.15 if copy_fallback else 0.85):
                     QTimer.singleShot(10, lambda c=candidate: self._perform_expansion(c))
@@ -1747,7 +1756,7 @@ class AutoFillWindow(AuroraFeaturesMixin, QMainWindow):
                     keyboard_verify = True
                 else:
                     raise ValueError("O atalho não está no intervalo esperado; expansão cancelada.")
-            if before is None and not keyboard_verify and sys.platform == "win32" and not (
+            if before is None and not direct and not keyboard_verify and sys.platform == "win32" and not (
                     self.isActiveWindow() and self.focusWidget() is self.test_box):
                 # Campos WebView e controles personalizados podem não expor
                 # texto por Win32. Jamais selecionar caracteres às cegas:
@@ -1797,13 +1806,13 @@ class AutoFillWindow(AuroraFeaturesMixin, QMainWindow):
             # O Notepad lê CF_UNICODETEXT. HTML é opcional e só aparece quando
             # o modelo foi realmente formatado (Word/Outlook podem aproveitar).
             rich = bool(snippet.rich_content and has_rich_formatting(snippet.rich_content)
-                        and "{{cursor}}" not in snippet.content)
+                        and ("{{cursor}}" not in snippet.content or word_native))
             if keyboard_verify and rendered.left_moves:
                 # Sem leitura do documento, {{cursor}} não pode ser colocado
                 # com precisão após a colagem.
                 raise ValueError("Este comando usa {{cursor}} e exige acessibilidade do editor.")
             suffix = rendered.text[-rendered.left_moves:] if rendered.left_moves else ""
-            if rendered.left_moves and before is None:
+            if rendered.left_moves and before is None and not word_native:
                 try:
                     before = self._edit_snapshot(accessibility=True)
                 except ContextUnavailable:
@@ -1818,12 +1827,9 @@ class AutoFillWindow(AuroraFeaturesMixin, QMainWindow):
             operation = ExpansionOperation(candidate, before, rendered.text, cursor_steps(suffix),
                                            rendered.text[:-rendered.left_moves] if rendered.left_moves else rendered.text,
                                            render_rich_html(snippet.rich_content, current_text, now) if rich else "")
-            # Chromium/Teams podem ler TextPattern e mesmo assim recusar
-            # Select(). Usar a seleção nativa + prova por Ctrl+C desde o início
-            # evita esse erro e a espera de 700 ms por um ACK que não chega.
-            # Manter o snapshot disponível para confirmar resultado/{{cursor}}.
-            operation.keyboard_verify = (keyboard_verify or
-                                         (copy_fallback and prefers_verified_copy(candidate.context)))
+            operation.tracked_replace = tracked
+            operation.word_native = word_native
+            operation.keyboard_verify = keyboard_verify and not (tracked or word_native)
             # O Teams aceita conteúdo HTML, mas não deve receber RTF Office
             # como formato concorrente. Sem alteração para Word/outros apps.
             operation.teams_web_html = bool(operation.rich_html and is_teams_target(candidate.context))
@@ -1839,7 +1845,7 @@ class AutoFillWindow(AuroraFeaturesMixin, QMainWindow):
                 if "\x00" in operation.text:
                     raise ValueError("O texto contém um caractere NUL e não pode ser colado.")
                 operation.text.encode("utf-16-le")
-                if before is None and not keyboard_verify:
+                if before is None and not keyboard_verify and not direct:
                     before = self._edit_snapshot(accessibility=True)
                     if before is None or before.shortcut_range(shortcut) is None:
                         raise ValueError("Não é possível verificar o atalho neste campo. Use o menu Copiar para outro aplicativo.")
@@ -1870,6 +1876,8 @@ class AutoFillWindow(AuroraFeaturesMixin, QMainWindow):
                                      image_only=operation.image_only,
                                      web_html_only=operation.teams_web_html)
             payload.setData("application/x-aurora-expansion", token)
+            if operation.word_native:
+                payload.setData('application/x-qt-windows-mime;value="AURORA Expansion"', token)
             if self._clipboard_sequence() != backup_sequence:
                 raise ValueError("O clipboard mudou durante a preparação; colagem cancelada.")
             clipboard.setMimeData(payload)
@@ -1879,6 +1887,25 @@ class AutoFillWindow(AuroraFeaturesMixin, QMainWindow):
             self._clipboard_pending = True
             if not self._candidate_valid(operation.candidate) or not self._owns_clipboard(lease):
                 raise ValueError("Contexto ou clipboard mudou antes da colagem.")
+            if operation.word_native:
+                self._begin_word_expansion(operation)
+                return
+            if operation.tracked_replace:
+                # A autorização vem do buffer de digitação, não de Ctrl+C.
+                # Não executar candidatos enfileirados/obsoletos nem repetir
+                # um envio parcial. Mudanças de teclado/mouse/foco invalidam.
+                if (not uses_tracked_replacement(operation.candidate.context)
+                        or not self.hotkeys.is_current(operation.candidate, require_fresh=True)):
+                    raise ValueError('A digitação mudou antes da substituição.')
+                if operation.before is not None:
+                    current = self._edit_snapshot(accessibility=bool(operation.before.identity))
+                    if (current != operation.before or not self._candidate_valid(operation.candidate)
+                            or not self._owns_clipboard(lease)):
+                        raise ValueError('O campo mudou antes da substituição.')
+                operation.stage = 'sent'
+                replace_tracked_shortcut(cursor_steps(operation.candidate.shortcut))
+                self._expansion_sent(operation)
+                return
             # Quando o destino é UIA, select_text_range() verifica de forma
             # atômica texto, identidade, cursor e seleção antes de enviar Ctrl+V.
             # Evitar um snapshot UIA idêntico antes dessa seleção: em navegadores
@@ -1934,6 +1961,48 @@ class AutoFillWindow(AuroraFeaturesMixin, QMainWindow):
             self._expansion_sent(operation)
         except Exception as exc:
             self._finish_expansion(operation, f"Não foi possível expandir: {exc}")
+
+    def _begin_word_expansion(self, operation):
+        if not self._candidate_valid(operation.candidate) or not self._owns_clipboard(operation.lease):
+            raise ValueError('O destino ou clipboard mudou antes da colagem no Word.')
+        operation.stage = 'word'
+        operation.word_request = submit_word(operation)
+        QTimer.singleShot(10, lambda op=operation: self._poll_word_expansion(op))
+
+    def _poll_word_expansion(self, operation):
+        if self._expansion_operation is not operation:
+            return
+        request = operation.word_request
+        if not self._candidate_valid(operation.candidate):
+            request.cancelled.set()
+        result = request.poll()
+        if result is None:
+            QTimer.singleShot(10, lambda op=operation: self._poll_word_expansion(op))
+            return
+        if result.get('status') == 'pasted':
+            # O GetClipboardData do processo STA pode materializar formatos
+            # atrasados e avançar a sequência. Só aceitar a revisão do ACK
+            # nativo enquanto token, conteúdo e contexto continuam nossos.
+            seq = result.get('clipboard_sequence')
+            mime = QApplication.clipboard().mimeData()
+            if (not request.cancelled.is_set() and self._candidate_valid(operation.candidate)
+                    and type(seq) is int and seq == self._clipboard_sequence()
+                    and mime and mime.text() == operation.lease.text
+                    and bytes(mime.data('application/x-aurora-expansion')) == operation.lease.token):
+                operation.lease.sequence = seq
+            operation.stage = 'sent'
+            operation.lease.consumed = True
+            if request.cancelled.is_set():
+                self._finish_expansion(operation, 'Envio ao Word concluído após mudança de contexto; confira o resultado.')
+            elif result.get('confirmed') and result.get('cursor'):
+                self._expansion_succeeded(operation)
+            else:
+                self._finish_expansion(operation, 'Enviado ao Word com formatação original; confira o conteúdo e o cursor.')
+        elif result.get('status') in {'changed', 'cancelled', 'unavailable'}:
+            self._finish_expansion(operation, 'O Word não confirmou o campo de edição; nenhuma nova colagem foi enviada.')
+        else:
+            operation.stage = 'sent'
+            self._finish_expansion(operation, 'Envio ao Word não confirmado; não haverá repetição automática.')
 
     def _begin_keyboard_verification(self, operation, *, select_keyboard: bool):
         """Seleciona sem apagar e valida Ctrl+C antes de permitir Ctrl+V."""
@@ -2124,7 +2193,7 @@ class AutoFillWindow(AuroraFeaturesMixin, QMainWindow):
                 raise ValueError("Contexto alterado após envio; resultado não confirmado.")
             before = operation.before
             if before is None:
-                self._finish_expansion(operation, "Expansão enviada; este campo não permite confirmar o resultado.")
+                self._finish_expansion(operation, f"Enviado: {operation.candidate.shortcut}")
                 return
             snapshot = self._edit_snapshot(accessibility=bool(before.identity))
             if snapshot is not None and snapshot.identity != before.identity:
@@ -2279,6 +2348,7 @@ class AutoFillWindow(AuroraFeaturesMixin, QMainWindow):
             event.ignore()
             return
         self.hotkeys.stop()
+        stop_word()
         if self._focus_monitor is not None:
             self._focus_monitor.stop()
         if self._clipboard_lease is not None:
