@@ -153,6 +153,17 @@ class ListenerLifecycleTests(unittest.TestCase):
                 self.assertEqual(len(self.received), 1)
                 self.received.clear()
 
+    def test_click_cancels_partial_input_with_old_and_new_pynput_signatures(self):
+        click = self.listener._mouse_listener.callbacks["on_click"]
+        for args in ((0, 0, None, True), (0, 0, None, True, False)):
+            self.type("/o")
+            click(*args)
+            self.type("k")
+            self.assertEqual(self.received, [])
+            self.assertFalse(self.listener._callback_failed)
+        self.type("/ok")
+        self.assertEqual(len(self.received), 1)
+
     def test_missing_native_events_rearm_even_with_both_threads_alive(self):
         previous = self.listener._listener
         self.listener._health.reset(InputSnapshot(100), now=0)

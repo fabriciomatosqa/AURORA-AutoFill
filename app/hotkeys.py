@@ -276,7 +276,8 @@ class GlobalHotkeyListener:
             on_release=lambda key: self._dispatch(generation, self._on_release, key),
             win32_event_filter=lambda msg, data: self._native_filter(generation, "keyboard", msg, data))
         self._mouse_listener = mouse.Listener(
-            on_click=lambda *args: self._dispatch(generation, self._on_click, *args),
+            on_click=lambda x, y, button, pressed, _injected=False:
+                self._dispatch(generation, self._on_click, x, y, button, pressed),
             on_scroll=lambda *_: self._dispatch(generation, self.invalidate),
             win32_event_filter=lambda msg, data: self._native_filter(generation, "mouse", msg, data))
         try:
