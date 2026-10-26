@@ -43,7 +43,7 @@ from .branding import brand_webp_bytes
 from .inline_images import AuroraImageEditor, contains_inline_images, plain_text_fallback, validate_inline_html, image_sources, read_image_file
 from .clipboard_content import (clone_mime, expansion_mime, image_mime,
                                 ordered_clipboard_parts, clipboard_part_mime,
-                                prepare_mixed_content)
+                                prepare_mixed_content, materialize_clipboard)
 
 
 def cursor_steps(text: str) -> int:
@@ -1885,6 +1885,9 @@ class AutoFillWindow(AuroraFeaturesMixin, QMainWindow):
                                    self._clipboard_sequence())
             operation.lease = self._clipboard_lease = lease
             self._clipboard_pending = True
+            if not (self.isActiveWindow() and self.focusWidget() is self.test_box):
+                materialize_clipboard()
+            lease.sequence = self._clipboard_sequence()
             if not self._candidate_valid(operation.candidate) or not self._owns_clipboard(lease):
                 raise ValueError("Contexto ou clipboard mudou antes da colagem.")
             if operation.word_native:
@@ -2076,6 +2079,8 @@ class AutoFillWindow(AuroraFeaturesMixin, QMainWindow):
                 operation.lease = self._clipboard_lease = lease
                 self._clipboard_pending = True
                 operation.verify_original = None
+                materialize_clipboard()
+                lease.sequence = self._clipboard_sequence()
                 if not self._candidate_valid(operation.candidate) or not self._owns_clipboard(lease):
                     raise ValueError("Foco ou clipboard mudou antes da colagem.")
                 operation.stage = "sent"

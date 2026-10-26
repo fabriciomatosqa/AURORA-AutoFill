@@ -103,7 +103,7 @@ def main():
     os.environ['QT_QPA_PLATFORM'] = 'windows'
     from PySide6.QtCore import QByteArray
     from PySide6.QtWidgets import QApplication
-    from app.clipboard_content import clone_mime, expansion_mime
+    from app.clipboard_content import clone_mime, expansion_mime, materialize_clipboard
     app = QApplication([])
     clipboard = app.clipboard()
     original = clone_mime(clipboard.mimeData())
@@ -113,6 +113,7 @@ def main():
         mime = expansion_mime('Synthetic Word payload', '<span style="font-family:Arial;font-size:14pt;color:#ff0000;background-color:#00ff00;font-weight:700">Synthetic Word payload</span>')
         mime.setData('application/x-qt-windows-mime;value="AURORA Expansion"', QByteArray(token.encode('ascii')))
         clipboard.setMimeData(mime)
+        materialize_clipboard()
         import tempfile
         with tempfile.TemporaryDirectory() as temporary:
             source = Path(temporary) / 'contracts.cs'
@@ -129,12 +130,9 @@ Add-Type -TypeDefinition ([IO.File]::ReadAllText($env:AURORA_WORD_TEST_SOURCE)) 
                                      env=dict(os.environ,AURORA_WORD_TEST_SOURCE=str(source)),
                                      stdout=subprocess.PIPE,stderr=subprocess.PIPE,
                                      creationflags=subprocess.CREATE_NO_WINDOW)
-            deadline=time.monotonic()+30
-            while child.poll() is None and time.monotonic()<deadline:
-                app.processEvents();time.sleep(.005)
-            if child.poll() is None:
-                child.kill();child.communicate();raise AssertionError('Word bridge contract timed out')
-            output,errors=child.communicate()
+            # Intentionally do not pump this writer's GUI. Flushed formats
+            # must be available to the independent Windows reader anyway.
+            output,errors=child.communicate(timeout=30)
             assert child.returncode==0, errors.decode('utf-8',errors='replace')
             print('Word STA bridge contracts passed:',json.loads(output))
     finally:

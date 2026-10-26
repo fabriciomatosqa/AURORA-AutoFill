@@ -217,6 +217,7 @@ class EngineFixture:
             self.stack.enter_context(patch(path, side_effect=self.context))
         self.stack.enter_context(patch('app.ui.capture_edit', side_effect=self.snapshot))
         self.stack.enter_context(patch('app.ui.QApplication.clipboard', return_value=self.clipboard))
+        self.stack.enter_context(patch('app.ui.materialize_clipboard'))
         self.stack.enter_context(patch('app.ui.windows_clipboard_sequence', side_effect=lambda: self.clipboard.sequence))
         self.stack.enter_context(patch('app.ui.QTimer.singleShot', side_effect=self.schedule))
         for path in ('app.ui.monotonic', 'app.hotkeys.monotonic'):

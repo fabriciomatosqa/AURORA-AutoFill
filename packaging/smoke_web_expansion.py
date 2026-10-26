@@ -212,6 +212,7 @@ def main():
                "e.oncopy=x=>{window.copies++;x.preventDefault();x.clipboardData.setData('text/plain','WRONG COPY');};"
                "e.onkeydown=x=>{if(x.shiftKey&&x.key==='ArrowLeft')x.preventDefault();};"
                "e.onpaste=x=>{window.pastes++;"
+               "window.pasteText=x.clipboardData.getData('text/plain');"
                "window.pasteHTML=x.clipboardData.getData('text/html');"
                "window.pasteTypes=Array.from(x.clipboardData.types);}; return true; })()")
             context = capture_focus()
@@ -231,7 +232,7 @@ def main():
             wait(lambda: host._expansion_operation is None and host._clipboard_lease is None)
             actual = js("(() => { const e=(" + doc + ").getElementById('editor');"
                         "return JSON.stringify({text:e.textContent,html:e.innerHTML,pastes:window.pastes,"
-                        "pasteHTML:window.pasteHTML,pasteTypes:window.pasteTypes,copies:window.copies});})()")
+                        "pasteHTML:window.pasteHTML,pasteText:window.pasteText,pasteTypes:window.pasteTypes,copies:window.copies});})()")
             actual = json.loads(actual)
             # Chromium may preserve boundary spaces with NBSP during rich paste.
             assert actual["text"].replace("\u00a0", " ") == (
