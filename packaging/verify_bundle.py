@@ -11,7 +11,10 @@ ASSETS += tuple('icons/' + name + '.svg' for name in (
     'settings', 'home', 'save', 'trash', 'plus', 'minus', 'export', 'import',
     'undo', 'folder', 'play', 'pause', 'volume', 'update', 'backup', 'restore',
     'back', 'check', 'close', 'bolt', 'bold', 'italic', 'underline',
-    'font-increase', 'font-decrease'))
+    'font-increase', 'font-decrease', 'align-left', 'align-center', 'align-right',
+    'align-justify', 'list-bullets', 'list-numbered', 'list-multilevel', 'indent-less',
+    'indent-more', 'line-spacing', 'paragraph-shading', 'paragraph-border', 'sort-text',
+    'paragraph-settings'))
 
 
 def verify_bundle(dist, platform, source_root=None):

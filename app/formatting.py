@@ -12,7 +12,11 @@ _FORMATTED_RE = re.compile(
     r'(?:font-weight\s*:\s*(?:bold|[6-9]00)|font-style\s*:\s*italic'
     r'|text-decoration[^;"]*(?:underline|line-through)|font-family\s*:'
     r'|font-size\s*:|(?:^|[;\s])color\s*:|background-color\s*:'
-    r'|vertical-align\s*:|<(?:b|strong|i|em|u|s|strike|sup|sub)(?:\s|>))',
+    r'|vertical-align\s*:|text-align\s*:\s*(?:center|right|justify)'
+    r'|align\s*=\s*[\"\'](?:center|right|justify)'
+    r'|(?:margin-(?:top|bottom|left|right)|text-indent)\s*:\s*-?(?:[1-9]|0\.\d*[1-9])'
+    r'|line-height\s*:|page-break-(?:before|after)\s*:\s*always'
+    r'|aurora-paragraphs|<(?:b|strong|i|em|u|s|strike|sup|sub|ol|ul|li|h[1-6])(?:\s|>))',
     re.I)
 
 _TOKEN_RE = re.compile(r'\{\{(?:data_hora|data|hora|clipboard|area_transferencia|cursor)\}\}')

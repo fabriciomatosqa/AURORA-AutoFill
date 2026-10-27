@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from copy import deepcopy
 import json
 import os
 import sys
@@ -17,6 +18,7 @@ DEFAULTS = {
     "include_prereleases": IS_PRERELEASE,
     "start_minimized": False,
     "theme": "system",
+    "paragraph_defaults": {},
 }
 RUN_NAME = "AURORAAutoFill"
 RUN_KEY = r"Software\Microsoft\Windows\CurrentVersion\Run"
@@ -28,7 +30,7 @@ def preferences_path() -> Path:
 
 def normalize_preferences(raw: dict) -> dict:
     """Use the same bounded, typed settings for files, imports and writes."""
-    settings = dict(DEFAULTS)
+    settings = deepcopy(DEFAULTS)
     settings["theme"] = "dark"
     if isinstance(raw, dict):
         # A settings file predating themes belongs to an existing dark profile.
@@ -39,6 +41,13 @@ def normalize_preferences(raw: dict) -> dict:
         volume = raw.get("sound_volume")
         if type(volume) is int:
             settings["sound_volume"] = max(0, min(100, volume))
+        if isinstance(raw.get('paragraph_defaults'), dict):
+            try:
+                encoded = json.dumps(raw['paragraph_defaults'], allow_nan=False)
+                if len(encoded) <= 16384:
+                    settings['paragraph_defaults'] = json.loads(encoded)
+            except (TypeError, ValueError, RecursionError):
+                pass
     return settings
 
 
@@ -54,7 +63,7 @@ def load_preferences(path: Path | None = None, *, existing_profile: bool | None 
                 pass
         return settings
     except (OSError, ValueError, UnicodeError):
-        settings = dict(DEFAULTS)
+        settings = deepcopy(DEFAULTS)
         if existing_profile is None:
             existing_profile = (target.parent / "snippets.sqlite3").exists()
         if existing_profile or target.exists():

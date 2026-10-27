@@ -85,6 +85,9 @@ jobs:
       - name: Testar conector STA do Word e propriedade do clipboard
         shell: pwsh
         run: python packaging/smoke_word_bridge.py
+      - name: Validar parágrafos e listas RTF no RichEdit nativo do Windows
+        shell: pwsh
+        run: python packaging/smoke_paragraphs.py
       - name: Testar colagem Chromium, iframe e recuperação da captura de atalhos
         shell: pwsh
         run: python packaging/smoke_web_expansion.py
