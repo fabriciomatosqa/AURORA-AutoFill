@@ -15,7 +15,7 @@ from PySide6.QtWidgets import (
     QApplication, QAbstractItemView, QComboBox, QFileDialog, QGraphicsDropShadowEffect,
     QFrame, QHBoxLayout, QInputDialog, QLabel, QLineEdit, QListView, QListWidget,
     QListWidgetItem, QMainWindow, QMenu, QMessageBox, QPlainTextEdit, QPushButton,
-    QScrollArea, QSpinBox, QSplitter, QStackedWidget, QSystemTrayIcon,
+    QScrollArea, QSizePolicy, QSpinBox, QSplitter, QStackedWidget, QSystemTrayIcon,
     QTextEdit, QStatusBar, QToolButton, QVBoxLayout, QWidget,
 )
 
@@ -88,7 +88,7 @@ QWidget#sidebar { background: #0f1d31; border-right: 1px solid #24445f; }
 QLabel#sectionTitle { color: #91e1d6; font-size: 12px; font-weight: 750; letter-spacing: .6px; }
 QLabel#shortcutConflict { color: #ffc0c8; font-size: 12px; font-weight: 600; }
 QLabel#autosaveStatus { color: #79ead8; font-size: 12px; font-weight: 640; }
-/* Barra tipográfica compacta, com dois alinhamentos como no Word. */
+/* Grupos compactos de fonte e inserção, separados por uma linha vertical. */
 QFrame#fontToolbar {
   background: #102338; border: 1px solid #31536b; border-radius: 9px;
 }
@@ -129,7 +129,7 @@ QFrame#fontToolbar QComboBox#fontFamily:focus,
 QFrame#fontToolbar QSpinBox#fontSize:focus { border-color: #79ead8; }
 QFrame#fontToolbar QFrame#fontDivider {
   color: #385a70; background: #385a70;
-  max-width: 1px; min-width: 1px;
+  max-width: 1px; min-width: 1px; border: none; border-radius: 0px;
 }
 QLabel#heading { color: #f3f9ff; font-size: 24px; font-weight: 760; }
 QLabel#subheading { color: #b8cde0; font-size: 13px; }
@@ -874,13 +874,18 @@ class AutoFillWindow(AuroraFeaturesMixin, QMainWindow):
             lambda message: QMessageBox.warning(self, "Imagem não inserida", message))
         # Barra própria Aurora, com todas as famílias instaladas no computador.
         # O QTextEdit continua sendo a origem do HTML e das imagens independentes.
-        # Todos os comandos tipográficos em um único painel de 2 linhas,
-        # com botões de 27px e espaçamento pequeno.
+        # Três linhas com a mesma largura, seguidas do grupo de inserção.
+        # O seletor mantém a largura e a lista de fontes já aprovadas.
         self.font_toolbar = QFrame()
         self.font_toolbar.setObjectName("fontToolbar")
-        toolbar_layout = QVBoxLayout(self.font_toolbar)
+        toolbar_layout = QHBoxLayout(self.font_toolbar)
         toolbar_layout.setContentsMargins(7, 6, 7, 6)
-        toolbar_layout.setSpacing(3)
+        toolbar_layout.setSpacing(12)
+        self.font_controls = QWidget()
+        self.font_controls.setFixedWidth(285)
+        font_rows = QVBoxLayout(self.font_controls)
+        font_rows.setContentsMargins(0, 0, 0, 0)
+        font_rows.setSpacing(4)
         # Ordem inspirada no Word: fonte/tamanho no topo, estilos logo
         # abaixo e cores/caixa/tamanho na última linha. Sem espaços vazios
         # entre ferramentas da mesma família.
@@ -906,42 +911,51 @@ class AutoFillWindow(AuroraFeaturesMixin, QMainWindow):
         self.font_size.valueChanged.connect(self._apply_font_size)
         family_row.addWidget(self.font_size)
         family_row.addStretch()
-        toolbar_layout.addLayout(family_row)
+        font_rows.addLayout(family_row)
 
         formatting_row = QHBoxLayout()
         formatting_row.setSpacing(4)
         self.format_buttons = {}
         for title, tip, mode in (
-            ("B", "Negrito", "bold"), ("I", "Itálico", "italic"),
-            ("U", "Sublinhado", "underline"), ("S̶", "Tachado", "strike"),
+            ("N", "Negrito", "bold"), ("I", "Itálico", "italic"),
+            ("S", "Sublinhado", "underline"), ("ab", "Tachado", "strike"),
             ("x₂", "Subscrito", "subscript"), ("x²", "Sobrescrito", "superscript")
         ):
             button = QPushButton(title)
             button.setObjectName("fontTool")
             button.setToolTip(tip)
+            button.setAccessibleName(tip)
+            glyph = QFont(button.font())
+            glyph.setBold(mode == "bold")
+            glyph.setItalic(mode == "italic")
+            glyph.setUnderline(mode == "underline")
+            glyph.setStrikeOut(mode == "strike")
+            button.setFont(glyph)
             button.setCheckable(True)
-            button.setFixedSize(29, 27)
+            button.setFixedSize(32, 27)
             button.clicked.connect(lambda checked, m=mode: self._apply_format(m, checked))
             self.format_buttons[mode] = button
             formatting_row.addWidget(button)
         clear_button = QPushButton("Limpar")
-        clear_button.setFixedSize(62, 27)
+        clear_button.setFixedSize(69, 27)
         clear_button.setObjectName("fontTool")
         clear_button.setToolTip("Limpar formatação do trecho selecionado")
         clear_button.clicked.connect(self._clear_text_format)
         formatting_row.addWidget(clear_button)
         formatting_row.addStretch()
-        toolbar_layout.addLayout(formatting_row)
+        font_rows.addLayout(formatting_row)
 
         color_row = QHBoxLayout()
         color_row.setSpacing(4)
         # As amostras inferiores mostram a última cor escolhida, tal como no
         # Word, inclusive quando o cursor vai para outro trecho da mensagem.
         self.text_color_button = AuroraColorButton("A", QColor("#142b40"))
+        self.text_color_button.setFixedHeight(27)
         self.text_color_button.setToolTip("Cor do texto — a barra mostra a cor escolhida")
         self.text_color_button.clicked.connect(lambda: self._choose_font_color(False))
         color_row.addWidget(self.text_color_button)
         self.highlight_button = AuroraColorButton("✎", QColor("#fff59d"))
+        self.highlight_button.setFixedHeight(27)
         self.highlight_button.setToolTip("Cor do realce — a barra mostra a cor escolhida")
         self.highlight_button.clicked.connect(lambda: self._choose_font_color(True))
         color_row.addWidget(self.highlight_button)
@@ -960,23 +974,32 @@ class AutoFillWindow(AuroraFeaturesMixin, QMainWindow):
             action.triggered.connect(lambda checked=False, m=mode: self._transform_case(m))
         case_button.setMenu(case_menu)
         color_row.addWidget(case_button)
-        for text, tip, delta in (("A+", "Aumentar tamanho", 1),
-                                 ("A−", "Diminuir tamanho", -1)):
-            button = QPushButton(text)
+        color_row.addStretch()
+        for name, tip, delta in (("font-increase", "Aumentar tamanho da fonte", 1),
+                                ("font-decrease", "Diminuir tamanho da fonte", -1)):
+            button = apply_icon(QPushButton(), name, label=tip)
             button.setObjectName("fontTool")
-            button.setFixedSize(30, 27)
+            button.setFixedSize(32, 27)
             button.setToolTip(tip)
             button.clicked.connect(lambda _=False, amount=delta: self._step_font_size(amount))
             color_row.addWidget(button)
-        color_row.addStretch()
-        toolbar_layout.addLayout(color_row)
-        v.addWidget(self.font_toolbar)
-        image_tools_row = QHBoxLayout()
-        image_tools_row.setSpacing(8)
+        font_rows.addLayout(color_row)
+        toolbar_layout.addWidget(self.font_controls)
+        divider = QFrame()
+        divider.setObjectName("fontDivider")
+        divider.setFrameShape(QFrame.VLine)
+        divider.setFixedWidth(1)
+        divider.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Expanding)
+        toolbar_layout.addWidget(divider)
+        insertion_tools = QWidget()
+        image_tools_row = QVBoxLayout(insertion_tools)
+        image_tools_row.setContentsMargins(0, 0, 0, 0)
+        image_tools_row.setSpacing(6)
         self.insert_image_button = apply_icon(QPushButton("Inserir imagem"), "image",
                                               label="Inserir imagem no comando")
         self.insert_image_button.setToolTip(
             "Insira PNG ou JPG entre parágrafos, ou cole um print com Ctrl+V.")
+        self.insert_image_button.setFixedHeight(36)
         self.insert_image_button.clicked.connect(self._insert_image_file)
         image_tools_row.addWidget(self.insert_image_button)
         self.token_button = AuroraMenuButton()
@@ -985,6 +1008,7 @@ class AutoFillWindow(AuroraFeaturesMixin, QMainWindow):
         self.token_button.setToolButtonStyle(Qt.ToolButtonTextBesideIcon)
         self.token_button.setPopupMode(QToolButton.InstantPopup)
         self.token_button.setMinimumWidth(238)
+        self.token_button.setFixedHeight(36)
         menu = AuroraMenu(self.token_button)
         menu.setObjectName("dynamicTokenMenu")
         for label, token in [
@@ -997,8 +1021,9 @@ class AutoFillWindow(AuroraFeaturesMixin, QMainWindow):
             menu.addAction(action)
         self.token_button.setMenu(menu)
         image_tools_row.addWidget(self.token_button)
-        image_tools_row.addStretch()
-        v.addLayout(image_tools_row)
+        toolbar_layout.addWidget(insertion_tools, 0, Qt.AlignVCenter)
+        toolbar_layout.addStretch()
+        v.addWidget(self.font_toolbar)
         self.body_input.currentCharFormatChanged.connect(self._sync_format_buttons)
         self.body_input.setMinimumHeight(190)
         v.addWidget(self.body_input, 3)
