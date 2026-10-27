@@ -91,6 +91,10 @@ class WordToolbarOrderTests(unittest.TestCase):
                     self.assertLessEqual(win.font_toolbar.sizeHint().height(), 115)
                     self.assertEqual(win.text_color_button.marker_rect().height(), 3)
                     self.assertEqual(win.highlight_button.marker_rect().height(), 3)
+                    self.assertEqual(row2.count(),5)
+                    self.assertEqual([row2.itemAt(i).widget().width() for i in range(5)], [55,55,69,45,45])
+                    self.assertEqual(row2.itemAt(4).widget().geometry().right(),win.font_size.geometry().right())
+                    self.assertEqual(win.paragraph_panel.height(),win.font_controls.height())
                     # Check rendered relationships: the old trailing stretch
                     # let CSS shrink buttons even when setFixedSize was used.
                     widths = {button.width() for button in win.format_buttons.values()}

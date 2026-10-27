@@ -32,7 +32,7 @@ class AuroraColorButton(QPushButton):
 
     def marker_rect(self) -> QRect:
         # A amostra fica exatamente sob o glifo, nunca sob a seta.
-        return QRect(6, self.height() - 7, 20, 3)
+        return QRect(6, self.height() - 7, max(20, self.width() - 17), 3)
 
     def paintEvent(self, event):
         super().paintEvent(event)
@@ -44,7 +44,7 @@ class AuroraColorButton(QPushButton):
         font.setPointSize(11)
         font.setBold(self._glyph == "A")
         painter.setFont(font)
-        painter.drawText(QRect(3, 1, 25, self.height() - 8),
+        painter.drawText(QRect(3, 1, self.width() - 12, self.height() - 8),
                          Qt.AlignHCenter | Qt.AlignVCenter, self._glyph)
 
         marker = self.marker_rect()

@@ -37,6 +37,7 @@ from .features import AuroraFeaturesMixin
 from .version import APP_VERSION
 from .icons import apply_icon
 from .font_catalog import AuroraFontCombo, AuroraFontSizeSpinBox
+from .paragraph_panel import ParagraphPanel
 from .color_dialog import AuroraColorDialog
 from .color_button import AuroraColorButton
 from .branding import brand_webp_bytes
@@ -106,6 +107,13 @@ QFrame#fontToolbar QPushButton#fontTool:hover,
 QFrame#fontToolbar QToolButton#fontTool:hover {
   border-color: #79ead8; background: #28546a;
 }
+QFrame#fontToolbar QToolButton#fontTool[paragraphMenu="true"]::menu-button {
+  width: 10px; border-left: 1px solid #365a71;
+}
+QFrame#fontToolbar QToolButton#fontTool[paragraphMenu="true"]::menu-arrow {
+  image: none; width: 0px; height: 0px;
+}
+QLabel#paragraphTitle { color: #91e1d6; font-size: 11px; font-weight: 600; }
 QFrame#fontToolbar QComboBox#fontFamily,
 QFrame#fontToolbar QSpinBox#fontSize {
   min-height: 27px; max-height: 27px; padding: 0px 5px;
@@ -884,7 +892,7 @@ class AutoFillWindow(AuroraFeaturesMixin, QMainWindow):
         fields.setAlignment(folder_box, Qt.AlignTop)
         v.addLayout(fields)
         content_header = QHBoxLayout()
-        content_label = QLabel("FONTE")
+        content_label = QLabel("FORMATAÇÃO")
         content_label.setObjectName("sectionTitle")
         content_header.addWidget(content_label)
         content_header.addStretch()
@@ -906,6 +914,7 @@ class AutoFillWindow(AuroraFeaturesMixin, QMainWindow):
         toolbar_layout.setContentsMargins(7, 6, 7, 6)
         toolbar_layout.setSpacing(12)
         self.font_controls = QWidget()
+        self.font_controls.setAccessibleName('Fonte')
         self.font_controls.setFixedWidth(285)
         font_rows = QVBoxLayout(self.font_controls)
         font_rows.setContentsMargins(0, 0, 0, 0)
@@ -963,7 +972,7 @@ class AutoFillWindow(AuroraFeaturesMixin, QMainWindow):
         clear_button = QPushButton("Limpar")
         clear_button.setFixedSize(69, 27)
         clear_button.setObjectName("fontTool")
-        clear_button.setToolTip("Limpar formatação do trecho selecionado")
+        clear_button.setToolTip("Limpar formatação das letras selecionadas")
         clear_button.clicked.connect(self._clear_text_format)
         # A trailing stretch used to take the spare width while Qt's stylesheet
         # relaxed each button's minimum size, leaving ragged rows on Windows.
@@ -975,18 +984,20 @@ class AutoFillWindow(AuroraFeaturesMixin, QMainWindow):
         # As amostras inferiores mostram a última cor escolhida, tal como no
         # Word, inclusive quando o cursor vai para outro trecho da mensagem.
         self.text_color_button = AuroraColorButton("A", QColor("#142b40"))
+        self.text_color_button.setFixedWidth(55)
         self.text_color_button.setFixedHeight(27)
         self.text_color_button.setToolTip("Cor do texto — a barra mostra a cor escolhida")
         self.text_color_button.clicked.connect(lambda: self._choose_font_color(False))
         color_row.addWidget(self.text_color_button, 1)
         self.highlight_button = AuroraColorButton("✎", QColor("#fff59d"))
+        self.highlight_button.setFixedWidth(55)
         self.highlight_button.setFixedHeight(27)
         self.highlight_button.setToolTip("Cor do realce — a barra mostra a cor escolhida")
         self.highlight_button.clicked.connect(lambda: self._choose_font_color(True))
         color_row.addWidget(self.highlight_button, 1)
         case_button = QToolButton()
         case_button.setText("Aa ▾")
-        case_button.setFixedSize(48, 27)
+        case_button.setFixedSize(69, 27)
         case_button.setToolTip("Maiúsculas, minúsculas e iniciais maiúsculas")
         case_button.setObjectName("fontTool")
         case_button.setPopupMode(QToolButton.InstantPopup)
@@ -999,12 +1010,12 @@ class AutoFillWindow(AuroraFeaturesMixin, QMainWindow):
             action.triggered.connect(lambda checked=False, m=mode: self._transform_case(m))
         case_button.setMenu(case_menu)
         color_row.addWidget(case_button, 1)
-        color_row.addStretch()
-        for name, tip, delta in (("font-increase", "Aumentar tamanho da fonte", 1),
-                                ("font-decrease", "Diminuir tamanho da fonte", -1)):
-            button = apply_icon(QPushButton(), name, label=tip)
+        for text, tip, delta in (("A+", "Aumentar tamanho da fonte", 1),
+                                ("A−", "Diminuir tamanho da fonte", -1)):
+            button = QPushButton(text)
+            button.setAccessibleName(tip)
             button.setObjectName("fontTool")
-            button.setFixedSize(32, 27)
+            button.setFixedSize(45, 27)
             button.setToolTip(tip)
             button.clicked.connect(lambda _=False, amount=delta: self._step_font_size(amount))
             color_row.addWidget(button, 1)
@@ -1016,15 +1027,20 @@ class AutoFillWindow(AuroraFeaturesMixin, QMainWindow):
         divider.setFixedWidth(1)
         divider.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Expanding)
         toolbar_layout.addWidget(divider)
-        insertion_tools = QWidget()
-        image_tools_row = QVBoxLayout(insertion_tools)
-        image_tools_row.setContentsMargins(0, 0, 0, 0)
-        image_tools_row.setSpacing(6)
+        self.paragraph_panel = ParagraphPanel(self.body_input, menu_factory=AuroraMenu,
+                                              save_default=self._set_paragraph_defaults)
+        self.paragraph_panel.setAccessibleName('Parágrafo')
+        toolbar_layout.addWidget(self.paragraph_panel)
+        toolbar_layout.addStretch()
+        v.addWidget(self.font_toolbar)
+        image_tools_row = QHBoxLayout()
+        image_tools_row.setSpacing(8)
         self.insert_image_button = apply_icon(QPushButton("Inserir imagem"), "image",
                                               label="Inserir imagem no comando")
         self.insert_image_button.setToolTip(
             "Insira PNG ou JPG entre parágrafos, ou cole um print com Ctrl+V.")
         self.insert_image_button.setFixedHeight(36)
+        self.insert_image_button.setMinimumWidth(238)
         self.insert_image_button.clicked.connect(self._insert_image_file)
         image_tools_row.addWidget(self.insert_image_button)
         self.token_button = AuroraMenuButton()
@@ -1046,9 +1062,8 @@ class AutoFillWindow(AuroraFeaturesMixin, QMainWindow):
             menu.addAction(action)
         self.token_button.setMenu(menu)
         image_tools_row.addWidget(self.token_button)
-        toolbar_layout.addWidget(insertion_tools, 0, Qt.AlignVCenter)
-        toolbar_layout.addStretch()
-        v.addWidget(self.font_toolbar)
+        image_tools_row.addStretch()
+        v.addLayout(image_tools_row)
         self.body_input.currentCharFormatChanged.connect(self._sync_format_buttons)
         self.body_input.setMinimumHeight(190)
         v.addWidget(self.body_input, 3)
@@ -1208,6 +1223,10 @@ class AutoFillWindow(AuroraFeaturesMixin, QMainWindow):
         self.body_input.mergeCurrentCharFormat(fmt)
         self.body_input.setFocus()
         self._autosave_edit("content")
+
+    def _set_paragraph_defaults(self, settings):
+        self._change_preference('paragraph_defaults', settings)
+        return self.preferences.get('paragraph_defaults') == settings
 
     def _apply_format(self, mode: str, active: bool):
         fmt = QTextCharFormat()
@@ -1514,6 +1533,8 @@ class AutoFillWindow(AuroraFeaturesMixin, QMainWindow):
             self.body_input.setHtml(snippet.rich_content)
         else:
             self.body_input.setPlainText(snippet.content if snippet else "")
+        if snippet is None and self.preferences.get('paragraph_defaults'):
+            self.paragraph_panel.controller.apply(self.preferences['paragraph_defaults'])
         folder_id = snippet.folder_id if snippet else self.filter_folder.currentData()
         idx = self.editor_folder.findData(folder_id)
         self.editor_folder.setCurrentIndex(max(0, idx))
@@ -1530,6 +1551,7 @@ class AutoFillWindow(AuroraFeaturesMixin, QMainWindow):
             "✓ Alterações salvas automaticamente" if snippet
             else "Novo comando: será salvo quando título, atalho e conteúdo estiverem completos.")
         self._sync_format_buttons(self.body_input.currentCharFormat())
+        self.paragraph_panel.sync()
         self._update_preview()
 
     def _new_snippet(self):

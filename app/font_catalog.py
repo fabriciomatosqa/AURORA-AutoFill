@@ -13,7 +13,7 @@ from .themes import ui_color
 from PySide6.QtCore import QPointF, Qt
 from PySide6.QtGui import QColor, QFontDatabase, QPainter, QPen
 from PySide6.QtWidgets import (QAbstractSpinBox, QApplication, QComboBox, QCompleter,
-                               QSpinBox, QStyle, QStyleOptionSpinBox)
+                               QDoubleSpinBox, QSpinBox, QStyle, QStyleOptionSpinBox)
 
 
 def _windows_installed_families() -> list[str]:
@@ -105,7 +105,7 @@ class AuroraFontCombo(QComboBox):
         painter.end()
 
 
-class AuroraFontSizeSpinBox(QSpinBox):
+class SpinArrows:
     """Native stepping/hit areas with chevrons independent of Windows' style."""
 
     def step_button_rect(self, up: bool):
@@ -131,3 +131,11 @@ class AuroraFontSizeSpinBox(QSpinBox):
             painter.drawLine(QPointF(x - 3, y - direction * 1.5), QPointF(x, y + direction * 1.5))
             painter.drawLine(QPointF(x, y + direction * 1.5), QPointF(x + 3, y - direction * 1.5))
         painter.end()
+
+
+class AuroraFontSizeSpinBox(SpinArrows, QSpinBox):
+    """Integer font size with visible native step controls."""
+
+
+class AuroraMeasureSpinBox(SpinArrows, QDoubleSpinBox):
+    """Decimal paragraph measures with the same visible step controls."""

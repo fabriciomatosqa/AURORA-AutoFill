@@ -12,7 +12,7 @@ from PySide6.QtGui import QImage, QTextDocument
 
 from .core import render_snippet
 from .formatting import render_rich_html
-from .rich_clipboard import interoperable_html, rich_text_rtf, cf_html_bytes
+from .rich_clipboard import interoperable_html, mixed_paragraph_html, rich_text_rtf, cf_html_bytes
 from .inline_images import decode_embedded_image, image_sources, validate_inline_html
 
 
@@ -153,7 +153,7 @@ def expansion_mime(text: str, html: str = "", *, image_only: bool = False,
         if sources:
             # Não converter documentos com imagens para RTF, que não suporta
             # aqui anexos independentes. HTML original preserva cada <img>.
-            payload.setHtml(html)
+            payload.setHtml(mixed_paragraph_html(html))
         else:
             # Fragmento HTML plano e inline: mantém cor, realce, fonte e
             # caracteres editáveis em Word, Teams e editores web.

@@ -172,6 +172,31 @@ class AuroraImageEditor(QTextEdit):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setDocument(EmbeddedImageDocument(self))
+        self.document().setProperty('auroraHasParagraphMetadata', False)
+
+    def setPlainText(self, text):
+        self.document().setProperty('auroraHasParagraphMetadata', False)
+        super().setPlainText(text)
+
+    def toHtml(self) -> str:
+        from .paragraph_format import serialize_document
+        return serialize_document(self.document())
+
+    def createMimeDataFromSelection(self):
+        from .paragraph_format import add_metadata, export_options, selected_blocks
+        payload = super().createMimeDataFromSelection()
+        if payload.hasHtml() and self.document().property('auroraHasParagraphMetadata'):
+            first = self.document().findBlock(self.textCursor().selectionStart()).blockNumber()
+            entries = [[block.blockNumber()-first, opts] for block in selected_blocks(self)
+                       if (opts := export_options(block.blockFormat()))]
+            if entries:
+                payload.setHtml(add_metadata(payload.html(), entries))
+        return payload
+
+    def paintEvent(self, event):
+        super().paintEvent(event)
+        from .paragraph_format import paint_decorations
+        paint_decorations(self)
 
     def insert_image(self, image: QImage | QPixmap) -> bool:
         try:
@@ -200,6 +225,22 @@ class AuroraImageEditor(QTextEdit):
             return False
 
     def insertFromMimeData(self, source) -> None:
+        from .paragraph_format import read_metadata, restore_metadata
+        html = source.html() if source.hasHtml() else ''
+        if read_metadata(html):
+            cursor = self.textCursor()
+            first = self.document().findBlock(cursor.selectionStart()).blockNumber()
+            cursor.beginEditBlock()
+            try:
+                self._insert_payload(source)
+                restore_metadata(self.document(), html, first)
+            finally:
+                cursor.endEditBlock()
+            self.viewport().update()
+        else:
+            self._insert_payload(source)
+
+    def _insert_payload(self, source) -> None:
         # HTML carries the complete sequence. An image flavor may be only a
         # preview; preferring it would silently discard surrounding paragraphs.
         if source.hasHtml() and "<img" in source.html().lower():
@@ -224,6 +265,7 @@ class AuroraImageEditor(QTextEdit):
         super().insertFromMimeData(source)
 
     def setHtml(self, html: str) -> None:
+        self.document().setProperty('auroraHasParagraphMetadata', None)
         try:
             validate_inline_html(html)
         except ValueError as exc:
@@ -231,9 +273,17 @@ class AuroraImageEditor(QTextEdit):
             # HTML is untouched, but no image resource is loaded.
             self.document().images_allowed = False
             super().setHtml(html)
+            self._restore_paragraphs(html)
             self.imageRejected.emit(str(exc))
             return
         self.document().images_allowed = True
         super().setHtml(html)
+        self._restore_paragraphs(html)
         add_inline_resources(self.document(), html)
         self.document().markContentsDirty(0, self.document().characterCount())
+
+    def _restore_paragraphs(self, html):
+        from .paragraph_format import normalize_contextual_spacing, restore_metadata
+        restore_metadata(self.document(), html)
+        normalize_contextual_spacing(self.document())
+        self.document().clearUndoRedoStacks()
