@@ -10,9 +10,10 @@ import sys
 
 from .themes import ui_color
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import QPointF, Qt
 from PySide6.QtGui import QColor, QFontDatabase, QPainter, QPen
-from PySide6.QtWidgets import QApplication, QComboBox, QCompleter
+from PySide6.QtWidgets import (QAbstractSpinBox, QApplication, QComboBox, QCompleter,
+                               QSpinBox, QStyle, QStyleOptionSpinBox)
 
 
 def _windows_installed_families() -> list[str]:
@@ -101,4 +102,32 @@ class AuroraFontCombo(QComboBox):
         y = self.height() // 2
         painter.drawLine(x - 5, y - 2, x, y + 3)
         painter.drawLine(x, y + 3, x + 5, y - 2)
+        painter.end()
+
+
+class AuroraFontSizeSpinBox(QSpinBox):
+    """Native stepping/hit areas with chevrons independent of Windows' style."""
+
+    def step_button_rect(self, up: bool):
+        option = QStyleOptionSpinBox()
+        self.initStyleOption(option)
+        control = QStyle.SC_SpinBoxUp if up else QStyle.SC_SpinBoxDown
+        return self.style().subControlRect(QStyle.CC_SpinBox, option, control, self)
+
+    def paintEvent(self, event):
+        super().paintEvent(event)
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.Antialiasing)
+        painter.setPen(QPen(ui_color("#81e9d9"), 1.6, Qt.SolidLine, Qt.RoundCap, Qt.RoundJoin))
+        enabled = self.stepEnabled()
+        for up, flag in ((True, QAbstractSpinBox.StepUpEnabled),
+                         (False, QAbstractSpinBox.StepDownEnabled)):
+            rect = self.step_button_rect(up)
+            if rect.isEmpty():
+                continue
+            painter.setOpacity(1.0 if self.isEnabled() and enabled & flag else 0.35)
+            x, y = rect.center().x() + 0.5, rect.center().y() + 0.5
+            direction = -1 if up else 1
+            painter.drawLine(QPointF(x - 3, y - direction * 1.5), QPointF(x, y + direction * 1.5))
+            painter.drawLine(QPointF(x, y + direction * 1.5), QPointF(x + 3, y - direction * 1.5))
         painter.end()

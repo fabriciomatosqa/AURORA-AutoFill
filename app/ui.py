@@ -15,7 +15,7 @@ from PySide6.QtWidgets import (
     QApplication, QAbstractItemView, QComboBox, QFileDialog, QGraphicsDropShadowEffect,
     QFrame, QHBoxLayout, QInputDialog, QLabel, QLineEdit, QListView, QListWidget,
     QListWidgetItem, QMainWindow, QMenu, QMessageBox, QPlainTextEdit, QPushButton,
-    QScrollArea, QSizePolicy, QSpinBox, QSplitter, QStackedWidget, QSystemTrayIcon,
+    QScrollArea, QSizePolicy, QSplitter, QStackedWidget, QSystemTrayIcon,
     QTextEdit, QStatusBar, QToolButton, QVBoxLayout, QWidget,
 )
 
@@ -36,7 +36,7 @@ from .formatting import has_rich_formatting, render_rich_html
 from .features import AuroraFeaturesMixin
 from .version import APP_VERSION
 from .icons import apply_icon
-from .font_catalog import AuroraFontCombo
+from .font_catalog import AuroraFontCombo, AuroraFontSizeSpinBox
 from .color_dialog import AuroraColorDialog
 from .color_button import AuroraColorButton
 from .branding import brand_webp_bytes
@@ -127,6 +127,25 @@ QFrame#fontToolbar QComboBox#fontFamily QLineEdit {
 }
 QFrame#fontToolbar QComboBox#fontFamily:focus,
 QFrame#fontToolbar QSpinBox#fontSize:focus { border-color: #79ead8; }
+QFrame#fontToolbar QSpinBox#fontSize { padding-right: 20px; }
+QFrame#fontToolbar QSpinBox#fontSize::up-button,
+QFrame#fontToolbar QSpinBox#fontSize::down-button {
+  subcontrol-origin: padding; width: 17px; height: 13px;
+  background: #204558; border-left: 1px solid #355d74;
+}
+QFrame#fontToolbar QSpinBox#fontSize::up-button {
+  subcontrol-position: top right; border-top-right-radius: 4px;
+  border-bottom: 1px solid #355d74;
+}
+QFrame#fontToolbar QSpinBox#fontSize::down-button {
+  subcontrol-position: bottom right; border-bottom-right-radius: 4px;
+}
+QFrame#fontToolbar QSpinBox#fontSize::up-button:hover,
+QFrame#fontToolbar QSpinBox#fontSize::down-button:hover { background: #28546a; }
+QFrame#fontToolbar QSpinBox#fontSize::up-arrow,
+QFrame#fontToolbar QSpinBox#fontSize::down-arrow {
+  image: none; border: none; width: 0px; height: 0px;
+}
 QFrame#fontToolbar QFrame#fontDivider {
   color: #385a70; background: #385a70;
   max-width: 1px; min-width: 1px; border: none; border-radius: 0px;
@@ -834,10 +853,12 @@ class AutoFillWindow(AuroraFeaturesMixin, QMainWindow):
         v.addWidget(self.title_input)
         fields = QHBoxLayout()
         shortcut_box = QVBoxLayout()
+        shortcut_box.setSpacing(v.spacing())
         shortcut_label = QLabel("Atalho")
         shortcut_label.setObjectName("sectionTitle")
         shortcut_box.addWidget(shortcut_label)
         self.shortcut_input = QLineEdit()
+        self.shortcut_input.setFixedHeight(40)
         self.shortcut_input.setPlaceholderText("/chamado")
         shortcut_box.addWidget(self.shortcut_input)
         # Aviso em tempo real: explica o comando/pasta conflitante antes de
@@ -849,15 +870,18 @@ class AutoFillWindow(AuroraFeaturesMixin, QMainWindow):
         shortcut_box.addWidget(self.shortcut_feedback)
         fields.addLayout(shortcut_box, 1)
         folder_box = QVBoxLayout()
+        folder_box.setSpacing(v.spacing())
         folder_label = QLabel("Pasta")
         folder_label.setObjectName("sectionTitle")
         folder_box.addWidget(folder_label)
         self.editor_folder = AuroraFolderCombo()
         self.editor_folder.setObjectName("folderPicker")
-        self.editor_folder.setMinimumHeight(38)
+        self.editor_folder.setFixedHeight(40)
         self.editor_folder.setMinimumContentsLength(18)
         folder_box.addWidget(self.editor_folder)
         fields.addLayout(folder_box, 1)
+        fields.setAlignment(shortcut_box, Qt.AlignTop)
+        fields.setAlignment(folder_box, Qt.AlignTop)
         v.addLayout(fields)
         content_header = QHBoxLayout()
         content_label = QLabel("FONTE")
@@ -900,7 +924,7 @@ class AutoFillWindow(AuroraFeaturesMixin, QMainWindow):
         self.font_family.lineEdit().editingFinished.connect(self._commit_font_family)
         family_row.addWidget(self.font_family)
 
-        self.font_size = QSpinBox()
+        self.font_size = AuroraFontSizeSpinBox()
         self.font_size.setObjectName("fontSize")
         self.font_size.setRange(6, 96)
         self.font_size.setSuffix(" pt")
@@ -935,14 +959,15 @@ class AutoFillWindow(AuroraFeaturesMixin, QMainWindow):
             button.setFixedSize(32, 27)
             button.clicked.connect(lambda checked, m=mode: self._apply_format(m, checked))
             self.format_buttons[mode] = button
-            formatting_row.addWidget(button)
+            formatting_row.addWidget(button, 1)
         clear_button = QPushButton("Limpar")
         clear_button.setFixedSize(69, 27)
         clear_button.setObjectName("fontTool")
         clear_button.setToolTip("Limpar formatação do trecho selecionado")
         clear_button.clicked.connect(self._clear_text_format)
-        formatting_row.addWidget(clear_button)
-        formatting_row.addStretch()
+        # A trailing stretch used to take the spare width while Qt's stylesheet
+        # relaxed each button's minimum size, leaving ragged rows on Windows.
+        formatting_row.addWidget(clear_button, 1)
         font_rows.addLayout(formatting_row)
 
         color_row = QHBoxLayout()
@@ -953,12 +978,12 @@ class AutoFillWindow(AuroraFeaturesMixin, QMainWindow):
         self.text_color_button.setFixedHeight(27)
         self.text_color_button.setToolTip("Cor do texto — a barra mostra a cor escolhida")
         self.text_color_button.clicked.connect(lambda: self._choose_font_color(False))
-        color_row.addWidget(self.text_color_button)
+        color_row.addWidget(self.text_color_button, 1)
         self.highlight_button = AuroraColorButton("✎", QColor("#fff59d"))
         self.highlight_button.setFixedHeight(27)
         self.highlight_button.setToolTip("Cor do realce — a barra mostra a cor escolhida")
         self.highlight_button.clicked.connect(lambda: self._choose_font_color(True))
-        color_row.addWidget(self.highlight_button)
+        color_row.addWidget(self.highlight_button, 1)
         case_button = QToolButton()
         case_button.setText("Aa ▾")
         case_button.setFixedSize(48, 27)
@@ -973,7 +998,7 @@ class AutoFillWindow(AuroraFeaturesMixin, QMainWindow):
             action = case_menu.addAction(label)
             action.triggered.connect(lambda checked=False, m=mode: self._transform_case(m))
         case_button.setMenu(case_menu)
-        color_row.addWidget(case_button)
+        color_row.addWidget(case_button, 1)
         color_row.addStretch()
         for name, tip, delta in (("font-increase", "Aumentar tamanho da fonte", 1),
                                 ("font-decrease", "Diminuir tamanho da fonte", -1)):
@@ -982,7 +1007,7 @@ class AutoFillWindow(AuroraFeaturesMixin, QMainWindow):
             button.setFixedSize(32, 27)
             button.setToolTip(tip)
             button.clicked.connect(lambda _=False, amount=delta: self._step_font_size(amount))
-            color_row.addWidget(button)
+            color_row.addWidget(button, 1)
         font_rows.addLayout(color_row)
         toolbar_layout.addWidget(self.font_controls)
         divider = QFrame()
