@@ -401,9 +401,22 @@ def _rtf_paragraph(paragraph, colors, lists):
         leader = ('',r'\tldot',r'\tlhyph',r'\tlul')[spec.get('leader',0)] if spec else ''
         controls.append(tab_types.get(tab.type.value,'')+leader+f'\\tx{_twips(position)}')
     if paragraph.listing is not None:
+        style = paragraph.listing.style()
+        bullet = _bullet(style)
+        marker = bullet or paragraph.marker
+        # RichEdit's RTF reader uses Word 6 paragraph numbering. Supply that
+        # native definition as well as Word's modern list tables. An unstarred
+        # listtext group becomes literal text in readers without Word 97 lists.
+        controls.append('{\\pntext\\f0 '+_rtf_escape(marker)+r'\tab}')
+        legacy = {QTextListFormat.ListDecimal:r'\pndec',QTextListFormat.ListLowerAlpha:r'\pnlcltr',
+                  QTextListFormat.ListUpperAlpha:r'\pnucltr',QTextListFormat.ListLowerRoman:r'\pnlcrm',
+                  QTextListFormat.ListUpperRoman:r'\pnucrm'}
+        definition = r'\pnlvlblt' if bullet else r'\pnlvlbody'+legacy.get(style,r'\pndec')
+        prefix = bullet or paragraph.listing.numberPrefix()
+        suffix = '' if bullet else paragraph.listing.numberSuffix() or '.'
+        controls.append('{\\*\\pn'+definition+f'\\pnf0\\pnstart{paragraph.number}\\pnindent300\\pnhang'
+                        +'{\\pntxtb '+_rtf_escape(prefix)+'}{\\pntxta '+_rtf_escape(suffix)+'}}')
         controls.append(f'\\ls{lists[paragraph.list_id]}\\ilvl{max(0,min(8,paragraph.listing.indent()-1))}')
-        marker = _bullet(paragraph.listing.style()) or paragraph.marker
-        controls.append('{\\listtext\\f0 '+_rtf_escape(marker)+r'\tab}')
     return ''.join(controls)+' '
 
 

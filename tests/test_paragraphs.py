@@ -123,7 +123,10 @@ class ParagraphTests(unittest.TestCase):
         rtf = rich_text_rtf(self.editor.toHtml()).decode('ascii')
         self.assertIn(r'\levelstartat3',rtf)
         self.assertIn(r'\ilvl1',rtf)
-        self.assertEqual(rtf.count(r'{\listtext'),4)
+        self.assertEqual(rtf.count(r'{\pntext'),4)
+        self.assertIn(r'\pnlvlbody\pndec',rtf)
+        self.assertIn(r'\pnlvlbody\pnlcltr',rtf)
+        self.assertNotIn(r'{\listtext',rtf)
 
     def test_marks_are_display_only(self):
         text, html = self.editor.toPlainText(), self.editor.toHtml()

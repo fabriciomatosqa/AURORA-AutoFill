@@ -16,6 +16,23 @@ sys.path.insert(0, str(ROOT))
 READER = r'''
 $ErrorActionPreference='Stop'
 Add-Type -AssemblyName System.Windows.Forms
+Add-Type -TypeDefinition @'
+using System;
+using System.Runtime.InteropServices;
+public static class AuroraParagraphNative {
+    [DllImport("user32.dll", CharSet=CharSet.Unicode)]
+    private static extern IntPtr SendMessage(IntPtr hwnd, uint msg, IntPtr wParam, IntPtr lParam);
+    public static int Numbering(IntPtr hwnd) {
+        IntPtr value=Marshal.AllocHGlobal(188);
+        try {
+            for(int i=0;i<188;i++) Marshal.WriteByte(value,i,0);
+            Marshal.WriteInt32(value,188);
+            SendMessage(hwnd,0x043D,IntPtr.Zero,value);
+            return Marshal.ReadInt16(value,8);
+        } finally { Marshal.FreeHGlobal(value); }
+    }
+}
+'@
 [Console]::OutputEncoding=[Text.UTF8Encoding]::new($false)
 $box=[Windows.Forms.RichTextBox]::new()
 try {
@@ -32,6 +49,13 @@ try {
             if(-not $box.SelectionFont.Bold) { throw 'Native character formatting lost' }
         }
         if($case.name -eq 'bullet' -and -not $box.SelectionBullet) { throw 'Native bullet list lost' }
+        if($case.name -eq 'numbered') {
+            if([AuroraParagraphNative]::Numbering($box.Handle) -ne 2) { throw 'Native decimal numbering lost' }
+            $rootIndent=$box.SelectionIndent
+            $box.Select($box.Text.IndexOf('Filho'),1)
+            if([AuroraParagraphNative]::Numbering($box.Handle) -ne 3) { throw 'Native alphabetic numbering lost' }
+            if($box.SelectionIndent -le $rootIndent+10) { throw 'Native nested list indentation lost' }
+        }
         if($box.Rtf.Length -lt 100) { throw 'Native RTF parser returned an empty document' }
     }
     [Console]::WriteLine('{"native_rtf_text":true,"alignment":true,"indentation":true,"bold":true,"bullets":true,"nested_numbering":true}')
