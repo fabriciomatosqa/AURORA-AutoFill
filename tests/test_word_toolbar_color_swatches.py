@@ -53,8 +53,12 @@ class WordColorButtonTests(unittest.TestCase):
 class WordToolbarOrderTests(unittest.TestCase):
     def test_toolbar_matches_word_row_order_and_remains_compact(self):
         from PySide6.QtWidgets import QApplication
+        from PySide6.QtCore import Qt
+        from PySide6.QtGui import QImage
+        from PySide6.QtTest import QTest
         from app.ui import AutoFillWindow
         from app.color_button import AuroraColorButton
+        from app.themes import ui_color
         app = QApplication.instance() or QApplication([])
         type(self)._app = app
         with tempfile.TemporaryDirectory(prefix="aurora-wordbar-") as tmp:
@@ -63,7 +67,12 @@ class WordToolbarOrderTests(unittest.TestCase):
                        return_value=(False, 'Modo de teste')), \
                  patch('app.ui.AutoFillWindow._initial_release_check'):
                 win = AutoFillWindow()
+                original_theme = win.theme_controller.preference
                 try:
+                    win._new_snippet()
+                    win.resize(1060, 840)
+                    win.show()
+                    app.processEvents()
                     toolbar = win.font_controls.layout()
                     self.assertEqual(toolbar.count(), 3)
                     row0 = toolbar.itemAt(0).layout()
@@ -82,7 +91,41 @@ class WordToolbarOrderTests(unittest.TestCase):
                     self.assertLessEqual(win.font_toolbar.sizeHint().height(), 115)
                     self.assertEqual(win.text_color_button.marker_rect().height(), 3)
                     self.assertEqual(win.highlight_button.marker_rect().height(), 3)
+                    # Check rendered relationships: the old trailing stretch
+                    # let CSS shrink buttons even when setFixedSize was used.
+                    widths = {button.width() for button in win.format_buttons.values()}
+                    self.assertEqual(len(widths), 1)
+                    self.assertEqual(row1.itemAt(6).widget().geometry().right(),
+                                     win.font_size.geometry().right())
+                    self.assertEqual(win.shortcut_input.geometry().top(),
+                                     win.editor_folder.geometry().top())
+                    self.assertEqual(win.shortcut_input.height(), win.editor_folder.height())
+                    spin = win.font_size
+                    for theme in ('dark', 'light'):
+                        win.theme_controller.set_preference(theme)
+                        app.processEvents()
+                        image = QImage(spin.size(), QImage.Format_ARGB32)
+                        spin.render(image)
+                        expected = ui_color('#81e9d9')
+                        for up in (True, False):
+                            rect = spin.step_button_rect(up)
+                            self.assertTrue(spin.rect().contains(rect))
+                            self.assertFalse(rect.isEmpty())
+                            # The two step buttons used to render as empty
+                            # squares on Windows. Require visible arrow pixels.
+                            pixels = sum(
+                                sum(abs(a-b) for a,b in zip(image.pixelColor(x,y).getRgb()[:3],
+                                                          expected.getRgb()[:3])) < 60
+                                for x in range(rect.left(), rect.right()+1)
+                                for y in range(rect.top(), rect.bottom()+1))
+                            self.assertGreater(pixels, 3)
+                        initial = spin.value()
+                        QTest.mouseClick(spin, Qt.LeftButton, pos=spin.step_button_rect(True).center())
+                        self.assertEqual(spin.value(), initial + 1)
+                        QTest.mouseClick(spin, Qt.LeftButton, pos=spin.step_button_rect(False).center())
+                        self.assertEqual(spin.value(), initial)
                 finally:
+                    win.theme_controller.set_preference(original_theme)
                     win.dirty = False
                     win._quitting = True
                     win.close()
