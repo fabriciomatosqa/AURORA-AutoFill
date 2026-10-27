@@ -6,7 +6,7 @@ from PySide6.QtCore import QByteArray, QRectF, QSize, Qt
 from PySide6.QtGui import QIcon, QIconEngine, QPainter, QPixmap
 from PySide6.QtSvg import QSvgRenderer
 
-ICON_NAMES = ('settings', 'home', 'save', 'trash', 'plus', 'minus', 'export', 'import', 'undo', 'folder', 'play', 'pause', 'volume', 'update', 'backup', 'restore', 'back', 'check', 'close', 'bolt', 'bold', 'italic', 'underline', 'image',)
+ICON_NAMES = ('settings', 'home', 'save', 'trash', 'plus', 'minus', 'export', 'import', 'undo', 'folder', 'play', 'pause', 'volume', 'update', 'backup', 'restore', 'back', 'check', 'close', 'bolt', 'bold', 'italic', 'underline', 'image', 'font-increase', 'font-decrease')
 ROOT = Path(__file__).resolve().parents[1] / 'assets/icons'
 
 

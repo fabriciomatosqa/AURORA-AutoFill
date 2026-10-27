@@ -64,7 +64,7 @@ class WordToolbarOrderTests(unittest.TestCase):
                  patch('app.ui.AutoFillWindow._initial_release_check'):
                 win = AutoFillWindow()
                 try:
-                    toolbar = win.font_toolbar.layout()
+                    toolbar = win.font_controls.layout()
                     self.assertEqual(toolbar.count(), 3)
                     row0 = toolbar.itemAt(0).layout()
                     row1 = toolbar.itemAt(1).layout()
