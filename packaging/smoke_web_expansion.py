@@ -17,15 +17,27 @@ from types import MethodType, SimpleNamespace
 from unittest.mock import Mock, patch
 from urllib.request import urlopen
 
-import websocket
-
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
+
+
+def read_devtools_port(path):
+    """Chrome can create this file before releasing its Windows write lock."""
+    try:
+        lines = path.read_text(encoding='ascii').splitlines()
+        prefix='/devtools/browser/'
+        if len(lines) < 2 or not lines[1].startswith(prefix) or len(lines[1])<=len(prefix):
+            return None
+        port = int(lines[0])
+        return port if 1 <= port <= 65535 else None
+    except (OSError, UnicodeError, ValueError):
+        return None
 
 
 def main():
     if sys.platform != "win32":
         raise SystemExit("This smoke test requires Windows")
+    import websocket
     os.environ["QT_QPA_PLATFORM"] = "windows"
     from PySide6.QtWidgets import QApplication
     from PySide6.QtCore import QObject, Signal, Qt
@@ -98,8 +110,14 @@ def main():
                                     "--disable-background-networking", "about:blank"],
                                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         port_file = profile / "DevToolsActivePort"
-        wait(lambda: port_file.exists(), seconds=20)
-        port = int(port_file.read_text().splitlines()[0])
+        port = None
+        def port_ready():
+            nonlocal port
+            if browser.poll() is not None:
+                raise AssertionError('Chrome exited before its DevTools port became ready')
+            port = read_devtools_port(port_file)
+            return port is not None
+        wait(port_ready, seconds=20)
         def targets():
             with urlopen(f"http://127.0.0.1:{port}/json/list", timeout=5) as response:
                 return json.load(response)
