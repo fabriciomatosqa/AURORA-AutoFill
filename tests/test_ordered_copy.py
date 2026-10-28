@@ -7,7 +7,6 @@ import unittest
 from datetime import datetime
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import patch
 
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QImage
@@ -19,8 +18,7 @@ from app.clipboard_content import (
 )
 from app.inline_images import AuroraImageEditor
 from app.preferences import normalize_preferences, load_preferences, save_preferences
-from app.ui import AutoFillWindow
-from engine_fixture import EngineFixture, Clipboard
+from engine_fixture import EngineFixture
 
 
 class SeparateContentTests(unittest.TestCase):
@@ -93,34 +91,6 @@ class SeparateContentTests(unittest.TestCase):
             self.assertTrue(payload.hasText() and payload.hasHtml())
             self.assertFalse(payload.hasImage())
             e.drain()
-
-    def test_menu_sequence_copy_keeps_text_then_native_image_then_text(self):
-        editor = AuroraImageEditor()
-        editor.insertPlainText("Início\n")
-        picture = QImage(80, 50, QImage.Format_ARGB32)
-        picture.fill(Qt.cyan)
-        assert editor.insert_image(picture)
-        editor.insertPlainText("\nFim")
-        host = SimpleNamespace(
-            body_input=editor, _expansion_operation=None,
-            _clipboard_lease=None, _clipboard_pending=False,
-            _clipboard_source_text=lambda: "",
-            statusBar=lambda: SimpleNamespace(showMessage=lambda *args: None),
-        )
-        clipboard = Clipboard()
-        with patch("app.ui.QApplication.clipboard", return_value=clipboard):
-            AutoFillWindow._copy_content_part(host, ("next", None))
-            self.assertTrue(clipboard.mimeData().hasText())
-            self.assertFalse(clipboard.mimeData().hasImage())
-            self.assertIn("Início", clipboard.text())
-            AutoFillWindow._copy_content_part(host, ("next", None))
-            self.assertTrue(clipboard.mimeData().hasImage())
-            self.assertFalse(clipboard.mimeData().hasText())
-            self.assertEqual(clipboard.mimeData().imageData().width(), 80)
-            AutoFillWindow._copy_content_part(host, ("next", None))
-            self.assertTrue(clipboard.mimeData().hasText())
-            self.assertIn("Fim", clipboard.text())
-            self.assertFalse(clipboard.mimeData().hasImage())
 
     def test_invalid_image_and_unsupported_part_fail_cleanly(self):
         with self.assertRaises(ValueError):
