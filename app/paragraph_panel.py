@@ -116,7 +116,8 @@ class ParagraphPanel(QWidget):
         self.paragraph_settings_button.setIconSize(QSize(13,13))
         row3.addWidget(self.paragraph_settings_button,1)
         self.emoji_button = self._button(None,'Inserir emoji',31,lambda _:self.open_emoji_picker(),text='🙂')
-        self.emoji_button.setObjectName('emojiButton')
+        # Reutiliza o QSS dos demais botões da faixa nos temas claro/escuro.
+        self.emoji_button.setObjectName('fontTool')
         self.emoji_button.setFont(QFont('Segoe UI Emoji', 13))
         self.emoji_button.setToolTip('Inserir emoji no texto')
         row3.addWidget(self.emoji_button,1)
