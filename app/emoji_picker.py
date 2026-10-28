@@ -5,17 +5,17 @@ transferência, não altera fontes salvas e não requer serviços online.
 """
 from __future__ import annotations
 
-import sys
 import unicodedata
 
-from PySide6.QtCore import QPoint, Qt
-from PySide6.QtGui import QFont, QGuiApplication, QTextCursor
+from PySide6.QtCore import QPoint, Qt, QSize
+from PySide6.QtGui import QGuiApplication, QTextCursor
 from PySide6.QtWidgets import (
     QFrame, QGridLayout, QHBoxLayout, QLabel, QLineEdit, QScrollArea,
-    QSizePolicy, QToolButton, QVBoxLayout, QWidget,
+    QToolButton, QVBoxLayout, QWidget,
 )
 
 from .themes import current_theme
+from .emoji_art import emoji_icon
 
 # Descrições concisas em português; aliases em inglês facilitam a busca.
 _DATA = (
@@ -418,7 +418,8 @@ class EmojiPicker(QFrame):
         for name, symbol in all_categories:
             button = QToolButton(self)
             button.setObjectName("emojiCategory")
-            button.setText(symbol)
+            button.setIcon(emoji_icon(symbol))
+            button.setIconSize(QSize(25,25))
             button.setToolTip(name)
             button.setAccessibleName(name)
             button.setFixedSize(33, 32)
@@ -480,8 +481,7 @@ class EmojiPicker(QFrame):
             QScrollArea#emojiScroll {{ border: none; background: {background}; }}
             QToolButton#emojiCategory, QToolButton#emojiItem {{
                 border: none; border-radius: 6px; background: transparent;
-                color: {foreground}; font-family: "Segoe UI Emoji", "Noto Color Emoji";
-                font-size: 19px;
+                color: {foreground};
             }}
             QToolButton#emojiCategory:hover, QToolButton#emojiItem:hover {{
                 background: {hover};
@@ -535,7 +535,8 @@ class EmojiPicker(QFrame):
             for index, (emoji, label) in enumerate(entries):
                 button = QToolButton(self.content)
                 button.setObjectName("emojiItem")
-                button.setText(emoji)
+                button.setIcon(emoji_icon(emoji))
+                button.setIconSize(QSize(27,27))
                 button.setToolTip(label)
                 button.setAccessibleName(label)
                 button.setFixedSize(38, 36)
