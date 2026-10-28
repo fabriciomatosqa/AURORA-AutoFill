@@ -412,7 +412,6 @@ class EmojiPicker(QFrame):
 
         self.tabs = QHBoxLayout()
         self.tabs.setSpacing(2)
-        layout.addLayout(self.tabs)
         all_categories = (("Recentes", "🕘"),) + tuple(
             (name, symbol) for name, symbol, _ in CATEGORIES)
         for name, symbol in all_categories:
@@ -447,6 +446,7 @@ class EmojiPicker(QFrame):
         self.scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.scroll.setFixedHeight(257)
         self.content = QWidget(self.scroll)
+        self.content.setObjectName('emojiGrid')
         self.grid = QGridLayout(self.content)
         self.grid.setContentsMargins(1, 1, 1, 1)
         self.grid.setHorizontalSpacing(2)
@@ -454,6 +454,7 @@ class EmojiPicker(QFrame):
         self.grid.setAlignment(Qt.AlignTop | Qt.AlignLeft)
         self.scroll.setWidget(self.content)
         layout.addWidget(self.scroll)
+        layout.addLayout(self.tabs)
         self.set_category("Recentes")
         self._apply_style()
 
@@ -479,9 +480,10 @@ class EmojiPicker(QFrame):
             QLineEdit#emojiSearch:focus {{ border-color: #24b7c2; }}
             QLabel#emojiHeading {{ color: {muted}; font-weight: 600; }}
             QScrollArea#emojiScroll {{ border: none; background: {background}; }}
+            QWidget#emojiGrid {{ background: {background}; }}
             QToolButton#emojiCategory, QToolButton#emojiItem {{
                 border: none; border-radius: 6px; background: transparent;
-                color: {foreground};
+                color: {foreground}; padding: 0px;
             }}
             QToolButton#emojiCategory:hover, QToolButton#emojiItem:hover {{
                 background: {hover};
@@ -536,7 +538,7 @@ class EmojiPicker(QFrame):
                 button = QToolButton(self.content)
                 button.setObjectName("emojiItem")
                 button.setIcon(emoji_icon(emoji))
-                button.setIconSize(QSize(27,27))
+                button.setIconSize(QSize(30,30))
                 button.setToolTip(label)
                 button.setAccessibleName(label)
                 button.setFixedSize(38, 36)

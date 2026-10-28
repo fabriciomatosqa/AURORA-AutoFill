@@ -166,7 +166,9 @@ class AutosaveAndFontUiTests(unittest.TestCase):
                 self.assertGreater(win.font_family.count(), 0)
                 # Três linhas compactas como no Word: seleção de fonte,
                 # estilos e cores. O painel não cresce sem necessidade.
-                self.assertLessEqual(win.font_toolbar.sizeHint().height(), 115)
+                self.assertEqual(win.font_controls.height(),91)
+                self.assertEqual(win.font_group.height(),115)
+                self.assertLessEqual(win.font_toolbar.sizeHint().height(),139)
                 self.assertGreaterEqual(win.font_toolbar.sizeHint().height(), 80)
                 self.assertEqual(win.format_buttons['bold'].height(), 27)
             finally:

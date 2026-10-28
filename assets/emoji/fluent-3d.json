@@ -1,0 +1,3370 @@
+{
+  "provider": "Microsoft Fluent Emoji",
+  "style": "3D",
+  "license": "MIT",
+  "source_revision": "1ffb34c752ecf5d402f04cfb4b392c77f57c54bc",
+  "atlas": "fluent-3d.png",
+  "emoji": {
+    "‼️": {
+      "source": "assets/Double exclamation mark/3D/double_exclamation_mark_3d.png",
+      "rect": [
+        0,
+        0,
+        96,
+        96
+      ],
+      "sha256": "144260091a4041a939bc579db61ca8d44f87c56ec03f28622071e8e8f323c91d"
+    },
+    "⌨️": {
+      "source": "assets/Keyboard/3D/keyboard_3d.png",
+      "rect": [
+        96,
+        0,
+        96,
+        96
+      ],
+      "sha256": "448ea066381ca784676b617c9c76a3ea175e93a025d3b1103a685996496521c0"
+    },
+    "⏰": {
+      "source": "assets/Alarm clock/3D/alarm_clock_3d.png",
+      "rect": [
+        192,
+        0,
+        96,
+        96
+      ],
+      "sha256": "1aa6929e1baa440db535fd321868dc76ddd888bf3e4f4333d37800ff2ec41c74"
+    },
+    "☀️": {
+      "source": "assets/Sun/3D/sun_3d.png",
+      "rect": [
+        288,
+        0,
+        96,
+        96
+      ],
+      "sha256": "c9bb15d03d4b1e6151d97e12119ac93bbd2bcb5e713a49c1fcfc11ece54caec1"
+    },
+    "☁️": {
+      "source": "assets/Cloud/3D/cloud_3d.png",
+      "rect": [
+        384,
+        0,
+        96,
+        96
+      ],
+      "sha256": "a4d4629711661a80f6b6b0081c0f84e65352518b2bf23f4c1bec55e297a9fafc"
+    },
+    "☑️": {
+      "source": "assets/Check box with check/3D/check_box_with_check_3d.png",
+      "rect": [
+        480,
+        0,
+        96,
+        96
+      ],
+      "sha256": "f471e406ca3b94ff1839c74eed328d592deafeb753fb71c733fbbc9cd1f240d9"
+    },
+    "☕": {
+      "source": "assets/Hot beverage/3D/hot_beverage_3d.png",
+      "rect": [
+        576,
+        0,
+        96,
+        96
+      ],
+      "sha256": "edeaa3fca5eace5f2546efcd3b3e42ef1fd389a0c51d374dbf7863731db8f314"
+    },
+    "☝️": {
+      "source": "assets/Index pointing up/Default/3D/index_pointing_up_3d_default.png",
+      "rect": [
+        672,
+        0,
+        96,
+        96
+      ],
+      "sha256": "01c60cb58d08f446877022f90c4083e8e8c651947db26ff7c35c218f1e54f0bb"
+    },
+    "♻️": {
+      "source": "assets/Recycling symbol/3D/recycling_symbol_3d.png",
+      "rect": [
+        768,
+        0,
+        96,
+        96
+      ],
+      "sha256": "9f19c694b396bece02d8bb763ed6ec7690a434f7214ccc4156332d34e1f52f4f"
+    },
+    "⚙️": {
+      "source": "assets/Gear/3D/gear_3d.png",
+      "rect": [
+        864,
+        0,
+        96,
+        96
+      ],
+      "sha256": "415296d4fadabc2e0f6593143ea632948fef20a1cd73fbbc3dbda571f0421988"
+    },
+    "⚠️": {
+      "source": "assets/Warning/3D/warning_3d.png",
+      "rect": [
+        960,
+        0,
+        96,
+        96
+      ],
+      "sha256": "318f534c5d93100443f6e48defc47d76140473d797087af5821587f0feb8003c"
+    },
+    "⚡": {
+      "source": "assets/High voltage/3D/high_voltage_3d.png",
+      "rect": [
+        1056,
+        0,
+        96,
+        96
+      ],
+      "sha256": "f8f9d3ed8a6f350f1e3f009fb8b3f3bcc20276c008b2ce391bef057ea062ca71"
+    },
+    "⚪": {
+      "source": "assets/White circle/3D/white_circle_3d.png",
+      "rect": [
+        1152,
+        0,
+        96,
+        96
+      ],
+      "sha256": "7789fbff029182d5a8b311453b8de9a04d582057e9a464750ad4f2f28d9dab60"
+    },
+    "⚫": {
+      "source": "assets/Black circle/3D/black_circle_3d.png",
+      "rect": [
+        1248,
+        0,
+        96,
+        96
+      ],
+      "sha256": "784da1594a382dfb7c6fa708e257506eb0cc78423be5a55aad2200817a0f0737"
+    },
+    "⚽": {
+      "source": "assets/Soccer ball/3D/soccer_ball_3d.png",
+      "rect": [
+        1344,
+        0,
+        96,
+        96
+      ],
+      "sha256": "bf8597110e987c13b8a3ac0c317d6903cef29499faa04de695b5fc37dbb5a053"
+    },
+    "⚾": {
+      "source": "assets/Baseball/3D/baseball_3d.png",
+      "rect": [
+        1440,
+        0,
+        96,
+        96
+      ],
+      "sha256": "08ddebb4406f2c243449b344f3e511b0077143e96f3c4d0eff619bf11de7123d"
+    },
+    "⛔": {
+      "source": "assets/No entry/3D/no_entry_3d.png",
+      "rect": [
+        1536,
+        0,
+        96,
+        96
+      ],
+      "sha256": "dc34988e83af66a6c9485d3bc64975908da6c857c73261e7bca125acc1e31198"
+    },
+    "⛰️": {
+      "source": "assets/Mountain/3D/mountain_3d.png",
+      "rect": [
+        1632,
+        0,
+        96,
+        96
+      ],
+      "sha256": "1ad6bb64d9596690fa8074d5abd9175c8e3d6111d44344101bf03f7f763c536a"
+    },
+    "⛵": {
+      "source": "assets/Sailboat/3D/sailboat_3d.png",
+      "rect": [
+        0,
+        96,
+        96,
+        96
+      ],
+      "sha256": "afac9f137599084a542bb68f11a7c56af4adc479ff2326b1184a0ea1af38276d"
+    },
+    "✅": {
+      "source": "assets/Check mark button/3D/check_mark_button_3d.png",
+      "rect": [
+        96,
+        96,
+        96,
+        96
+      ],
+      "sha256": "256e3dd950cf1705ab72511ab242472b4bd7db519aa402a6182c1aaf8c58def9"
+    },
+    "✈️": {
+      "source": "assets/Airplane/3D/airplane_3d.png",
+      "rect": [
+        192,
+        96,
+        96,
+        96
+      ],
+      "sha256": "dda8d8e9ccaca71973f4ee75fcab085dcffbb89f3987a9d2cc5401f186268fa1"
+    },
+    "✉️": {
+      "source": "assets/Envelope/3D/envelope_3d.png",
+      "rect": [
+        288,
+        96,
+        96,
+        96
+      ],
+      "sha256": "9671859aa64b65b6977b7ab6adc2e64220e75edf531a8e67c4b76e01ace04230"
+    },
+    "✊": {
+      "source": "assets/Raised fist/Default/3D/raised_fist_3d_default.png",
+      "rect": [
+        384,
+        96,
+        96,
+        96
+      ],
+      "sha256": "2418f8596cc79cebacc0ae73091d8ee965ca280f2087014bdd78da31474bd422"
+    },
+    "✋": {
+      "source": "assets/Raised hand/Default/3D/raised_hand_3d_default.png",
+      "rect": [
+        480,
+        96,
+        96,
+        96
+      ],
+      "sha256": "70a05b72094c836ffc45fce31b551cb939daecf36526ad745f844fa7bc98f2ff"
+    },
+    "✌️": {
+      "source": "assets/Victory hand/Default/3D/victory_hand_3d_default.png",
+      "rect": [
+        576,
+        96,
+        96,
+        96
+      ],
+      "sha256": "8b2a28bc1662f54491dec60f2c8ac867aae56784a2cc33e8a7b444942c5c74f1"
+    },
+    "✔️": {
+      "source": "assets/Check mark/3D/check_mark_3d.png",
+      "rect": [
+        672,
+        96,
+        96,
+        96
+      ],
+      "sha256": "2afd74cdf3f327936a59e3e19df1a7a25a0dc61acaaa35194c553781f9bb9072"
+    },
+    "✖️": {
+      "source": "assets/Multiply/3D/multiply_3d.png",
+      "rect": [
+        768,
+        96,
+        96,
+        96
+      ],
+      "sha256": "485183921fcd9b07c8c8f236a8c04d7b0ebe0561f72e9d32f60ce5124c68aafd"
+    },
+    "✨": {
+      "source": "assets/Sparkles/3D/sparkles_3d.png",
+      "rect": [
+        864,
+        96,
+        96,
+        96
+      ],
+      "sha256": "e4490c9ff74a3fd73a8f99c760d65b6ed51b8a3e4ad28da137fec050b77e1058"
+    },
+    "❄️": {
+      "source": "assets/Snowflake/3D/snowflake_3d.png",
+      "rect": [
+        960,
+        96,
+        96,
+        96
+      ],
+      "sha256": "82f12779eb8658ebd4bae02c8136c4588bea55cdf60536d4d88f5eb530e7cb90"
+    },
+    "❌": {
+      "source": "assets/Cross mark/3D/cross_mark_3d.png",
+      "rect": [
+        1056,
+        96,
+        96,
+        96
+      ],
+      "sha256": "2753b89dcd790c7f25fa3c5fd5641821860257364163abd87a2f57bb268466b9"
+    },
+    "❎": {
+      "source": "assets/Cross mark button/3D/cross_mark_button_3d.png",
+      "rect": [
+        1152,
+        96,
+        96,
+        96
+      ],
+      "sha256": "61a65558f334a32c402cf3bae942abfe2aac5e611a8fc0bbbdec0c393ba10816"
+    },
+    "❓": {
+      "source": "assets/Red question mark/3D/red_question_mark_3d.png",
+      "rect": [
+        1248,
+        96,
+        96,
+        96
+      ],
+      "sha256": "fb2af4458d9bf975a4a3a841e8368c9d7315dc881a3080b3fcbcf522934d4cca"
+    },
+    "❗": {
+      "source": "assets/Red exclamation mark/3D/red_exclamation_mark_3d.png",
+      "rect": [
+        1344,
+        96,
+        96,
+        96
+      ],
+      "sha256": "a058bdb1b245cb6134bcc99975722c6093873a5c59e59cd3e2aee8bf0a362f58"
+    },
+    "❤️": {
+      "source": "assets/Red heart/3D/red_heart_3d.png",
+      "rect": [
+        1440,
+        96,
+        96,
+        96
+      ],
+      "sha256": "7218cb9f08ed1ef38fcd83fe699a1125d07f50725f4c87a68cb7c9f4efb3c32b"
+    },
+    "➕": {
+      "source": "assets/Plus/3D/plus_3d.png",
+      "rect": [
+        1536,
+        96,
+        96,
+        96
+      ],
+      "sha256": "d3e169258dd3e0d90886c6adb89fbcf79d5094c47a9cba8dfdc877296a696856"
+    },
+    "➖": {
+      "source": "assets/Minus/3D/minus_3d.png",
+      "rect": [
+        1632,
+        96,
+        96,
+        96
+      ],
+      "sha256": "393b2f4b842c04138c9de88fecf39c8e7eb71c64d07ce1ecc513c287f0b342be"
+    },
+    "➗": {
+      "source": "assets/Divide/3D/divide_3d.png",
+      "rect": [
+        0,
+        192,
+        96,
+        96
+      ],
+      "sha256": "ee8552f252287153f5212c18386fb5d548858af1c4b26707127011f852bb3825"
+    },
+    "➡️": {
+      "source": "assets/Right arrow/3D/right_arrow_3d.png",
+      "rect": [
+        96,
+        192,
+        96,
+        96
+      ],
+      "sha256": "499ad6a8d1327d60c756134fff21fc879cebd43e478a1b1d99fc07e83adca2d6"
+    },
+    "⬅️": {
+      "source": "assets/Left arrow/3D/left_arrow_3d.png",
+      "rect": [
+        192,
+        192,
+        96,
+        96
+      ],
+      "sha256": "67a377760bb0dbc7b4a25fe5298125c59a11c43167d21052cb3d64c6701badd4"
+    },
+    "⬆️": {
+      "source": "assets/Up arrow/3D/up_arrow_3d.png",
+      "rect": [
+        288,
+        192,
+        96,
+        96
+      ],
+      "sha256": "4f01db9cddb09aaf01741dd39695aa71dff1d3871f2537e9ccfa68f8bc3047c8"
+    },
+    "⬇️": {
+      "source": "assets/Down arrow/3D/down_arrow_3d.png",
+      "rect": [
+        384,
+        192,
+        96,
+        96
+      ],
+      "sha256": "cb1059241bdc6409798f70be74381e4683042a33181f887de1e6b551f39a2513"
+    },
+    "⭐": {
+      "source": "assets/Star/3D/star_3d.png",
+      "rect": [
+        480,
+        192,
+        96,
+        96
+      ],
+      "sha256": "b935cdf502b69054bc2b08e7ba4e4eaba6499564a2041dd77d6291e21bf8cfe8"
+    },
+    "🌃": {
+      "source": "assets/Night with stars/3D/night_with_stars_3d.png",
+      "rect": [
+        576,
+        192,
+        96,
+        96
+      ],
+      "sha256": "048d4865f20d20a6c67b3634fbd97689f99b605f09cd5972176e29b0a83f01c3"
+    },
+    "🌅": {
+      "source": "assets/Sunrise/3D/sunrise_3d.png",
+      "rect": [
+        672,
+        192,
+        96,
+        96
+      ],
+      "sha256": "c0c29c2c4d095cd4cd1a8bafbc8a21ad375db82e6b0f11b6d521a994e8343067"
+    },
+    "🌇": {
+      "source": "assets/Sunset/3D/sunset_3d.png",
+      "rect": [
+        768,
+        192,
+        96,
+        96
+      ],
+      "sha256": "eaf81d22207a684c48758bb85e11d207df4a4bd4ebae21ce98f6a6a8dc8ed5a0"
+    },
+    "🌈": {
+      "source": "assets/Rainbow/3D/rainbow_3d.png",
+      "rect": [
+        864,
+        192,
+        96,
+        96
+      ],
+      "sha256": "81c60a96369047dd287b9fb54d02d29fe1e9b7fe3f00924330037e861b1fbd81"
+    },
+    "🌋": {
+      "source": "assets/Volcano/3D/volcano_3d.png",
+      "rect": [
+        960,
+        192,
+        96,
+        96
+      ],
+      "sha256": "fb44ceca45206af4f746699a52de3ef8f324c1827f64763dd2a9813871af5969"
+    },
+    "🌎": {
+      "source": "assets/Globe showing americas/3D/globe_showing_americas_3d.png",
+      "rect": [
+        1056,
+        192,
+        96,
+        96
+      ],
+      "sha256": "4acbea40bef64badd9acd7430cc51318ba57381786818e3df338b7cee8f5d855"
+    },
+    "🌙": {
+      "source": "assets/Crescent moon/3D/crescent_moon_3d.png",
+      "rect": [
+        1152,
+        192,
+        96,
+        96
+      ],
+      "sha256": "0a5b5192390983789d430e37582dfda343be19bf8246feda73108484771ba09d"
+    },
+    "🌧️": {
+      "source": "assets/Cloud with rain/3D/cloud_with_rain_3d.png",
+      "rect": [
+        1248,
+        192,
+        96,
+        96
+      ],
+      "sha256": "75dd1e6fc5f6b92cbc222ab0b9c10e60f889af2b82453ba784ba0517ffd690b4"
+    },
+    "🌭": {
+      "source": "assets/Hot dog/3D/hot_dog_3d.png",
+      "rect": [
+        1344,
+        192,
+        96,
+        96
+      ],
+      "sha256": "dd2de011487b7c1fc34fc6313ad221b81633b6d85c180622e6d56ccd88a81108"
+    },
+    "🌮": {
+      "source": "assets/Taco/3D/taco_3d.png",
+      "rect": [
+        1440,
+        192,
+        96,
+        96
+      ],
+      "sha256": "33687d9e320233c811998633f5ff1ac95f82fba22d8f31a9af62cf49ea96fa44"
+    },
+    "🌳": {
+      "source": "assets/Deciduous tree/3D/deciduous_tree_3d.png",
+      "rect": [
+        1536,
+        192,
+        96,
+        96
+      ],
+      "sha256": "3c13998c6b866d824703327296c0317de5f079c2b31a6c22defd49d819d6e7f9"
+    },
+    "🌷": {
+      "source": "assets/Tulip/3D/tulip_3d.png",
+      "rect": [
+        1632,
+        192,
+        96,
+        96
+      ],
+      "sha256": "dbf0252b8c748da89c3436e109926979167ce9225c0b999823ef32b5a973bda5"
+    },
+    "🌹": {
+      "source": "assets/Rose/3D/rose_3d.png",
+      "rect": [
+        0,
+        288,
+        96,
+        96
+      ],
+      "sha256": "24a9794f108eb27d8d51ac8fc1898f8cee20e19f1b4e8c063efec5215d28d947"
+    },
+    "🌺": {
+      "source": "assets/Hibiscus/3D/hibiscus_3d.png",
+      "rect": [
+        96,
+        288,
+        96,
+        96
+      ],
+      "sha256": "91d2d16a023e8b2f4bb8de3aeb5c3e6063d5baaacc70a29f58df7133bf215d7b"
+    },
+    "🌻": {
+      "source": "assets/Sunflower/3D/sunflower_3d.png",
+      "rect": [
+        192,
+        288,
+        96,
+        96
+      ],
+      "sha256": "14eb41f2cb9afa1387e9b925a9458d8fc768be3bd32210e3064fb7f320e123ca"
+    },
+    "🌽": {
+      "source": "assets/Ear of corn/3D/ear_of_corn_3d.png",
+      "rect": [
+        288,
+        288,
+        96,
+        96
+      ],
+      "sha256": "ed99feeaf391a301ed16480b0e6bf8bbe8e470d9e036a7fe77b4a5e19af2b696"
+    },
+    "🍀": {
+      "source": "assets/Four leaf clover/3D/four_leaf_clover_3d.png",
+      "rect": [
+        384,
+        288,
+        96,
+        96
+      ],
+      "sha256": "37b310abbb0914050cb033ffcb99fe25b09c4e47d1d0ef93988f60f6fd849d07"
+    },
+    "🍇": {
+      "source": "assets/Grapes/3D/grapes_3d.png",
+      "rect": [
+        480,
+        288,
+        96,
+        96
+      ],
+      "sha256": "862ea99e063a228682b5b2da59613ddb2e64d7ad0144712125eb34d9cd2fa36d"
+    },
+    "🍉": {
+      "source": "assets/Watermelon/3D/watermelon_3d.png",
+      "rect": [
+        576,
+        288,
+        96,
+        96
+      ],
+      "sha256": "00bacc111ae855cf0621d35ba987d519c07fb4103500edc4af2152fa6d27177e"
+    },
+    "🍊": {
+      "source": "assets/Tangerine/3D/tangerine_3d.png",
+      "rect": [
+        672,
+        288,
+        96,
+        96
+      ],
+      "sha256": "dd21b66eb226ea4598141bd598eeb7ed037493b028fa1736712f8768009d3d89"
+    },
+    "🍋": {
+      "source": "assets/Lemon/3D/lemon_3d.png",
+      "rect": [
+        768,
+        288,
+        96,
+        96
+      ],
+      "sha256": "b0919ced1b7ae879f8900af4a71a001491280dbd9a6592eca808ee4801c673dc"
+    },
+    "🍌": {
+      "source": "assets/Banana/3D/banana_3d.png",
+      "rect": [
+        864,
+        288,
+        96,
+        96
+      ],
+      "sha256": "b82cd3cc7e56e70026b599aeec5d811568b507adc96473bf854096f5e67d92a5"
+    },
+    "🍍": {
+      "source": "assets/Pineapple/3D/pineapple_3d.png",
+      "rect": [
+        960,
+        288,
+        96,
+        96
+      ],
+      "sha256": "428706e3eb27e9c34a4740f7264a75f8bc0be6aac3f7d8999dc3746c7afefef0"
+    },
+    "🍎": {
+      "source": "assets/Red apple/3D/red_apple_3d.png",
+      "rect": [
+        1056,
+        288,
+        96,
+        96
+      ],
+      "sha256": "7e37f4ad4d227d283f9afad0605fcddf67406bf8c6c4964419efbd23de7ad60c"
+    },
+    "🍒": {
+      "source": "assets/Cherries/3D/cherries_3d.png",
+      "rect": [
+        1152,
+        288,
+        96,
+        96
+      ],
+      "sha256": "3ebbdc0c13ab42cdf9b5ed27f444b17e92a01b08eac76a4c893c2210e86bca73"
+    },
+    "🍓": {
+      "source": "assets/Strawberry/3D/strawberry_3d.png",
+      "rect": [
+        1248,
+        288,
+        96,
+        96
+      ],
+      "sha256": "446d640c24e146d03e8382c61ae52862848b11aadf74e7b47d200bc44d2f0223"
+    },
+    "🍔": {
+      "source": "assets/Hamburger/3D/hamburger_3d.png",
+      "rect": [
+        1344,
+        288,
+        96,
+        96
+      ],
+      "sha256": "5a078744b30da58e854ab7700c501180e0b11337c9d64e33b70585c8b98088a5"
+    },
+    "🍕": {
+      "source": "assets/Pizza/3D/pizza_3d.png",
+      "rect": [
+        1440,
+        288,
+        96,
+        96
+      ],
+      "sha256": "beb2d1ac000003d96711ea8364815641442523285fa59007dd5b589059c74b9a"
+    },
+    "🍜": {
+      "source": "assets/Steaming bowl/3D/steaming_bowl_3d.png",
+      "rect": [
+        1536,
+        288,
+        96,
+        96
+      ],
+      "sha256": "753c2250ef9f60fe4933e21ee1d53e6820413486f75bffc29ef092957bae583b"
+    },
+    "🍝": {
+      "source": "assets/Spaghetti/3D/spaghetti_3d.png",
+      "rect": [
+        1632,
+        288,
+        96,
+        96
+      ],
+      "sha256": "466b00d96569fb84dd8f975ed39ff9d8af9488a5877f8075d39c847a8323bdaf"
+    },
+    "🍞": {
+      "source": "assets/Bread/3D/bread_3d.png",
+      "rect": [
+        0,
+        384,
+        96,
+        96
+      ],
+      "sha256": "648d935809d028ce4b583a77a2206d11c54ff981d392703c7fb68dd5c90f0315"
+    },
+    "🍟": {
+      "source": "assets/French fries/3D/french_fries_3d.png",
+      "rect": [
+        96,
+        384,
+        96,
+        96
+      ],
+      "sha256": "b151bcc12de63b16a4cdb57a2cd71b7d3421d64550fb361bb849a3562ddedc52"
+    },
+    "🍣": {
+      "source": "assets/Sushi/3D/sushi_3d.png",
+      "rect": [
+        192,
+        384,
+        96,
+        96
+      ],
+      "sha256": "5992070c8e4af0af12643e16999606b891bfd5b49b0f8aa33e9bf9e7bba5ed68"
+    },
+    "🍦": {
+      "source": "assets/Soft ice cream/3D/soft_ice_cream_3d.png",
+      "rect": [
+        288,
+        384,
+        96,
+        96
+      ],
+      "sha256": "085679c473ca9e25152b21b5e746c7e03a8753bba5e7daefca68efde7045e1bb"
+    },
+    "🍩": {
+      "source": "assets/Doughnut/3D/doughnut_3d.png",
+      "rect": [
+        384,
+        384,
+        96,
+        96
+      ],
+      "sha256": "5527fa6a366ad366a45f84b71432e8a54aa502debea3b53d3926c2823fcdf986"
+    },
+    "🍪": {
+      "source": "assets/Cookie/3D/cookie_3d.png",
+      "rect": [
+        480,
+        384,
+        96,
+        96
+      ],
+      "sha256": "d3c5f5e2864d3178bf2033074c0cf679b067192fa9b5e1aa136267c7ac95d376"
+    },
+    "🍫": {
+      "source": "assets/Chocolate bar/3D/chocolate_bar_3d.png",
+      "rect": [
+        576,
+        384,
+        96,
+        96
+      ],
+      "sha256": "cc1d1cf934113021204000db8e42574f243ebd668d5490c8242bb4263e79faee"
+    },
+    "🍬": {
+      "source": "assets/Candy/3D/candy_3d.png",
+      "rect": [
+        672,
+        384,
+        96,
+        96
+      ],
+      "sha256": "79607ed1b5a0b96117723261fb9c79db77e63b154cebbd9af42ee8ddb6776fb9"
+    },
+    "🍰": {
+      "source": "assets/Shortcake/3D/shortcake_3d.png",
+      "rect": [
+        768,
+        384,
+        96,
+        96
+      ],
+      "sha256": "0acebe0de7e4d5393c8825ee1a233ea8780e52bfec71ab52dd3e0135e8a9fb37"
+    },
+    "🍱": {
+      "source": "assets/Bento box/3D/bento_box_3d.png",
+      "rect": [
+        864,
+        384,
+        96,
+        96
+      ],
+      "sha256": "7578704a1f66d8f5bf47c4be398bd3f33c6cbce2c3900703a3eec460994d4946"
+    },
+    "🍵": {
+      "source": "assets/Teacup without handle/3D/teacup_without_handle_3d.png",
+      "rect": [
+        960,
+        384,
+        96,
+        96
+      ],
+      "sha256": "dfe2e8975bab243637c9d05a2453850c99fe4a4b9c762f55fd8b631dfadff954"
+    },
+    "🍷": {
+      "source": "assets/Wine glass/3D/wine_glass_3d.png",
+      "rect": [
+        1056,
+        384,
+        96,
+        96
+      ],
+      "sha256": "cb3ae7ba64b9418565e025ac58eec4c0719c03ee73e281685fca0abfcdf8c189"
+    },
+    "🍺": {
+      "source": "assets/Beer mug/3D/beer_mug_3d.png",
+      "rect": [
+        1152,
+        384,
+        96,
+        96
+      ],
+      "sha256": "f03abaa231dd78bcdd5e98804398a32b12dab60485ec54466bf4efc526efc770"
+    },
+    "🎁": {
+      "source": "assets/Wrapped gift/3D/wrapped_gift_3d.png",
+      "rect": [
+        1248,
+        384,
+        96,
+        96
+      ],
+      "sha256": "fc9c446401c9fb347f4e9f47e6023247208126047d9ec32059d5e14e127fb562"
+    },
+    "🎂": {
+      "source": "assets/Birthday cake/3D/birthday_cake_3d.png",
+      "rect": [
+        1344,
+        384,
+        96,
+        96
+      ],
+      "sha256": "5c5d6961fde0fa82d1aa2242f938ff10b0327e791674c625c912f13ff206933b"
+    },
+    "🎉": {
+      "source": "assets/Party popper/3D/party_popper_3d.png",
+      "rect": [
+        1440,
+        384,
+        96,
+        96
+      ],
+      "sha256": "70a8e2f9daf1646be9e773751b7f3b6b281a2415cf29c3c3aeebd9c923cdc3e0"
+    },
+    "🎊": {
+      "source": "assets/Confetti ball/3D/confetti_ball_3d.png",
+      "rect": [
+        1536,
+        384,
+        96,
+        96
+      ],
+      "sha256": "92dc91f0566a3e103c71bf8e96ef693aa7509cf810b239203ae2d8b66a11bf0b"
+    },
+    "🎗️": {
+      "source": "assets/Reminder ribbon/3D/reminder_ribbon_3d.png",
+      "rect": [
+        1632,
+        384,
+        96,
+        96
+      ],
+      "sha256": "5225e2c4d4e62ee005c95c127628d492bc37a1fa994e8d9f25177cb3e42afa1c"
+    },
+    "🎤": {
+      "source": "assets/Microphone/3D/microphone_3d.png",
+      "rect": [
+        0,
+        480,
+        96,
+        96
+      ],
+      "sha256": "99ccf1ae9f0df5a0449441da687cd5337581c029f452db8ed135f14c6a6e0121"
+    },
+    "🎧": {
+      "source": "assets/Headphone/3D/headphone_3d.png",
+      "rect": [
+        96,
+        480,
+        96,
+        96
+      ],
+      "sha256": "e7c26d433340b1706f20c733558da412cbf70b1a95048d51a80eb0ed2c0a02c9"
+    },
+    "🎨": {
+      "source": "assets/Artist palette/3D/artist_palette_3d.png",
+      "rect": [
+        192,
+        480,
+        96,
+        96
+      ],
+      "sha256": "147e62f6523e7e923add4ed5497bf90982d22e04eb2e65ab916b743de2dbe1d2"
+    },
+    "🎬": {
+      "source": "assets/Clapper board/3D/clapper_board_3d.png",
+      "rect": [
+        288,
+        480,
+        96,
+        96
+      ],
+      "sha256": "1a6e2d6681865c8834b29576398f82045b170177e4e745d7bce210e80cc98561"
+    },
+    "🎭": {
+      "source": "assets/Performing arts/3D/performing_arts_3d.png",
+      "rect": [
+        384,
+        480,
+        96,
+        96
+      ],
+      "sha256": "fdf3c47ed2292c844cd4795ef4fbbe482fafbf0102dd1391796ecc182444b5c6"
+    },
+    "🎮": {
+      "source": "assets/Video game/3D/video_game_3d.png",
+      "rect": [
+        480,
+        480,
+        96,
+        96
+      ],
+      "sha256": "4b01e22089defe553717d49624e673cb5492ecdd9c6a8eddb7e6ba12d400c0da"
+    },
+    "🎯": {
+      "source": "assets/Bullseye/3D/bullseye_3d.png",
+      "rect": [
+        576,
+        480,
+        96,
+        96
+      ],
+      "sha256": "2b2a2d9eec76c5649b8207b050f9135ce666c9d94694e5577aade50c53768437"
+    },
+    "🎲": {
+      "source": "assets/Game die/3D/game_die_3d.png",
+      "rect": [
+        672,
+        480,
+        96,
+        96
+      ],
+      "sha256": "454d51562973cf3af447db64832905d8f3fc3bbc7508c5a8bf79d2771edbbe4c"
+    },
+    "🎵": {
+      "source": "assets/Musical note/3D/musical_note_3d.png",
+      "rect": [
+        768,
+        480,
+        96,
+        96
+      ],
+      "sha256": "24f7ec2e5cdf032c3605ec8c57399f72b96585ea6495f8da59695f5ea86da2ff"
+    },
+    "🎶": {
+      "source": "assets/Musical notes/3D/musical_notes_3d.png",
+      "rect": [
+        864,
+        480,
+        96,
+        96
+      ],
+      "sha256": "72bd5c2870b7bcad31bb591a789107c92825b7dd844006366e6fc4e1fa31ab36"
+    },
+    "🎸": {
+      "source": "assets/Guitar/3D/guitar_3d.png",
+      "rect": [
+        960,
+        480,
+        96,
+        96
+      ],
+      "sha256": "a993e9066855f890c1c89eaa0295e75fbc5a1accb17db41fcb3b05c888fb9b27"
+    },
+    "🎹": {
+      "source": "assets/Musical keyboard/3D/musical_keyboard_3d.png",
+      "rect": [
+        1056,
+        480,
+        96,
+        96
+      ],
+      "sha256": "dbaa3e3571d5baf68ca705bd233bc26a5ab58b8a3cb106f54c08a61d3420a8e2"
+    },
+    "🎾": {
+      "source": "assets/Tennis/3D/tennis_3d.png",
+      "rect": [
+        1152,
+        480,
+        96,
+        96
+      ],
+      "sha256": "48991f754eda621e8f84c9769189bb43cf707729bc3474b94f0adf75203fb67f"
+    },
+    "🏀": {
+      "source": "assets/Basketball/3D/basketball_3d.png",
+      "rect": [
+        1248,
+        480,
+        96,
+        96
+      ],
+      "sha256": "cdca1c9b81130ab7b1f8da385984bfaba3f577176bb84b927ad70cfe367cecff"
+    },
+    "🏃": {
+      "source": "assets/Person running/Default/3D/person_running_3d_default.png",
+      "rect": [
+        1344,
+        480,
+        96,
+        96
+      ],
+      "sha256": "7fb8f896fee354034305c2c202859b1a1bbfdfead8e9ebb63d4675806e75c960"
+    },
+    "🏆": {
+      "source": "assets/Trophy/3D/trophy_3d.png",
+      "rect": [
+        1440,
+        480,
+        96,
+        96
+      ],
+      "sha256": "7c4a9805f354eb2aec35063a95a4043306efc726324c0d128883f24497857bbc"
+    },
+    "🏈": {
+      "source": "assets/American football/3D/american_football_3d.png",
+      "rect": [
+        1536,
+        480,
+        96,
+        96
+      ],
+      "sha256": "c88dfd0fc165b8293cb6fcbe8bc4bf131e021204909418e3944833ee0a749c31"
+    },
+    "🏊": {
+      "source": "assets/Person swimming/Default/3D/person_swimming_3d_default.png",
+      "rect": [
+        1632,
+        480,
+        96,
+        96
+      ],
+      "sha256": "41ab0f7ae63a833ca887dfff61b5057e227752f2a2ac568125c8c0cade4f001f"
+    },
+    "🏋️": {
+      "source": "assets/Person lifting weights/Default/3D/person_lifting_weights_3d_default.png",
+      "rect": [
+        0,
+        576,
+        96,
+        96
+      ],
+      "sha256": "b08e5800ccb886ca234d96197ba94e5dfcf2a851c0a71c40224696f84d82e75f"
+    },
+    "🏍️": {
+      "source": "assets/Motorcycle/3D/motorcycle_3d.png",
+      "rect": [
+        96,
+        576,
+        96,
+        96
+      ],
+      "sha256": "b1d42d17357d5480ad92b92942a550d870601dbdd3cac66a300dbcc582eb0619"
+    },
+    "🏐": {
+      "source": "assets/Volleyball/3D/volleyball_3d.png",
+      "rect": [
+        192,
+        576,
+        96,
+        96
+      ],
+      "sha256": "684b85d6e0db2180ea0f337328ec39597a3141d7c6d504f44aa72b5eaa8d46a7"
+    },
+    "🏓": {
+      "source": "assets/Ping pong/3D/ping_pong_3d.png",
+      "rect": [
+        288,
+        576,
+        96,
+        96
+      ],
+      "sha256": "869db5098a622899967e236f5ad5c93b4bb9b3710095e23b3197bfe013a8070a"
+    },
+    "🏖️": {
+      "source": "assets/Beach with umbrella/3D/beach_with_umbrella_3d.png",
+      "rect": [
+        384,
+        576,
+        96,
+        96
+      ],
+      "sha256": "f1be4e3c04f152edd10eb5d44d850d09b8b3166cc27ca76db1aa19e0106a7cbb"
+    },
+    "🏠": {
+      "source": "assets/House/3D/house_3d.png",
+      "rect": [
+        480,
+        576,
+        96,
+        96
+      ],
+      "sha256": "0279b073321551b55c86a10dc2fff5bf66c8dec895672004da43482c5a1de87c"
+    },
+    "🏡": {
+      "source": "assets/House with garden/3D/house_with_garden_3d.png",
+      "rect": [
+        576,
+        576,
+        96,
+        96
+      ],
+      "sha256": "57f676a85409d18348c069cebf35b4b4082498b0ddb783c54166eac15d402b81"
+    },
+    "🏢": {
+      "source": "assets/Office building/3D/office_building_3d.png",
+      "rect": [
+        672,
+        576,
+        96,
+        96
+      ],
+      "sha256": "a7bb5b154e6ea40eb22c2221333d51522c65ae0021320801383fe50ae32b0649"
+    },
+    "🏥": {
+      "source": "assets/Hospital/3D/hospital_3d.png",
+      "rect": [
+        768,
+        576,
+        96,
+        96
+      ],
+      "sha256": "efdd62ac17fe3d726f82c67fe22b08d14138402648409ef4fe48d3e89f80d837"
+    },
+    "🏫": {
+      "source": "assets/School/3D/school_3d.png",
+      "rect": [
+        864,
+        576,
+        96,
+        96
+      ],
+      "sha256": "fdbd89cc0e4e7a80b776fd12275bb1c7867e364b3017aee7e5a0b736e332ec24"
+    },
+    "🏸": {
+      "source": "assets/Badminton/3D/badminton_3d.png",
+      "rect": [
+        960,
+        576,
+        96,
+        96
+      ],
+      "sha256": "ca2ecc2871111703b41ec34e2b450b687b6443faf83462cea6a6cfa0c7617fbb"
+    },
+    "🐈": {
+      "source": "assets/Cat/3D/cat_3d.png",
+      "rect": [
+        1056,
+        576,
+        96,
+        96
+      ],
+      "sha256": "5d3fcbbfb0be45d9be0ade47fe4eb1b97d33130fe67d46a8db697e434f13289b"
+    },
+    "🐍": {
+      "source": "assets/Snake/3D/snake_3d.png",
+      "rect": [
+        1152,
+        576,
+        96,
+        96
+      ],
+      "sha256": "3d9ad552f970ebcf8d9adf27d0d08b4f783646a25378d6283e956e2f73c0466c"
+    },
+    "🐔": {
+      "source": "assets/Chicken/3D/chicken_3d.png",
+      "rect": [
+        1248,
+        576,
+        96,
+        96
+      ],
+      "sha256": "78a069bc06c3e266ad600804840c44ba2cf291d24d090b3f627c1d5a09cb5a29"
+    },
+    "🐕": {
+      "source": "assets/Dog/3D/dog_3d.png",
+      "rect": [
+        1344,
+        576,
+        96,
+        96
+      ],
+      "sha256": "27ce5eadb088d9c7a5658b6c3b6aa4484c7a75983e8e1a9988845a54f90f1bcb"
+    },
+    "🐘": {
+      "source": "assets/Elephant/3D/elephant_3d.png",
+      "rect": [
+        1440,
+        576,
+        96,
+        96
+      ],
+      "sha256": "d3046f53f45dc20b818484dec97f53634d5c71b277015fc96aebcdc0d49a8f91"
+    },
+    "🐙": {
+      "source": "assets/Octopus/3D/octopus_3d.png",
+      "rect": [
+        1536,
+        576,
+        96,
+        96
+      ],
+      "sha256": "4dfd49959bc303d641dca3b36c35c3d4d3c4b248c9394aa5879fe2c5edfeb089"
+    },
+    "🐝": {
+      "source": "assets/Honeybee/3D/honeybee_3d.png",
+      "rect": [
+        1632,
+        576,
+        96,
+        96
+      ],
+      "sha256": "7769854974b0fe9d75ccf16943f7f01773c87a1b1f2f84feb16327be46c69ef2"
+    },
+    "🐟": {
+      "source": "assets/Fish/3D/fish_3d.png",
+      "rect": [
+        0,
+        672,
+        96,
+        96
+      ],
+      "sha256": "d219342f1f416f2a89b5f6d412743bc809ac75d3be3d8cff0bc0cf5af5e288fa"
+    },
+    "🐢": {
+      "source": "assets/Turtle/3D/turtle_3d.png",
+      "rect": [
+        96,
+        672,
+        96,
+        96
+      ],
+      "sha256": "86486ad9e55664aad9e28af70a8b35dbbadd0678be5f0d1f0b1b5baba616649c"
+    },
+    "🐦": {
+      "source": "assets/Bird/3D/bird_3d.png",
+      "rect": [
+        192,
+        672,
+        96,
+        96
+      ],
+      "sha256": "eeb6e0a3a54f7b5ec2b32995a1062ba3380eebd5f9a00d7158f3cfbb978c31a2"
+    },
+    "🐧": {
+      "source": "assets/Penguin/3D/penguin_3d.png",
+      "rect": [
+        288,
+        672,
+        96,
+        96
+      ],
+      "sha256": "c513a326631f3758e3ef9729ed2aa3bba46432340657ae63f32fd0332f648341"
+    },
+    "🐨": {
+      "source": "assets/Koala/3D/koala_3d.png",
+      "rect": [
+        384,
+        672,
+        96,
+        96
+      ],
+      "sha256": "e5ec59d366cffe5e0f7d49144264633c71af2e50961d5cfe011f155a7ddfce1a"
+    },
+    "🐬": {
+      "source": "assets/Dolphin/3D/dolphin_3d.png",
+      "rect": [
+        480,
+        672,
+        96,
+        96
+      ],
+      "sha256": "03ba3937393cf760b90a3d20fc2ca36fa1219713b54838088c2b1bbe67c11181"
+    },
+    "🐭": {
+      "source": "assets/Mouse face/3D/mouse_face_3d.png",
+      "rect": [
+        576,
+        672,
+        96,
+        96
+      ],
+      "sha256": "a14db12e1c223a3b87d0813310e83ae0f2f17e48cd748b18fe43b013282c7494"
+    },
+    "🐮": {
+      "source": "assets/Cow face/3D/cow_face_3d.png",
+      "rect": [
+        672,
+        672,
+        96,
+        96
+      ],
+      "sha256": "d26b39b80c43051e072c864570e7561db099646d9c8eea9ec4cd8d417ed3b29a"
+    },
+    "🐯": {
+      "source": "assets/Tiger face/3D/tiger_face_3d.png",
+      "rect": [
+        768,
+        672,
+        96,
+        96
+      ],
+      "sha256": "124229ecfb2fa27d6d343aa0827f728ff36c2b7ce6f297f103db76dc847ac3d7"
+    },
+    "🐰": {
+      "source": "assets/Rabbit face/3D/rabbit_face_3d.png",
+      "rect": [
+        864,
+        672,
+        96,
+        96
+      ],
+      "sha256": "49e3894d0e17c2eeea2b81f50d36ff407731d8b1983f3b5d71a7f7304dcbd5b3"
+    },
+    "🐱": {
+      "source": "assets/Cat face/3D/cat_face_3d.png",
+      "rect": [
+        960,
+        672,
+        96,
+        96
+      ],
+      "sha256": "d930f2aee8ae47cb3ca26f2594ddd15df42345d952b5903b776adf4a728860b5"
+    },
+    "🐳": {
+      "source": "assets/Spouting whale/3D/spouting_whale_3d.png",
+      "rect": [
+        1056,
+        672,
+        96,
+        96
+      ],
+      "sha256": "6d54f3331c142690c6762c4cf5e2b212a45e652e16653f1a765ce3346db0f8db"
+    },
+    "🐴": {
+      "source": "assets/Horse face/3D/horse_face_3d.png",
+      "rect": [
+        1152,
+        672,
+        96,
+        96
+      ],
+      "sha256": "8bb57bb52b9af304c148d87e324eefd89252de4d2f6403f8bab37ceb11649a2c"
+    },
+    "🐵": {
+      "source": "assets/Monkey face/3D/monkey_face_3d.png",
+      "rect": [
+        1248,
+        672,
+        96,
+        96
+      ],
+      "sha256": "28457ce308d7563afe96f1e1fc703c7ca760045a56596f89329159c55233e7bd"
+    },
+    "🐶": {
+      "source": "assets/Dog face/3D/dog_face_3d.png",
+      "rect": [
+        1344,
+        672,
+        96,
+        96
+      ],
+      "sha256": "7db4c311218a47053e490ec53e7b3995bb83246b0d6992e135868a5220bb32e7"
+    },
+    "🐷": {
+      "source": "assets/Pig face/3D/pig_face_3d.png",
+      "rect": [
+        1440,
+        672,
+        96,
+        96
+      ],
+      "sha256": "8446bb06dc2c1049b28e5413ac6aa3c2cecc18036d1d6f49b135c0ac6c1123fa"
+    },
+    "🐸": {
+      "source": "assets/Frog/3D/frog_3d.png",
+      "rect": [
+        1536,
+        672,
+        96,
+        96
+      ],
+      "sha256": "c7926ce26b08536982d021237b10024fd5dd0153fd8bd0334a4eb8e457fb2111"
+    },
+    "🐹": {
+      "source": "assets/Hamster/3D/hamster_3d.png",
+      "rect": [
+        1632,
+        672,
+        96,
+        96
+      ],
+      "sha256": "36a63a367b1d4e1bbba74284f5b2c4c741a3ff611bfec764f377ae4da4e2d51c"
+    },
+    "🐻": {
+      "source": "assets/Bear/3D/bear_3d.png",
+      "rect": [
+        0,
+        768,
+        96,
+        96
+      ],
+      "sha256": "8f108a036c28d25378e3970eea68d00fbf155228b349707f0456e557013a87c9"
+    },
+    "🐼": {
+      "source": "assets/Panda/3D/panda_3d.png",
+      "rect": [
+        96,
+        768,
+        96,
+        96
+      ],
+      "sha256": "31524ed035f8d769bc7d437268f30a65eb309ea216e84c09823d4f36c2f97070"
+    },
+    "🐾": {
+      "source": "assets/Paw prints/3D/paw_prints_3d.png",
+      "rect": [
+        192,
+        768,
+        96,
+        96
+      ],
+      "sha256": "4332fe23d9d3c6f0c5a91b26bc835b972301d9b50031a7365c176d3c5afbbf51"
+    },
+    "👀": {
+      "source": "assets/Eyes/3D/eyes_3d.png",
+      "rect": [
+        288,
+        768,
+        96,
+        96
+      ],
+      "sha256": "b3049f399cb0947b423610f5876077efa86bc640fba5cb9d138b149773d4c793"
+    },
+    "👆": {
+      "source": "assets/Backhand index pointing up/Default/3D/backhand_index_pointing_up_3d_default.png",
+      "rect": [
+        384,
+        768,
+        96,
+        96
+      ],
+      "sha256": "71a036d4d74cb61d92c037724dc1ba8696b07625d4692ef7edd47768f0d10c63"
+    },
+    "👇": {
+      "source": "assets/Backhand index pointing down/Default/3D/backhand_index_pointing_down_3d_default.png",
+      "rect": [
+        480,
+        768,
+        96,
+        96
+      ],
+      "sha256": "ace09c0778f6653b1254fe3040eacbfea1795195f19f598fb788f2ace3e00e1f"
+    },
+    "👈": {
+      "source": "assets/Backhand index pointing left/Default/3D/backhand_index_pointing_left_3d_default.png",
+      "rect": [
+        576,
+        768,
+        96,
+        96
+      ],
+      "sha256": "1675f449d38145e54f2b3ffa8551d2b2a9b98efd64b54547c55471c0ce978f12"
+    },
+    "👉": {
+      "source": "assets/Backhand index pointing right/Default/3D/backhand_index_pointing_right_3d_default.png",
+      "rect": [
+        672,
+        768,
+        96,
+        96
+      ],
+      "sha256": "af6942496976b7e1ccb76da13b307576b83fcfa1c3153462dc190db7c96cee9d"
+    },
+    "👊": {
+      "source": "assets/Oncoming fist/Default/3D/oncoming_fist_3d_default.png",
+      "rect": [
+        768,
+        768,
+        96,
+        96
+      ],
+      "sha256": "88806fa95230c09949b0746a279f65e417cd0a8527e4f8ad1629954881be23ff"
+    },
+    "👋": {
+      "source": "assets/Waving hand/Default/3D/waving_hand_3d_default.png",
+      "rect": [
+        864,
+        768,
+        96,
+        96
+      ],
+      "sha256": "fd8d684a2dd4bca71b53eea530ffa226fdd9a17a50b9bebec2788447477f0d39"
+    },
+    "👌": {
+      "source": "assets/Ok hand/Default/3D/ok_hand_3d_default.png",
+      "rect": [
+        960,
+        768,
+        96,
+        96
+      ],
+      "sha256": "cb506278a6b54b1d60b7a9e513f1513aa1d1cd245f9cf7c14e930b3ee8cc8fa1"
+    },
+    "👍": {
+      "source": "assets/Thumbs up/Default/3D/thumbs_up_3d_default.png",
+      "rect": [
+        1056,
+        768,
+        96,
+        96
+      ],
+      "sha256": "a48dbe89a1a16969593db76f5bec45e9e537e0f090e7609caa8d9a3ff598d1d2"
+    },
+    "👎": {
+      "source": "assets/Thumbs down/Default/3D/thumbs_down_3d_default.png",
+      "rect": [
+        1152,
+        768,
+        96,
+        96
+      ],
+      "sha256": "12020dc8a616138d0ab3daa94008b97d0ed35dbdb1f0d80d5f17657e8aee492f"
+    },
+    "👏": {
+      "source": "assets/Clapping hands/Default/3D/clapping_hands_3d_default.png",
+      "rect": [
+        1248,
+        768,
+        96,
+        96
+      ],
+      "sha256": "54075bd39fd3e1860ba39898d73e61096c0e0e633ac5e9840beefddaf1d75113"
+    },
+    "👐": {
+      "source": "assets/Open hands/Default/3D/open_hands_3d_default.png",
+      "rect": [
+        1344,
+        768,
+        96,
+        96
+      ],
+      "sha256": "b05296b85d2604e4aa2a56fd5b348c9d0b5456ee1295f88836a2b7c3f6a1ab13"
+    },
+    "👨": {
+      "source": "assets/Man/Default/3D/man_3d_default.png",
+      "rect": [
+        1440,
+        768,
+        96,
+        96
+      ],
+      "sha256": "2b9d1eee644cae73e3194251e5403d910110e085ba7e8f212a2bbdb66ed32b1c"
+    },
+    "👨‍⚕️": {
+      "source": "assets/Man health worker/Default/3D/man_health_worker_3d_default.png",
+      "rect": [
+        1536,
+        768,
+        96,
+        96
+      ],
+      "sha256": "93fbfeec67b650b9883b6412eb2b83b2c8931bcbead1ba9dcb53465d8bf614cb"
+    },
+    "👨‍💻": {
+      "source": "assets/Man technologist/Default/3D/man_technologist_3d_default.png",
+      "rect": [
+        1632,
+        768,
+        96,
+        96
+      ],
+      "sha256": "3ff378383a06142cc9ecef9d2ae4aab6b9f31698744fe1db3f26594a9f486605"
+    },
+    "👩": {
+      "source": "assets/Woman/Default/3D/woman_3d_default.png",
+      "rect": [
+        0,
+        864,
+        96,
+        96
+      ],
+      "sha256": "92083a355b38b6a54f43ad124e2f8abdcece7da9d0fab7d28947d236e80caf4e"
+    },
+    "👩‍⚕️": {
+      "source": "assets/Woman health worker/Default/3D/woman_health_worker_3d_default.png",
+      "rect": [
+        96,
+        864,
+        96,
+        96
+      ],
+      "sha256": "65ec38d37d001b80a9ec1084c03d3f9314b061fad9800db44af3328d93ddb3bc"
+    },
+    "👩‍💻": {
+      "source": "assets/Woman technologist/Default/3D/woman_technologist_3d_default.png",
+      "rect": [
+        192,
+        864,
+        96,
+        96
+      ],
+      "sha256": "1fe6d451f8a204530ad54d9fff7af3129b9e6f26181c691fa0bcb93d402663dc"
+    },
+    "👶": {
+      "source": "assets/Baby/Default/3D/baby_3d_default.png",
+      "rect": [
+        288,
+        864,
+        96,
+        96
+      ],
+      "sha256": "a9f27d8ae4a277a572ccc3d49d56128cff229fef5ece1a9afe85059c2e97c96c"
+    },
+    "👻": {
+      "source": "assets/Ghost/3D/ghost_3d.png",
+      "rect": [
+        384,
+        864,
+        96,
+        96
+      ],
+      "sha256": "2a07c00a4af13532717a201e201b7219f02ce91232ea86abd7e74cbf1b5fb42f"
+    },
+    "💀": {
+      "source": "assets/Skull/3D/skull_3d.png",
+      "rect": [
+        480,
+        864,
+        96,
+        96
+      ],
+      "sha256": "9920d9e79017306b7af9eef09117070ff7fde28d7711fdb4861c14c446b5bf45"
+    },
+    "💊": {
+      "source": "assets/Pill/3D/pill_3d.png",
+      "rect": [
+        576,
+        864,
+        96,
+        96
+      ],
+      "sha256": "39fea3b43ec3fcd7f42cd014f69fb145b2f87540ad823ac99f6c64b3288a76b4"
+    },
+    "💔": {
+      "source": "assets/Broken heart/3D/broken_heart_3d.png",
+      "rect": [
+        672,
+        864,
+        96,
+        96
+      ],
+      "sha256": "d4f336d4cc70a2dd316ecb546995f9fbae3d80f3c9d236ad69046097bc80befb"
+    },
+    "💖": {
+      "source": "assets/Sparkling heart/3D/sparkling_heart_3d.png",
+      "rect": [
+        768,
+        864,
+        96,
+        96
+      ],
+      "sha256": "c458860ef79e7baedd7346104fb1f6cd27f2be165200c94fb3d7781c75269ae7"
+    },
+    "💙": {
+      "source": "assets/Blue heart/3D/blue_heart_3d.png",
+      "rect": [
+        864,
+        864,
+        96,
+        96
+      ],
+      "sha256": "8aa6e1c088684e048c32f23bf66b5a23a95d65cbfda4592e3530c7cae7593a34"
+    },
+    "💚": {
+      "source": "assets/Green heart/3D/green_heart_3d.png",
+      "rect": [
+        960,
+        864,
+        96,
+        96
+      ],
+      "sha256": "0fd65dfc7eafc3006e78feacb45c18bcb52402385550b708679dd991c2f7d07f"
+    },
+    "💛": {
+      "source": "assets/Yellow heart/3D/yellow_heart_3d.png",
+      "rect": [
+        1056,
+        864,
+        96,
+        96
+      ],
+      "sha256": "5258d02eff2080ffd5b28cbac16b8a9f579ec692eee5e8051ab8c80dd4c04fc6"
+    },
+    "💜": {
+      "source": "assets/Purple heart/3D/purple_heart_3d.png",
+      "rect": [
+        1152,
+        864,
+        96,
+        96
+      ],
+      "sha256": "183e6b57c851f7ede51732d61ddee9d36d2882c0e385c575da42553330d27619"
+    },
+    "💡": {
+      "source": "assets/Light bulb/3D/light_bulb_3d.png",
+      "rect": [
+        1248,
+        864,
+        96,
+        96
+      ],
+      "sha256": "df7b09aa18301507e6fb8c279df66d9afa465b6fed3e63d2efa84dacebdbbf79"
+    },
+    "💪": {
+      "source": "assets/Flexed biceps/Default/3D/flexed_biceps_3d_default.png",
+      "rect": [
+        1344,
+        864,
+        96,
+        96
+      ],
+      "sha256": "c765683c47844d18dd1daa38556f27347d059d7cf54b315a41403326f5af8a38"
+    },
+    "💬": {
+      "source": "assets/Speech balloon/3D/speech_balloon_3d.png",
+      "rect": [
+        1440,
+        864,
+        96,
+        96
+      ],
+      "sha256": "b9bdb19ef2e550923bc4f541de049f1633883619564b2aa140a968eaf1d69a0d"
+    },
+    "💭": {
+      "source": "assets/Thought balloon/3D/thought_balloon_3d.png",
+      "rect": [
+        1536,
+        864,
+        96,
+        96
+      ],
+      "sha256": "8b1fded1c65b158264ca52b1ceec39e3f903f0af5171d779763ab3dd00b6816a"
+    },
+    "💯": {
+      "source": "assets/Hundred points/3D/hundred_points_3d.png",
+      "rect": [
+        1632,
+        864,
+        96,
+        96
+      ],
+      "sha256": "2c9411a425e60a538a7ee5125d21c9fa2610e827f8d38d0c953e5d8cda8562cf"
+    },
+    "💰": {
+      "source": "assets/Money bag/3D/money_bag_3d.png",
+      "rect": [
+        0,
+        960,
+        96,
+        96
+      ],
+      "sha256": "cec19b9cf0beac5bbd27a07dcbe1e68c54b04112b4641165705ccb920f230292"
+    },
+    "💳": {
+      "source": "assets/Credit card/3D/credit_card_3d.png",
+      "rect": [
+        96,
+        960,
+        96,
+        96
+      ],
+      "sha256": "8988e8c1f850752f517c28b46f7745c54621c79679cfa1b387e73741d2ba4935"
+    },
+    "💻": {
+      "source": "assets/Laptop/3D/laptop_3d.png",
+      "rect": [
+        192,
+        960,
+        96,
+        96
+      ],
+      "sha256": "3b8a267f6c3d2721af925782bdbc11c4e1bc9ae806c5c875557b100393665aab"
+    },
+    "📁": {
+      "source": "assets/File folder/3D/file_folder_3d.png",
+      "rect": [
+        288,
+        960,
+        96,
+        96
+      ],
+      "sha256": "d07ff91df2a4ad9f08e281e9b99ad66924b6db0c0afd2a938feca4dd6b7a9039"
+    },
+    "📂": {
+      "source": "assets/Open file folder/3D/open_file_folder_3d.png",
+      "rect": [
+        384,
+        960,
+        96,
+        96
+      ],
+      "sha256": "beedae7737b8e50045b51a25c5d2153bf911c558d8743f5c4a4a75bd18f6c009"
+    },
+    "📄": {
+      "source": "assets/Page facing up/3D/page_facing_up_3d.png",
+      "rect": [
+        480,
+        960,
+        96,
+        96
+      ],
+      "sha256": "f212d11ed09cfef2ca9cfd3b6b35b29ad7a57eb677aa6611fe284763303a1c57"
+    },
+    "📅": {
+      "source": "assets/Calendar/3D/calendar_3d.png",
+      "rect": [
+        576,
+        960,
+        96,
+        96
+      ],
+      "sha256": "7c377466753d5c5062e60edec0258ac78c512df423add89b2dd359035592d8ef"
+    },
+    "📆": {
+      "source": "assets/Tear-off calendar/3D/tear-off_calendar_3d.png",
+      "rect": [
+        672,
+        960,
+        96,
+        96
+      ],
+      "sha256": "fc08a373de7a26317a13fe68af10dab54b2ea52493a5e6cc12746318d0ee9d35"
+    },
+    "📋": {
+      "source": "assets/Clipboard/3D/clipboard_3d.png",
+      "rect": [
+        768,
+        960,
+        96,
+        96
+      ],
+      "sha256": "cbe87f41d539362944c6a37aeb67387f118740eb1414377619dd8ed368a069a2"
+    },
+    "📌": {
+      "source": "assets/Pushpin/3D/pushpin_3d.png",
+      "rect": [
+        864,
+        960,
+        96,
+        96
+      ],
+      "sha256": "116ad83b2a124f7b86a663f34610e3cd48539a1fa1db213e047230a6486507b3"
+    },
+    "📎": {
+      "source": "assets/Paperclip/3D/paperclip_3d.png",
+      "rect": [
+        960,
+        960,
+        96,
+        96
+      ],
+      "sha256": "9b002f19d69a206b704540bc458b61d7a30c9b1ca93ad023d5564035ffac6536"
+    },
+    "📖": {
+      "source": "assets/Open book/3D/open_book_3d.png",
+      "rect": [
+        1056,
+        960,
+        96,
+        96
+      ],
+      "sha256": "c6b7de9724d8ca47f900238d8cb34c2ac7346a12c8cea91c176b30f8a39d628d"
+    },
+    "📚": {
+      "source": "assets/Books/3D/books_3d.png",
+      "rect": [
+        1152,
+        960,
+        96,
+        96
+      ],
+      "sha256": "36f75eaa1e1a849fc950f43962b447c206d96244858468240a6a81beaa97f7be"
+    },
+    "📝": {
+      "source": "assets/Memo/3D/memo_3d.png",
+      "rect": [
+        1248,
+        960,
+        96,
+        96
+      ],
+      "sha256": "bddf602ea6a0988a77ef51187a3ac8b526791a614a8bb7123705359319a81dcd"
+    },
+    "📞": {
+      "source": "assets/Telephone receiver/3D/telephone_receiver_3d.png",
+      "rect": [
+        1344,
+        960,
+        96,
+        96
+      ],
+      "sha256": "ee86ef399ada86680a826260e9855aec82c756345a02c93f5b036a41c076acb2"
+    },
+    "📧": {
+      "source": "assets/E-mail/3D/e-mail_3d.png",
+      "rect": [
+        1440,
+        960,
+        96,
+        96
+      ],
+      "sha256": "c1482a99df6e3d972a7998d508c39e236097d560c071b5e9c02e321d1d5b8922"
+    },
+    "📩": {
+      "source": "assets/Envelope with arrow/3D/envelope_with_arrow_3d.png",
+      "rect": [
+        1536,
+        960,
+        96,
+        96
+      ],
+      "sha256": "f0d4294e5cba25a026c7a909b11525da473b40b4a9c6f4e416a28f3dcf1f2036"
+    },
+    "📱": {
+      "source": "assets/Mobile phone/3D/mobile_phone_3d.png",
+      "rect": [
+        1632,
+        960,
+        96,
+        96
+      ],
+      "sha256": "c72cf9f888cb74cb8852679184e0dac945ed0340839c98a86c653f51e1e3504d"
+    },
+    "📷": {
+      "source": "assets/Camera/3D/camera_3d.png",
+      "rect": [
+        0,
+        1056,
+        96,
+        96
+      ],
+      "sha256": "1b16f78a3feb212e66c0263b81d651347d702383e4a23f6e0211f83c79d3c7e3"
+    },
+    "🔄": {
+      "source": "assets/Counterclockwise arrows button/3D/counterclockwise_arrows_button_3d.png",
+      "rect": [
+        96,
+        1056,
+        96,
+        96
+      ],
+      "sha256": "f43c7b042dfef8a3a288e9ee54119caaca68f3b3a85493bfaf53abfa436d471c"
+    },
+    "🔍": {
+      "source": "assets/Magnifying glass tilted left/3D/magnifying_glass_tilted_left_3d.png",
+      "rect": [
+        192,
+        1056,
+        96,
+        96
+      ],
+      "sha256": "e8fea91e4652a36486aa9392a67873c987a13389afdae06bbcdae78ab30b4f4f"
+    },
+    "🔑": {
+      "source": "assets/Key/3D/key_3d.png",
+      "rect": [
+        288,
+        1056,
+        96,
+        96
+      ],
+      "sha256": "ae59ce2b8dcfaa1afcdfe91bde7cc88cf06a8493686a6676706d1c891bb349eb"
+    },
+    "🔒": {
+      "source": "assets/Locked/3D/locked_3d.png",
+      "rect": [
+        384,
+        1056,
+        96,
+        96
+      ],
+      "sha256": "8c8e9209b8420ac7caf8c94fde6586044d9b91e85728aaaf4b98c2482761ea16"
+    },
+    "🔓": {
+      "source": "assets/Unlocked/3D/unlocked_3d.png",
+      "rect": [
+        480,
+        1056,
+        96,
+        96
+      ],
+      "sha256": "0bf5a01afbe49e92a7e5f20cbae121daef47445a1b07ce79941d926c80541e0e"
+    },
+    "🔔": {
+      "source": "assets/Bell/3D/bell_3d.png",
+      "rect": [
+        576,
+        1056,
+        96,
+        96
+      ],
+      "sha256": "e1c9efed838326cb746462b824456ef382742237017871f4d0fe54c407a9d5bf"
+    },
+    "🔕": {
+      "source": "assets/Bell with slash/3D/bell_with_slash_3d.png",
+      "rect": [
+        672,
+        1056,
+        96,
+        96
+      ],
+      "sha256": "4063b651ea5e16432b9b9d21290ea8ed49de02aeae016acb585fd2827fc0f271"
+    },
+    "🔥": {
+      "source": "assets/Fire/3D/fire_3d.png",
+      "rect": [
+        768,
+        1056,
+        96,
+        96
+      ],
+      "sha256": "d56355132d73df1741edcf37cb4e21ad54f1c46eeb76fa17224607abf4128c3f"
+    },
+    "🔧": {
+      "source": "assets/Wrench/3D/wrench_3d.png",
+      "rect": [
+        864,
+        1056,
+        96,
+        96
+      ],
+      "sha256": "0a87edecc4a5f6c4e7dcf19d688044fe2c1ac7402929a35ac0e269a62d56f607"
+    },
+    "🔴": {
+      "source": "assets/Red circle/3D/red_circle_3d.png",
+      "rect": [
+        960,
+        1056,
+        96,
+        96
+      ],
+      "sha256": "3c2db2998b57dfde1666e065d482d401a6c5b5ab98a4ad0f1f852edef7aa7790"
+    },
+    "🔵": {
+      "source": "assets/Blue circle/3D/blue_circle_3d.png",
+      "rect": [
+        1056,
+        1056,
+        96,
+        96
+      ],
+      "sha256": "2f18c5c4e03b8c14ff5cc31d8a78ad9f0a7b3040c9119b0efdfc4a4046a74954"
+    },
+    "🕒": {
+      "source": "assets/Three oclock/3D/three_oclock_3d.png",
+      "rect": [
+        1152,
+        1056,
+        96,
+        96
+      ],
+      "sha256": "030747cb8b0abfd961841730ee01973412bfd2a07aba608fbf4bfabe4ea3d734"
+    },
+    "🕘": {
+      "source": "assets/Nine oclock/3D/nine_oclock_3d.png",
+      "rect": [
+        1248,
+        1056,
+        96,
+        96
+      ],
+      "sha256": "8c2aa2cc2e0d7278317a7638b4bd4ada4c5cebead8533f334ae0a8950987ab03"
+    },
+    "🖐️": {
+      "source": "assets/Hand with fingers splayed/Default/3D/hand_with_fingers_splayed_3d_default.png",
+      "rect": [
+        1344,
+        1056,
+        96,
+        96
+      ],
+      "sha256": "3f29791354aa75e6bc9e242bf22f847546c4e9d9acdc732f11bffc58379f3efe"
+    },
+    "🖤": {
+      "source": "assets/Black heart/3D/black_heart_3d.png",
+      "rect": [
+        1440,
+        1056,
+        96,
+        96
+      ],
+      "sha256": "6d6fb494995ef95b146fd3d4a4ba6c85b4b08f658c606e7dd3760e5d51f9976e"
+    },
+    "🖥️": {
+      "source": "assets/Desktop computer/3D/desktop_computer_3d.png",
+      "rect": [
+        1536,
+        1056,
+        96,
+        96
+      ],
+      "sha256": "f0ec12ccf1e9a2ff83f95cd8ba85e357e401d8dcdbc6bae596d23d77be7f74da"
+    },
+    "🖨️": {
+      "source": "assets/Printer/3D/printer_3d.png",
+      "rect": [
+        1632,
+        1056,
+        96,
+        96
+      ],
+      "sha256": "1106aee713a1c4e1368f0e9d41276439d8c540193a1b1dbc413ec0ee80054ea3"
+    },
+    "🖱️": {
+      "source": "assets/Computer mouse/3D/computer_mouse_3d.png",
+      "rect": [
+        0,
+        1152,
+        96,
+        96
+      ],
+      "sha256": "f3d221fe962db9828e7d70e9df964e65a0ed550bd86c944d645cfd8ef1bb6dc3"
+    },
+    "😀": {
+      "source": "assets/Grinning face/3D/grinning_face_3d.png",
+      "rect": [
+        96,
+        1152,
+        96,
+        96
+      ],
+      "sha256": "175d214df45fe18f6f106a9a094b695689d98abe6f343295fcbd690a7ee4f0ab"
+    },
+    "😁": {
+      "source": "assets/Beaming face with smiling eyes/3D/beaming_face_with_smiling_eyes_3d.png",
+      "rect": [
+        192,
+        1152,
+        96,
+        96
+      ],
+      "sha256": "043c9fced9114368d73af7d1689cfcfc1ed42883456642770912f3d5e978dda3"
+    },
+    "😂": {
+      "source": "assets/Face with tears of joy/3D/face_with_tears_of_joy_3d.png",
+      "rect": [
+        288,
+        1152,
+        96,
+        96
+      ],
+      "sha256": "8af20fb0c64c44a8d8c8d047c1410c5e529a37c3158d496832b380198ed2e9c3"
+    },
+    "😃": {
+      "source": "assets/Grinning face with big eyes/3D/grinning_face_with_big_eyes_3d.png",
+      "rect": [
+        384,
+        1152,
+        96,
+        96
+      ],
+      "sha256": "2e1e71709927b706cf9721c8f730afa735da4073685ce365a54e4951e5133c80"
+    },
+    "😄": {
+      "source": "assets/Grinning face with smiling eyes/3D/grinning_face_with_smiling_eyes_3d.png",
+      "rect": [
+        480,
+        1152,
+        96,
+        96
+      ],
+      "sha256": "4661c4c7f43fc3aeb2e452d4be40782b1957b3ca944b2620886cd22c102dfdcf"
+    },
+    "😅": {
+      "source": "assets/Grinning face with sweat/3D/grinning_face_with_sweat_3d.png",
+      "rect": [
+        576,
+        1152,
+        96,
+        96
+      ],
+      "sha256": "dcac6dc921b77aabc16d524ed5d5067f66b6104d545c5f6396f7bbdba6d4cf2c"
+    },
+    "😆": {
+      "source": "assets/Grinning squinting face/3D/grinning_squinting_face_3d.png",
+      "rect": [
+        672,
+        1152,
+        96,
+        96
+      ],
+      "sha256": "b9a3e632bd3cceb6e3d9233989c7629dc651ea3b970f53a94665cd67b0ea556d"
+    },
+    "😇": {
+      "source": "assets/Smiling face with halo/3D/smiling_face_with_halo_3d.png",
+      "rect": [
+        768,
+        1152,
+        96,
+        96
+      ],
+      "sha256": "e8f119ffa91001b094448ae148ee6d29fbbdbf6d718b5669b670c75b61e2f03b"
+    },
+    "😉": {
+      "source": "assets/Winking face/3D/winking_face_3d.png",
+      "rect": [
+        864,
+        1152,
+        96,
+        96
+      ],
+      "sha256": "f14edbaa23f127ee6ee7c4a17b35969405a3c441b3f79c3356cc6406c1bf9ae4"
+    },
+    "😊": {
+      "source": "assets/Smiling face with smiling eyes/3D/smiling_face_with_smiling_eyes_3d.png",
+      "rect": [
+        960,
+        1152,
+        96,
+        96
+      ],
+      "sha256": "73dce77bd423b2531809763025d20faca40d2391fd12dc1fc88a986872d8214a"
+    },
+    "😋": {
+      "source": "assets/Face savoring food/3D/face_savoring_food_3d.png",
+      "rect": [
+        1056,
+        1152,
+        96,
+        96
+      ],
+      "sha256": "5e058b31cb8e7260d4a95fb1156a17ca11ce1a198524b4b33f162cbe0866c0c6"
+    },
+    "😍": {
+      "source": "assets/Smiling face with heart-eyes/3D/smiling_face_with_heart-eyes_3d.png",
+      "rect": [
+        1152,
+        1152,
+        96,
+        96
+      ],
+      "sha256": "2b5ab00dd73673faa86463eac8787b7fc366935c4d82a54451df33443190b9cc"
+    },
+    "😎": {
+      "source": "assets/Smiling face with sunglasses/3D/smiling_face_with_sunglasses_3d.png",
+      "rect": [
+        1248,
+        1152,
+        96,
+        96
+      ],
+      "sha256": "e98cb43a7a531289c82eb57441eb20cd88cb53b895c212d8e3abf05dd2647da1"
+    },
+    "😏": {
+      "source": "assets/Smirking face/3D/smirking_face_3d.png",
+      "rect": [
+        1344,
+        1152,
+        96,
+        96
+      ],
+      "sha256": "bf047787b8a7984d1def106ff6fc92b9178fe32b8c2c2b775daec9bae56165b6"
+    },
+    "😐": {
+      "source": "assets/Neutral face/3D/neutral_face_3d.png",
+      "rect": [
+        1440,
+        1152,
+        96,
+        96
+      ],
+      "sha256": "94e84241cbbf2a5fcceda4c32b0e5a02ea537453791b2bfdadfb99e6891baf9b"
+    },
+    "😑": {
+      "source": "assets/Expressionless face/3D/expressionless_face_3d.png",
+      "rect": [
+        1536,
+        1152,
+        96,
+        96
+      ],
+      "sha256": "6e7bb93a79ad236ff2b79bc8d2b0f2b0e8b0ef4ac04d134cb09d79233c2c213c"
+    },
+    "😔": {
+      "source": "assets/Pensive face/3D/pensive_face_3d.png",
+      "rect": [
+        1632,
+        1152,
+        96,
+        96
+      ],
+      "sha256": "61431f47c41035697aa8241c6c8e2d49fd618a9c1857446aa96d4e85c8633c16"
+    },
+    "😗": {
+      "source": "assets/Kissing face/3D/kissing_face_3d.png",
+      "rect": [
+        0,
+        1248,
+        96,
+        96
+      ],
+      "sha256": "eb1fdf9b01b484262c279791370d901bbc541b156d7ebf196c2c2a454f9c78a0"
+    },
+    "😘": {
+      "source": "assets/Face blowing a kiss/3D/face_blowing_a_kiss_3d.png",
+      "rect": [
+        96,
+        1248,
+        96,
+        96
+      ],
+      "sha256": "5a993350588f243ae13c011b5cb8cc4a5f497d2cc213adfefc5ded40196afe10"
+    },
+    "😚": {
+      "source": "assets/Kissing face with closed eyes/3D/kissing_face_with_closed_eyes_3d.png",
+      "rect": [
+        192,
+        1248,
+        96,
+        96
+      ],
+      "sha256": "5f876ff35bb1899236d33f725e46dab0ce013597c609764bf0ddff1300a92439"
+    },
+    "😛": {
+      "source": "assets/Face with tongue/3D/face_with_tongue_3d.png",
+      "rect": [
+        288,
+        1248,
+        96,
+        96
+      ],
+      "sha256": "606fe49cf6dd67f01e602f4553eda41055e2705b491f9cc4ef3544b6714b595d"
+    },
+    "😜": {
+      "source": "assets/Winking face with tongue/3D/winking_face_with_tongue_3d.png",
+      "rect": [
+        384,
+        1248,
+        96,
+        96
+      ],
+      "sha256": "d89d3542df5bf0c60300a6ebe88dd050278f9eec1c5cefd447ba7766e7f346fa"
+    },
+    "😝": {
+      "source": "assets/Squinting face with tongue/3D/squinting_face_with_tongue_3d.png",
+      "rect": [
+        480,
+        1248,
+        96,
+        96
+      ],
+      "sha256": "e3185f2b4cbcc8f553618c037417c42bdc4c397a7c2372d3379623ca4ad113ff"
+    },
+    "😡": {
+      "source": "assets/Pouting face/3D/pouting_face_3d.png",
+      "rect": [
+        576,
+        1248,
+        96,
+        96
+      ],
+      "sha256": "053597c33ff5340a6971eaee06acfde543820375ca77652cc1fff3461f795c06"
+    },
+    "😢": {
+      "source": "assets/Crying face/3D/crying_face_3d.png",
+      "rect": [
+        672,
+        1248,
+        96,
+        96
+      ],
+      "sha256": "9fb63e831445543e063c675ea3d428feedfe4c66a6630ae0f9223c6f9b17653f"
+    },
+    "😤": {
+      "source": "assets/Face with steam from nose/3D/face_with_steam_from_nose_3d.png",
+      "rect": [
+        768,
+        1248,
+        96,
+        96
+      ],
+      "sha256": "7d451ed5cff4c3c323e4a46e132b1dba39727478a48f621d74282d49d6b9841d"
+    },
+    "😨": {
+      "source": "assets/Fearful face/3D/fearful_face_3d.png",
+      "rect": [
+        864,
+        1248,
+        96,
+        96
+      ],
+      "sha256": "e43d899dc37816bb0f130c5b26d0f927a1d612fda6f1da3a3457027c0f000346"
+    },
+    "😭": {
+      "source": "assets/Loudly crying face/3D/loudly_crying_face_3d.png",
+      "rect": [
+        960,
+        1248,
+        96,
+        96
+      ],
+      "sha256": "9e7b740110d12731e7416c8958b88bfadd75e0e7121ab0245e581e8f70491e02"
+    },
+    "😰": {
+      "source": "assets/Anxious face with sweat/3D/anxious_face_with_sweat_3d.png",
+      "rect": [
+        1056,
+        1248,
+        96,
+        96
+      ],
+      "sha256": "89fb24fcf00ec4da643912e0fe1fe4168decbdc599a8460c405984e7baf336de"
+    },
+    "😱": {
+      "source": "assets/Face screaming in fear/3D/face_screaming_in_fear_3d.png",
+      "rect": [
+        1152,
+        1248,
+        96,
+        96
+      ],
+      "sha256": "fe82efcca47346ff85d85b6e947f9c70dcb9e8ba463b1900053b23f1faf37789"
+    },
+    "😳": {
+      "source": "assets/Flushed face/3D/flushed_face_3d.png",
+      "rect": [
+        1248,
+        1248,
+        96,
+        96
+      ],
+      "sha256": "6058b2f5d07f7e3bfb569cbfc0d156b059bd672b53d467ca66ba3d64f81c5a9e"
+    },
+    "😴": {
+      "source": "assets/Sleeping face/3D/sleeping_face_3d.png",
+      "rect": [
+        1344,
+        1248,
+        96,
+        96
+      ],
+      "sha256": "c7d1cd5d04ae7214b6ae92b9802b6c860729c755da0020ccec22c7c8171f18fa"
+    },
+    "😶": {
+      "source": "assets/Face without mouth/3D/face_without_mouth_3d.png",
+      "rect": [
+        1440,
+        1248,
+        96,
+        96
+      ],
+      "sha256": "8f5afd9e68f1409d241fdfe14d880f5e630030f8a95df8bf7fb71d3082030db1"
+    },
+    "😷": {
+      "source": "assets/Face with medical mask/3D/face_with_medical_mask_3d.png",
+      "rect": [
+        1536,
+        1248,
+        96,
+        96
+      ],
+      "sha256": "eb7eb9e877dbaf7f530bce6c9eeb0a03c028127cbba0cf98b7b3944e1f97d5b2"
+    },
+    "🙂": {
+      "source": "assets/Slightly smiling face/3D/slightly_smiling_face_3d.png",
+      "rect": [
+        1632,
+        1248,
+        96,
+        96
+      ],
+      "sha256": "6d7afa319ea9acf5d260ef019434ee37c6333fd20dcfa7a0fef4bb573f84ec1a"
+    },
+    "🙃": {
+      "source": "assets/Upside-down face/3D/upside-down_face_3d.png",
+      "rect": [
+        0,
+        1344,
+        96,
+        96
+      ],
+      "sha256": "de4e2d827973cc3c0288daa26559389847a3cf3a1b2597be85f40e7056aeea42"
+    },
+    "🙄": {
+      "source": "assets/Face with rolling eyes/3D/face_with_rolling_eyes_3d.png",
+      "rect": [
+        96,
+        1344,
+        96,
+        96
+      ],
+      "sha256": "2c1d7babfd5b788a90d960bf3690c39fcdc9cad37b0c7cad6c4b5d6d1b79d8c4"
+    },
+    "🙌": {
+      "source": "assets/Raising hands/Default/3D/raising_hands_3d_default.png",
+      "rect": [
+        192,
+        1344,
+        96,
+        96
+      ],
+      "sha256": "e645fbc6c7e174cb74ce168e4ad7d360d3aecc56bbadabbcb51a6d80c9375992"
+    },
+    "🙏": {
+      "source": "assets/Folded hands/Default/3D/folded_hands_3d_default.png",
+      "rect": [
+        288,
+        1344,
+        96,
+        96
+      ],
+      "sha256": "69090ea19b7741e691f878fe3f1649a8d18f42fc59e1912ea799bf4e35045039"
+    },
+    "🚀": {
+      "source": "assets/Rocket/3D/rocket_3d.png",
+      "rect": [
+        384,
+        1344,
+        96,
+        96
+      ],
+      "sha256": "4636925a1dfc76a45dc83c08b983699d39143a0978f794a4e2dfb6cbffdcd7ab"
+    },
+    "🚁": {
+      "source": "assets/Helicopter/3D/helicopter_3d.png",
+      "rect": [
+        480,
+        1344,
+        96,
+        96
+      ],
+      "sha256": "0899940cc72b6833a8bbfa0ffafd1d0590f40cafa29f7398885f3717bab4f438"
+    },
+    "🚆": {
+      "source": "assets/Train/3D/train_3d.png",
+      "rect": [
+        576,
+        1344,
+        96,
+        96
+      ],
+      "sha256": "26a6eeb706ae0ebeb7026b65f9df22a24321ea408e8a40fd10e28d411fdd91a3"
+    },
+    "🚇": {
+      "source": "assets/Metro/3D/metro_3d.png",
+      "rect": [
+        672,
+        1344,
+        96,
+        96
+      ],
+      "sha256": "a886509a8344ca2f74d05849c081873c7bc6e1f4de47b02dcdd7d5345a0a83cb"
+    },
+    "🚌": {
+      "source": "assets/Bus/3D/bus_3d.png",
+      "rect": [
+        768,
+        1344,
+        96,
+        96
+      ],
+      "sha256": "d34d9d19e0d9f2751f464905561a29e6c0031fb43f24b3af5ed8d56586a6ed5d"
+    },
+    "🚎": {
+      "source": "assets/Trolleybus/3D/trolleybus_3d.png",
+      "rect": [
+        864,
+        1344,
+        96,
+        96
+      ],
+      "sha256": "5438b6ab21316e7026323b8156ef19c33ba11a7c7ddff1dceb5a9d7ab24ed727"
+    },
+    "🚑": {
+      "source": "assets/Ambulance/3D/ambulance_3d.png",
+      "rect": [
+        960,
+        1344,
+        96,
+        96
+      ],
+      "sha256": "8709daea147cbd1a20c2fe743b47372b3fd5190227732ad07750f0c70b4aa3b8"
+    },
+    "🚒": {
+      "source": "assets/Fire engine/3D/fire_engine_3d.png",
+      "rect": [
+        1056,
+        1344,
+        96,
+        96
+      ],
+      "sha256": "23b4f5d37b3af3b22573c884bd9a0142b1ae1b38c3d75b7b74e02cd282b94a58"
+    },
+    "🚓": {
+      "source": "assets/Police car/3D/police_car_3d.png",
+      "rect": [
+        1152,
+        1344,
+        96,
+        96
+      ],
+      "sha256": "709f851b70776b9be6667a236bb79fb0c68da9871cb5429aee6ce00f2d439911"
+    },
+    "🚕": {
+      "source": "assets/Taxi/3D/taxi_3d.png",
+      "rect": [
+        1248,
+        1344,
+        96,
+        96
+      ],
+      "sha256": "25f830e2bb1967f9560de8d313f69b5c24acd2ebad13f801a39fac1128266c02"
+    },
+    "🚗": {
+      "source": "assets/Automobile/3D/automobile_3d.png",
+      "rect": [
+        1344,
+        1344,
+        96,
+        96
+      ],
+      "sha256": "0fabb870cfe90fb7ba7cebfa689a0e62012ff5658fd6cab05898573d9d268b73"
+    },
+    "🚚": {
+      "source": "assets/Delivery truck/3D/delivery_truck_3d.png",
+      "rect": [
+        1440,
+        1344,
+        96,
+        96
+      ],
+      "sha256": "98c0b6e596c7182890fe72bce725f3d9291040dd262b562a514307c5d1aec94e"
+    },
+    "🚢": {
+      "source": "assets/Ship/3D/ship_3d.png",
+      "rect": [
+        1536,
+        1344,
+        96,
+        96
+      ],
+      "sha256": "efa326a1a8be1ff81010877213bb81fbc953b5af58b78719960387b25a5dcbe4"
+    },
+    "🚫": {
+      "source": "assets/Prohibited/3D/prohibited_3d.png",
+      "rect": [
+        1632,
+        1344,
+        96,
+        96
+      ],
+      "sha256": "20d8e0eba08431ab2df0cf16b20780cf0edbfe54043890b0e4c5d5412af3af2e"
+    },
+    "🚲": {
+      "source": "assets/Bicycle/3D/bicycle_3d.png",
+      "rect": [
+        0,
+        1440,
+        96,
+        96
+      ],
+      "sha256": "69f1b75015c8cbdff5fee66ec656e66697657bd56e63f05e0f2e7420cb38d1f7"
+    },
+    "🚴": {
+      "source": "assets/Person biking/Default/3D/person_biking_3d_default.png",
+      "rect": [
+        96,
+        1440,
+        96,
+        96
+      ],
+      "sha256": "1533ac7a513cfd0b001a0b6753072130579b5c4bef003e9b4e04e199763cfc16"
+    },
+    "🛒": {
+      "source": "assets/Shopping cart/3D/shopping_cart_3d.png",
+      "rect": [
+        192,
+        1440,
+        96,
+        96
+      ],
+      "sha256": "d91cf9705bc1dd6de0bb975d20ca48322082c982f9473cf206cf99675bd416e1"
+    },
+    "🛠️": {
+      "source": "assets/Hammer and wrench/3D/hammer_and_wrench_3d.png",
+      "rect": [
+        288,
+        1440,
+        96,
+        96
+      ],
+      "sha256": "573a9abccd004b5ef5fbf513f720cc48e835c52e01563d2064b9480bb0e6ee90"
+    },
+    "🛵": {
+      "source": "assets/Motor scooter/3D/motor_scooter_3d.png",
+      "rect": [
+        384,
+        1440,
+        96,
+        96
+      ],
+      "sha256": "9016e69ab73e264a4583f0f701186f890d6cb997fdd638c1ff5d8dc5a37a8986"
+    },
+    "🟠": {
+      "source": "assets/Orange circle/3D/orange_circle_3d.png",
+      "rect": [
+        480,
+        1440,
+        96,
+        96
+      ],
+      "sha256": "dc6d783130ec404a760fa69c735c55fb882252eb7e219cdf160a9ec7bd4dc3df"
+    },
+    "🟡": {
+      "source": "assets/Yellow circle/3D/yellow_circle_3d.png",
+      "rect": [
+        576,
+        1440,
+        96,
+        96
+      ],
+      "sha256": "5ff1a237a0e38abdfbf302c22ef1e1367dd4f9560345cfe341ec28c66af798d3"
+    },
+    "🟢": {
+      "source": "assets/Green circle/3D/green_circle_3d.png",
+      "rect": [
+        672,
+        1440,
+        96,
+        96
+      ],
+      "sha256": "e0001101fcba5f3b1cc1b983fd59fcda4cf61ca2277c2ef5be77f39e74c02108"
+    },
+    "🟣": {
+      "source": "assets/Purple circle/3D/purple_circle_3d.png",
+      "rect": [
+        768,
+        1440,
+        96,
+        96
+      ],
+      "sha256": "7b2cfaa91d365a2080c8ccd85ae4d2afeca7ea0c2dc9f8d264f857fab1735987"
+    },
+    "🟤": {
+      "source": "assets/Brown circle/3D/brown_circle_3d.png",
+      "rect": [
+        864,
+        1440,
+        96,
+        96
+      ],
+      "sha256": "25d33f22a19994572e34d9e75e5ecd7e077aef524a4815893cd8023eac75fc60"
+    },
+    "🤌": {
+      "source": "assets/Pinched fingers/Default/3D/pinched_fingers_3d_default.png",
+      "rect": [
+        960,
+        1440,
+        96,
+        96
+      ],
+      "sha256": "654785fb6e5c26df24ba2157f6608c1498e47592976ed17612afb97c814ccfa2"
+    },
+    "🤍": {
+      "source": "assets/White heart/3D/white_heart_3d.png",
+      "rect": [
+        1056,
+        1440,
+        96,
+        96
+      ],
+      "sha256": "653fc282b8cec750a170a75b32cb413d9c4fb8f90ed32b9360299f8a30a45a77"
+    },
+    "🤏": {
+      "source": "assets/Pinching hand/Default/3D/pinching_hand_3d_default.png",
+      "rect": [
+        1152,
+        1440,
+        96,
+        96
+      ],
+      "sha256": "9f0c3a8994ca20bf0871bc86cf58611ff75773e79166dea185732f8586b3b258"
+    },
+    "🤐": {
+      "source": "assets/Zipper-mouth face/3D/zipper-mouth_face_3d.png",
+      "rect": [
+        1248,
+        1440,
+        96,
+        96
+      ],
+      "sha256": "6323ff0a73399f14f4f21271d8254ec53abe53e237a771350d574978747ceca9"
+    },
+    "🤑": {
+      "source": "assets/Money-mouth face/3D/money-mouth_face_3d.png",
+      "rect": [
+        1344,
+        1440,
+        96,
+        96
+      ],
+      "sha256": "4b505c1e10e3fbdafa92ff787a8c3c6732dc66861483c52525cd00facfff179a"
+    },
+    "🤒": {
+      "source": "assets/Face with thermometer/3D/face_with_thermometer_3d.png",
+      "rect": [
+        1440,
+        1440,
+        96,
+        96
+      ],
+      "sha256": "d3277e8900f877a16725314505f380075eb8588e073c410dd487d26491a38322"
+    },
+    "🤓": {
+      "source": "assets/Nerd face/3D/nerd_face_3d.png",
+      "rect": [
+        1536,
+        1440,
+        96,
+        96
+      ],
+      "sha256": "315caf53dc0f11091494c8cceacda4ef316ae2eb28e02d2cf95a7bb34bad806e"
+    },
+    "🤔": {
+      "source": "assets/Thinking face/3D/thinking_face_3d.png",
+      "rect": [
+        1632,
+        1440,
+        96,
+        96
+      ],
+      "sha256": "cd29da5c3886e1e25726d3cf6ff79faa2f0d631b1c0873b115be287d358fc4be"
+    },
+    "🤖": {
+      "source": "assets/Robot/3D/robot_3d.png",
+      "rect": [
+        0,
+        1536,
+        96,
+        96
+      ],
+      "sha256": "3f9b5a00b53c8bddda36b6a3f68d00718d9d7d8c04f986a3248e55ae93a7961b"
+    },
+    "🤗": {
+      "source": "assets/Hugging face/3D/hugging_face_3d.png",
+      "rect": [
+        96,
+        1536,
+        96,
+        96
+      ],
+      "sha256": "2f70a465496f45c146253fc933202a38f4f8e1af8b2a0e2555832456c03f1b2e"
+    },
+    "🤘": {
+      "source": "assets/Sign of the horns/Default/3D/sign_of_the_horns_3d_default.png",
+      "rect": [
+        192,
+        1536,
+        96,
+        96
+      ],
+      "sha256": "f8837b50f27a4d9a5f0a0f5fc192d60fa257ddd35f14da8bcabaa85749ac2998"
+    },
+    "🤙": {
+      "source": "assets/Call me hand/Default/3D/call_me_hand_3d_default.png",
+      "rect": [
+        288,
+        1536,
+        96,
+        96
+      ],
+      "sha256": "e282b9f9b016cf12b9129ef0b8705c1fe854f56faeba906b32534019377f9902"
+    },
+    "🤚": {
+      "source": "assets/Raised back of hand/Default/3D/raised_back_of_hand_3d_default.png",
+      "rect": [
+        384,
+        1536,
+        96,
+        96
+      ],
+      "sha256": "ea10c489e5b91ace58309d52e63051b572f2af84d2cc1c1b6a5debef0e2744ee"
+    },
+    "🤝": {
+      "source": "assets/Handshake/3D/handshake_3d.png",
+      "rect": [
+        480,
+        1536,
+        96,
+        96
+      ],
+      "sha256": "fd0c3ae54cf208f371636263f4c972b54ac929fef0455b9d15ce72c04fee0f2b"
+    },
+    "🤞": {
+      "source": "assets/Crossed fingers/Default/3D/crossed_fingers_3d_default.png",
+      "rect": [
+        576,
+        1536,
+        96,
+        96
+      ],
+      "sha256": "cdbf02a0b55bf69c322578a35f55530f3e0cebec71bd274c53870d1e94bb3366"
+    },
+    "🤟": {
+      "source": "assets/Love-you gesture/Default/3D/love-you_gesture_3d_default.png",
+      "rect": [
+        672,
+        1536,
+        96,
+        96
+      ],
+      "sha256": "0928e36d745c4ab87f7309f6738da444ced2a8bb33069653f053f8b57b167144"
+    },
+    "🤠": {
+      "source": "assets/Cowboy hat face/3D/cowboy_hat_face_3d.png",
+      "rect": [
+        768,
+        1536,
+        96,
+        96
+      ],
+      "sha256": "9ef48091f71a81a04fe648cac438be0b0ae3f832879a9dd3451e0aaeb2b4732b"
+    },
+    "🤢": {
+      "source": "assets/Nauseated face/3D/nauseated_face_3d.png",
+      "rect": [
+        864,
+        1536,
+        96,
+        96
+      ],
+      "sha256": "de648c7234570d83bc162b3e63c012f5908f05104e9a5d7e46aad27fe7b47232"
+    },
+    "🤣": {
+      "source": "assets/Rolling on the floor laughing/3D/rolling_on_the_floor_laughing_3d.png",
+      "rect": [
+        960,
+        1536,
+        96,
+        96
+      ],
+      "sha256": "22ebfd950c4df297e784babe1e31bc1713144615f78cb0262c8dc2ce0da90ca0"
+    },
+    "🤩": {
+      "source": "assets/Star-struck/3D/star-struck_3d.png",
+      "rect": [
+        1056,
+        1536,
+        96,
+        96
+      ],
+      "sha256": "89a14e242892cbe067095b75eb51cd55692841bceb384a45a90f8f3f8b9b2e9b"
+    },
+    "🤪": {
+      "source": "assets/Zany face/3D/zany_face_3d.png",
+      "rect": [
+        1152,
+        1536,
+        96,
+        96
+      ],
+      "sha256": "3d7805655cb653c12dc4662a58dc447fadae80b29ffc2f5a28e3dbabba2f81da"
+    },
+    "🤫": {
+      "source": "assets/Shushing face/3D/shushing_face_3d.png",
+      "rect": [
+        1248,
+        1536,
+        96,
+        96
+      ],
+      "sha256": "0045661e6269e01b454cf9c54aea5c81e00891b76f36932046dc2a77502fe95b"
+    },
+    "🤬": {
+      "source": "assets/Face with symbols on mouth/3D/face_with_symbols_on_mouth_3d.png",
+      "rect": [
+        1344,
+        1536,
+        96,
+        96
+      ],
+      "sha256": "94c3b5fe459640d3628667b607cb2b2a0d7df032da7322e3d0595a6b697cece7"
+    },
+    "🤭": {
+      "source": "assets/Face with hand over mouth/3D/face_with_hand_over_mouth_3d.png",
+      "rect": [
+        1440,
+        1536,
+        96,
+        96
+      ],
+      "sha256": "c87c0277c7b0ade675b69a5c90482041d8b5af42bbccd19bf0b88e8ee0865086"
+    },
+    "🤮": {
+      "source": "assets/Face vomiting/3D/face_vomiting_3d.png",
+      "rect": [
+        1536,
+        1536,
+        96,
+        96
+      ],
+      "sha256": "2b0d77d6614cd611dcc614da1f6e919996a796482d3cf9aa8a5c8577a332612c"
+    },
+    "🤲": {
+      "source": "assets/Palms up together/Default/3D/palms_up_together_3d_default.png",
+      "rect": [
+        1632,
+        1536,
+        96,
+        96
+      ],
+      "sha256": "9675d4c569d82cef18469b313bf266a0250c5911365153ff11ac0f880c61a0c1"
+    },
+    "🥁": {
+      "source": "assets/Drum/3D/drum_3d.png",
+      "rect": [
+        0,
+        1632,
+        96,
+        96
+      ],
+      "sha256": "490d2d2c795508b7059a73bf308dce18018155527f95ed2643546c60e6664549"
+    },
+    "🥇": {
+      "source": "assets/1st place medal/3D/1st_place_medal_3d.png",
+      "rect": [
+        96,
+        1632,
+        96,
+        96
+      ],
+      "sha256": "3f4dc5626b0e9f62585d317572e9c11d8ec64856c3e82f03c16c40be3a31dae5"
+    },
+    "🥊": {
+      "source": "assets/Boxing glove/3D/boxing_glove_3d.png",
+      "rect": [
+        192,
+        1632,
+        96,
+        96
+      ],
+      "sha256": "24efa41a15f790d0ce19253bfebd0ad2145f9d5f49328cf0da4844b4eea35830"
+    },
+    "🥑": {
+      "source": "assets/Avocado/3D/avocado_3d.png",
+      "rect": [
+        288,
+        1632,
+        96,
+        96
+      ],
+      "sha256": "526f16895dee591111aa502e6a07e3a8cd6262b4189be7f670c82a76e702f4d2"
+    },
+    "🥕": {
+      "source": "assets/Carrot/3D/carrot_3d.png",
+      "rect": [
+        384,
+        1632,
+        96,
+        96
+      ],
+      "sha256": "add5179377b74ccfb6dc4bcf603aeb80fd8de23e1411bb63ce72db1286cea6a8"
+    },
+    "🥚": {
+      "source": "assets/Egg/3D/egg_3d.png",
+      "rect": [
+        480,
+        1632,
+        96,
+        96
+      ],
+      "sha256": "efc307f317a1b758eb43152e1354fb407b3cb587f849db15c9ac0f9fcb025400"
+    },
+    "🥝": {
+      "source": "assets/Kiwi fruit/3D/kiwi_fruit_3d.png",
+      "rect": [
+        576,
+        1632,
+        96,
+        96
+      ],
+      "sha256": "e9aa7668a2839b866ee74b7c37a3987121827348f2e47adbd52ded0cf66febc1"
+    },
+    "🥤": {
+      "source": "assets/Cup with straw/3D/cup_with_straw_3d.png",
+      "rect": [
+        672,
+        1632,
+        96,
+        96
+      ],
+      "sha256": "7005731a952d0043c604fea15f3286c704e2eef599530e910ef125f9f3ebcf0f"
+    },
+    "🥦": {
+      "source": "assets/Broccoli/3D/broccoli_3d.png",
+      "rect": [
+        768,
+        1632,
+        96,
+        96
+      ],
+      "sha256": "692ef3447f34a427fee05f69581c75ed212ad702127d2e838ad63589d5151ad4"
+    },
+    "🥰": {
+      "source": "assets/Smiling face with hearts/3D/smiling_face_with_hearts_3d.png",
+      "rect": [
+        864,
+        1632,
+        96,
+        96
+      ],
+      "sha256": "2b8c4abe57a81fe3805ec0c271f855984e9f4a7a1d10053050a4db7b6def778e"
+    },
+    "🥱": {
+      "source": "assets/Yawning face/3D/yawning_face_3d.png",
+      "rect": [
+        960,
+        1632,
+        96,
+        96
+      ],
+      "sha256": "3a6f9f61b703d0a21c67eeabde6771fd8916ed18e3c49f96942675b76e566a7a"
+    },
+    "🥳": {
+      "source": "assets/Partying face/3D/partying_face_3d.png",
+      "rect": [
+        1056,
+        1632,
+        96,
+        96
+      ],
+      "sha256": "e01bd94de6b85468f6e59da55d380985c363f6bc300b412d18290f143f7e44a9"
+    },
+    "🥵": {
+      "source": "assets/Hot face/3D/hot_face_3d.png",
+      "rect": [
+        1152,
+        1632,
+        96,
+        96
+      ],
+      "sha256": "6266103d439cfbe33857199b407d16b108bd68b452cb594f477167b7ff9a7059"
+    },
+    "🥶": {
+      "source": "assets/Cold face/3D/cold_face_3d.png",
+      "rect": [
+        1248,
+        1632,
+        96,
+        96
+      ],
+      "sha256": "0196625191a24519055a6eec8526b4c6b215197a93dc477a1f51657fa5486bad"
+    },
+    "🥺": {
+      "source": "assets/Pleading face/3D/pleading_face_3d.png",
+      "rect": [
+        1344,
+        1632,
+        96,
+        96
+      ],
+      "sha256": "7dfc89c51118f0adecf886063b5eafce140a613075394ebe22ed9dd2bd9e9c4f"
+    },
+    "🦁": {
+      "source": "assets/Lion/3D/lion_3d.png",
+      "rect": [
+        1440,
+        1632,
+        96,
+        96
+      ],
+      "sha256": "1f1cf0d0dd94915f3c9f10c3415c5efbd4b8725adfa44a5d564098547076b34b"
+    },
+    "🦈": {
+      "source": "assets/Shark/3D/shark_3d.png",
+      "rect": [
+        1536,
+        1632,
+        96,
+        96
+      ],
+      "sha256": "a60ab98d8fe5ee118fab6a3cdad32efbb6613aae35aa758604f901e9e5d1cac2"
+    },
+    "🦉": {
+      "source": "assets/Owl/3D/owl_3d.png",
+      "rect": [
+        1632,
+        1632,
+        96,
+        96
+      ],
+      "sha256": "7dfcdcdebd599787719d98f3057b0822522678e6752369ca3498a780ca7ba443"
+    },
+    "🦊": {
+      "source": "assets/Fox/3D/fox_3d.png",
+      "rect": [
+        0,
+        1728,
+        96,
+        96
+      ],
+      "sha256": "1a3bc43212405fb03d8d2bcc709c7f39c99d4a19af06d406cae4724e5fe2b0ad"
+    },
+    "🦋": {
+      "source": "assets/Butterfly/3D/butterfly_3d.png",
+      "rect": [
+        96,
+        1728,
+        96,
+        96
+      ],
+      "sha256": "2ee52f94c6383dafdd29f471d04c17141563d7fff790d33e16781a751f72b397"
+    },
+    "🦒": {
+      "source": "assets/Giraffe/3D/giraffe_3d.png",
+      "rect": [
+        192,
+        1728,
+        96,
+        96
+      ],
+      "sha256": "bfe23a59e8b7f25b691403763f972f3da030edf199cb0665b21e01d1d1f6079c"
+    },
+    "🧀": {
+      "source": "assets/Cheese wedge/3D/cheese_wedge_3d.png",
+      "rect": [
+        288,
+        1728,
+        96,
+        96
+      ],
+      "sha256": "66966a3b1f27f802260988cde7ab2419525300e9747bcb92657c3f544e0568d7"
+    },
+    "🧠": {
+      "source": "assets/Brain/3D/brain_3d.png",
+      "rect": [
+        384,
+        1728,
+        96,
+        96
+      ],
+      "sha256": "37906c3f0b0495215df114d72565a389496dc4c5b2af02398abf9dc7dc5a2a43"
+    },
+    "🧡": {
+      "source": "assets/Orange heart/3D/orange_heart_3d.png",
+      "rect": [
+        480,
+        1728,
+        96,
+        96
+      ],
+      "sha256": "623c508a92d4651817462f6ae0374c4ec62c2a88779b9306a95d80883b5618da"
+    },
+    "🧪": {
+      "source": "assets/Test tube/3D/test_tube_3d.png",
+      "rect": [
+        576,
+        1728,
+        96,
+        96
+      ],
+      "sha256": "60dc2ba1c1dd275624dc27a1a63548af6264c4288733b838af46e1ee31233668"
+    },
+    "🧾": {
+      "source": "assets/Receipt/3D/receipt_3d.png",
+      "rect": [
+        672,
+        1728,
+        96,
+        96
+      ],
+      "sha256": "3a0d1b4ab48e5f181211f55d954de2e915db0a9749258c75cae8cff92f1983ba"
+    },
+    "🫡": {
+      "source": "assets/Saluting face/3D/saluting_face_3d.png",
+      "rect": [
+        768,
+        1728,
+        96,
+        96
+      ],
+      "sha256": "3a18f67e9cb6edaa18e9331451f9b93527aca574c52f9e6d896cce691e737b5a"
+    },
+    "🫢": {
+      "source": "assets/Face with open eyes and hand over mouth/3D/face_with_open_eyes_and_hand_over_mouth_3d.png",
+      "rect": [
+        864,
+        1728,
+        96,
+        96
+      ],
+      "sha256": "85d30dc2e232f14ec9fc09ca8d8c1639251ee40e1f61e9f9c3fc5319777f2b25"
+    },
+    "🫰": {
+      "source": "assets/Hand with index finger and thumb crossed/Default/3D/hand_with_index_finger_and_thumb_crossed_3d_default.png",
+      "rect": [
+        960,
+        1728,
+        96,
+        96
+      ],
+      "sha256": "c4d2388063ccb89d611cd6698292ea191a48b1a1296789d3c41c35b61773d1af"
+    },
+    "🫶": {
+      "source": "assets/Heart hands/Default/3D/heart_hands_3d_default.png",
+      "rect": [
+        1056,
+        1728,
+        96,
+        96
+      ],
+      "sha256": "6bba515957b6068cff97b8ff99064694d4afb340b38795d782757373de868e22"
+    }
+  },
+  "atlas_sha256": "94240902f8f8cf00747124b93a20c944cc7a5d901c690ec3839320e31525870b"
+}

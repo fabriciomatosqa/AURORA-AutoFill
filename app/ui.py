@@ -12,7 +12,7 @@ from PySide6.QtCore import QObject, Qt, QMimeData, QTimer, Signal, QPoint, QRect
 from PySide6.QtGui import (QAction, QColor, QFont, QFontMetricsF, QIcon, QKeySequence, QPalette,
                            QShortcut, QTextCharFormat, QTextCursor, QPainter, QPainterPath, QLinearGradient, QPen, QPixmap)
 from PySide6.QtWidgets import (
-    QApplication, QAbstractItemView, QComboBox, QFileDialog, QGraphicsDropShadowEffect,
+    QApplication, QAbstractItemView, QComboBox, QDialog, QFileDialog, QGraphicsDropShadowEffect,
     QFrame, QHBoxLayout, QInputDialog, QLabel, QLineEdit, QListView, QListWidget,
     QListWidgetItem, QMainWindow, QMenu, QMessageBox, QPlainTextEdit, QPushButton,
     QScrollArea, QSizePolicy, QSplitter, QStackedWidget, QSystemTrayIcon,
@@ -38,6 +38,8 @@ from .version import APP_VERSION
 from .icons import apply_icon
 from .font_catalog import AuroraFontCombo, AuroraFontSizeSpinBox
 from .paragraph_panel import ParagraphPanel
+from .ribbon import RibbonFooter
+from .font_dialog import FontDialog
 from .color_dialog import AuroraColorDialog
 from .color_button import AuroraColorButton
 from .branding import brand_webp_bytes
@@ -107,12 +109,12 @@ QFrame#fontToolbar QToolButton#fontTool:hover {
   border-color: #79ead8; background: #28546a;
 }
 QFrame#fontToolbar QToolButton#fontTool[paragraphMenu="true"]::menu-button {
-  width: 10px; border-left: 1px solid #365a71;
+  width: 13px; border-left: 1px solid #365a71;
 }
 QFrame#fontToolbar QToolButton#fontTool[paragraphMenu="true"]::menu-arrow {
   image: none; width: 0px; height: 0px;
 }
-QLabel#paragraphTitle { color: #91e1d6; font-size: 11px; font-weight: 600; }
+QLabel#ribbonGroupTitle { color: #a8bfd2; font-size: 11px; font-weight: 500; }
 QFrame#fontToolbar QComboBox#fontFamily,
 QFrame#fontToolbar QSpinBox#fontSize {
   min-height: 27px; max-height: 27px; padding: 0px 5px;
@@ -914,7 +916,7 @@ class AutoFillWindow(AuroraFeaturesMixin, QMainWindow):
         toolbar_layout.setSpacing(12)
         self.font_controls = QWidget()
         self.font_controls.setAccessibleName('Fonte')
-        self.font_controls.setFixedWidth(285)
+        self.font_controls.setFixedSize(285,91)
         font_rows = QVBoxLayout(self.font_controls)
         font_rows.setContentsMargins(0, 0, 0, 0)
         font_rows.setSpacing(4)
@@ -1019,7 +1021,16 @@ class AutoFillWindow(AuroraFeaturesMixin, QMainWindow):
             button.clicked.connect(lambda _=False, amount=delta: self._step_font_size(amount))
             color_row.addWidget(button, 1)
         font_rows.addLayout(color_row)
-        toolbar_layout.addWidget(self.font_controls)
+        self.font_group = QWidget()
+        self.font_group.setFixedSize(285,115)
+        font_group_layout = QVBoxLayout(self.font_group)
+        font_group_layout.setContentsMargins(0,0,0,0)
+        font_group_layout.setSpacing(4)
+        font_group_layout.addWidget(self.font_controls)
+        self.font_footer = RibbonFooter('Fonte',self._open_font_dialog)
+        self.font_settings_button = self.font_footer.launcher
+        font_group_layout.addWidget(self.font_footer)
+        toolbar_layout.addWidget(self.font_group)
         divider = QFrame()
         divider.setObjectName("fontDivider")
         divider.setFrameShape(QFrame.VLine)
@@ -1213,6 +1224,14 @@ class AutoFillWindow(AuroraFeaturesMixin, QMainWindow):
             self.body_input.setCurrentCharFormat(clean)
         self.body_input.setFocus()
         self._autosave_edit("content")
+
+    def _open_font_dialog(self):
+        cursor = QTextCursor(self.body_input.textCursor())
+        dialog = FontDialog(cursor.charFormat(),self.body_input.currentFont(),self,
+                            sample=cursor.selectedText())
+        if dialog.exec() == QDialog.Accepted:
+            self.body_input.setTextCursor(cursor)
+            self._merge_text_format(dialog.value())
 
     def _transform_case(self, mode: str):
         cursor = self.body_input.textCursor()

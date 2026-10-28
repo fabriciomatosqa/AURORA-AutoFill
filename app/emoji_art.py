@@ -1,46 +1,35 @@
-"""Emoji colorido estável independente das fontes do sistema operacional.
-
-Os SVG Twemoji são recursos locais CC BY 4.0, listados em
-assets/emoji/ATTRIBUTION.md. Emojis inseridos continuam sendo Unicode.
-"""
-from __future__ import annotations
-
+"""Offline Microsoft Fluent 3D artwork; inserted messages remain Unicode text."""
 from functools import lru_cache
 import json
 from pathlib import Path
 
-from PySide6.QtCore import QByteArray, QRectF, Qt
-from PySide6.QtGui import QIcon, QPainter, QPixmap
-from PySide6.QtSvg import QSvgRenderer
+from PySide6.QtGui import QIcon, QPixmap
 
-_RESOURCE = Path(__file__).resolve().parents[1] / "assets" / "emoji" / "twemoji-vectors.json"
+_RESOURCE = Path(__file__).resolve().parents[1]/'assets/emoji/fluent-3d.json'
 
 
 @lru_cache(maxsize=1)
-def emoji_svgs() -> dict[str, str]:
-    """Carrega uma vez o catálogo offline, também distribuído pelo PyInstaller."""
+def emoji_artwork():
     try:
-        with _RESOURCE.open("r", encoding="utf-8") as file:
-            data = json.load(file)
-        return data["emoji"]
+        data = json.loads(_RESOURCE.read_text(encoding='utf-8'))
+        return data['emoji']
     except (OSError, ValueError, KeyError, TypeError):
         return {}
 
 
+@lru_cache(maxsize=1)
+def _atlas():
+    return QPixmap(str(_RESOURCE.with_name('fluent-3d.png')))
+
+
 @lru_cache(maxsize=512)
-def emoji_icon(emoji: str) -> QIcon:
-    """Desenha o SVG colorido em pixmap HiDPI; sem texto/tofu nos botões."""
-    vector = emoji_svgs().get(emoji)
-    if not vector:
+def emoji_icon(emoji):
+    record = emoji_artwork().get(emoji)
+    if not record or _atlas().isNull():
         return QIcon()
-    renderer = QSvgRenderer(QByteArray(vector.encode("utf-8")))
-    if not renderer.isValid():
+    rect = record.get('rect',[])
+    if len(rect)!=4:
         return QIcon()
-    pixmap = QPixmap(64, 64)
-    pixmap.fill(Qt.transparent)
-    painter = QPainter(pixmap)
-    painter.setRenderHint(QPainter.Antialiasing, True)
-    renderer.render(painter, QRectF(0, 0, 64, 64))
-    painter.end()
-    pixmap.setDevicePixelRatio(2.0)
+    pixmap = _atlas().copy(*rect)
+    pixmap.setDevicePixelRatio(3)
     return QIcon(pixmap)
