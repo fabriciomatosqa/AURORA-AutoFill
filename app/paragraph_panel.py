@@ -1,10 +1,11 @@
 """Word-style paragraph ribbon with native editing commands."""
-from PySide6.QtCore import Qt
-from PySide6.QtGui import QPainter, QPen, QTextListFormat, QTextOption
+from PySide6.QtCore import Qt, QSize
+from PySide6.QtGui import QFont, QPainter, QPen, QTextListFormat, QTextOption
 from PySide6.QtWidgets import (QDialog, QHBoxLayout, QInputDialog, QLabel, QMenu,
                                QMessageBox, QToolButton, QVBoxLayout, QWidget)
 
 from .color_dialog import AuroraColorDialog
+from .emoji_picker import EmojiPicker
 from .icons import apply_icon
 from .paragraph_dialog import ParagraphDialog, ParagraphSortDialog
 from .paragraph_editor import ParagraphEditor
@@ -88,14 +89,14 @@ class ParagraphPanel(QWidget):
         marks.setCheckable(True)
         self.buttons['marks'] = marks
         row2.addWidget(marks,1)
-        shade = self._button('paragraph-shading','Sombreamento do parágrafo',46,
+        shade = self._button('paragraph-shading','Sombreamento do parágrafo',35,
                              lambda _:self.controller.shade(self._shade_color), menu=True)
         menu = self._menu_factory(shade)
         self._action(menu,'Escolher cor…',self._choose_shading)
         self._action(menu,'Sem cor',lambda:self.controller.shade(None))
         shade.setMenu(menu)
         row3.addWidget(shade,1)
-        border = self._button('paragraph-border','Bordas do parágrafo',46,
+        border = self._button('paragraph-border','Bordas do parágrafo',35,
                               lambda _:self._border('outside'), menu=True)
         menu = self._menu_factory(border)
         for label, mode in (('Sem borda','none'),('Todas as bordas','all'),('Borda externa','outside'),
@@ -106,15 +107,28 @@ class ParagraphPanel(QWidget):
         self._action(menu,'Espessura da borda…',self._border_size)
         border.setMenu(menu)
         row3.addWidget(border,1)
-        row3.addWidget(self._button('sort-text','Classificar parágrafos',32,lambda _:self._sort()),1)
-        caption = QLabel('Parágrafo')
-        caption.setObjectName('paragraphTitle')
-        caption.setFixedWidth(75)
-        caption.setAlignment(Qt.AlignCenter)
-        row3.addWidget(caption)
-        row3.addWidget(self._button('paragraph-settings','Opções de parágrafo',23,lambda _:self.open_dialog()),1)
+        row3.addWidget(self._button('sort-text','Classificar parágrafos',28,lambda _:self._sort()),1)
+        # Ícone e rótulo ocupam UM controle: libera espaço para o seletor emoji.
+        self.paragraph_settings_button = self._button(
+            'paragraph-settings','Opções de parágrafo',92,lambda _:self.open_dialog())
+        self.paragraph_settings_button.setText('Parágrafo')
+        self.paragraph_settings_button.setToolButtonStyle(Qt.ToolButtonTextBesideIcon)
+        self.paragraph_settings_button.setIconSize(QSize(13,13))
+        row3.addWidget(self.paragraph_settings_button,1)
+        self.emoji_button = self._button(None,'Inserir emoji',31,lambda _:self.open_emoji_picker(),text='🙂')
+        # Reutiliza o QSS dos demais botões da faixa nos temas claro/escuro.
+        self.emoji_button.setObjectName('fontTool')
+        self.emoji_button.setFont(QFont('Segoe UI Emoji', 13))
+        self.emoji_button.setToolTip('Inserir emoji no texto')
+        row3.addWidget(self.emoji_button,1)
+        self.emoji_picker = None
         self.controller.updated.connect(self.sync)
         self.sync()
+
+    def open_emoji_picker(self):
+        if self.emoji_picker is None:
+            self.emoji_picker = EmojiPicker(self.editor, self.window())
+        self.emoji_picker.show_at(self.emoji_button)
 
     def _button(self, icon, label, width, callback, *, menu=False, text=None):
         button = ParagraphMenuButton() if menu else QToolButton()

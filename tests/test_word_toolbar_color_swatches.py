@@ -137,6 +137,94 @@ class WordToolbarOrderTests(unittest.TestCase):
                     app.clipboard().clear()
                     app.processEvents()
 
+    def test_emoji_picker_compacts_paragraph_row_and_preserves_selection(self):
+        from PySide6.QtGui import QTextCharFormat, QTextCursor, QFont
+        from app.paragraph_panel import ParagraphPanel
+        from app.emoji_picker import EmojiPicker, RECENT
+        from app.inline_images import AuroraImageEditor
+        from app.themes import ThemeController
+        from PySide6.QtWidgets import QApplication
+        from PySide6.QtCore import Qt
+        app = QApplication.instance() or QApplication([])
+        type(self)._app = app
+        editor = AuroraImageEditor()
+        panel = ParagraphPanel(editor)
+        theme = ThemeController('dark')
+        old_recent = list(RECENT)
+        try:
+            editor.setPlainText('Olá mundo')
+            cursor = editor.textCursor()
+            cursor.setPosition(4)
+            cursor.setPosition(9, QTextCursor.KeepAnchor)
+            fmt = QTextCharFormat()
+            fmt.setFontWeight(QFont.Bold)
+            cursor.mergeCharFormat(fmt)
+            editor.setTextCursor(cursor)
+            row = panel.layout().itemAt(2).layout()
+            self.assertEqual(row.count(), 5)
+            self.assertEqual(panel.width(), 238)
+            self.assertEqual(sum(row.itemAt(i).widget().width() for i in range(5))
+                             + 4 * row.spacing(), 237)
+            self.assertEqual(panel.paragraph_settings_button.text(), 'Parágrafo')
+            self.assertEqual(panel.emoji_button.text(), '🙂')
+            self.assertEqual(panel.emoji_button.accessibleName(), 'Inserir emoji')
+            self.assertLessEqual(panel.emoji_button.geometry().right(), panel.width())
+            for mode in ('light', 'dark'):
+                theme.set_preference(mode)
+                panel.open_emoji_picker()
+                app.processEvents()
+                self.assertIsInstance(panel.emoji_picker, EmojiPicker)
+                self.assertTrue(panel.emoji_picker.isVisible())
+                self.assertIn('😀', panel.emoji_picker.category_buttons['Carinhas'].text())
+                panel.emoji_picker.close()
+            panel.open_emoji_picker()
+            panel.emoji_picker.insert_emoji('🙂')
+            self.assertEqual(editor.toPlainText(), 'Olá 🙂')
+            self.assertIn('🙂', editor.toHtml())
+            self.assertEqual(editor.document().find('🙂').charFormat().fontWeight(), QFont.Bold)
+            self.assertEqual(RECENT[0], '🙂')
+            editor.undo()
+            self.assertEqual(editor.toPlainText(), 'Olá mundo')
+        finally:
+            RECENT[:] = old_recent
+            if panel.emoji_picker:
+                panel.emoji_picker.close()
+            theme.set_preference('dark')
+            panel.deleteLater()
+            editor.deleteLater()
+            app.processEvents()
+
+    def test_emoji_search_categories_and_keyboard_enter(self):
+        from PySide6.QtWidgets import QApplication
+        from app.emoji_picker import EmojiPicker, CATEGORIES, RECENT
+        from app.inline_images import AuroraImageEditor
+        app = QApplication.instance() or QApplication([])
+        type(self)._app = app
+        editor = AuroraImageEditor()
+        picker = EmojiPicker(editor)
+        old_recent = list(RECENT)
+        try:
+            self.assertGreaterEqual(len(CATEGORIES), 7)
+            picker.search.setText('coracao')
+            self.assertIn('❤️', picker.visible_emojis)
+            picker.search.setText('naoexisteesseemoji')
+            self.assertEqual(picker.visible_emojis, [])
+            picker.search.clear()
+            picker.set_category('Viagens')
+            self.assertIn('🚗', picker.visible_emojis)
+            self.assertNotIn('❤️', picker.visible_emojis)
+            picker.search.setText('computador')
+            self.assertIn('🖥️', picker.visible_emojis)
+            picker.insert_first()
+            self.assertEqual(editor.toPlainText(), '🖥️')
+            self.assertEqual(RECENT[0], '🖥️')
+        finally:
+            RECENT[:] = old_recent
+            picker.close()
+            picker.deleteLater()
+            editor.deleteLater()
+            app.processEvents()
+
 
 if __name__ == "__main__":
     unittest.main()
