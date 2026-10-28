@@ -109,12 +109,19 @@ class InterfaceSmokeTests(unittest.TestCase):
                         win.body_input.setPlainText('Texto antes\\n')
                         self.assertTrue(win.body_input.insert_image(screenshot))
                         win.body_input.insertPlainText('\\nTexto depois')
-                        win._prepare_copy_menu()
-                        labels = [action.text().lower() for action in
-                                  win.copy_content_menu.actions()]
-                        self.assertFalse(any('imagem única' in label for label in labels))
-                        self.assertTrue(any('copiar trecho de texto' in label for label in labels))
-                        self.assertTrue(any('copiar imagem 1' in label for label in labels))
+                        # A pré-visualização deve seguir seu título diretamente,
+                        # sem a antiga barra de cópia manual.
+                        self.assertFalse(hasattr(win, 'copy_content_button'))
+                        self.assertFalse(hasattr(win, 'copy_content_menu'))
+                        page = win.editor_scroll.widget()
+                        layout = page.layout()
+                        self.assertEqual(layout.indexOf(win.preview),
+                                         layout.indexOf(win.body_input) + 2)
+                        self.assertEqual(layout.stretch(layout.indexOf(win.preview)), 3)
+                        self.assertTrue(win.preview.isReadOnly())
+                        labels = [label.text() for label in page.findChildren(type(win.edit_heading))]
+                        self.assertNotIn('Copiar para outro aplicativo', ' '.join(labels))
+                        self.assertFalse(any('Copiar mensagem como imagem' in label for label in labels))
                         win.dirty = False
                         win.filter_folder.showPopup()
                         app.processEvents()

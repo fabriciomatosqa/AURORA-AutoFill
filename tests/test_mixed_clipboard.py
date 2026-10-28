@@ -331,25 +331,6 @@ class MixedClipboardTests(unittest.TestCase):
             self.assertEqual(engine.clipboard.text(), "original")
             self.assertEqual(engine.store.snippets()[0].rich_content, source.toHtml())
 
-    def test_copy_menu_copies_selected_image_and_text_without_images(self):
-        from app.ui import AutoFillWindow
-        editor = self.mixed()
-        messages = SimpleNamespace(showMessage=lambda *args: None)
-        host = SimpleNamespace(body_input=editor, _expansion_operation=None,
-                               _clipboard_lease=object(), _clipboard_pending=True,
-                               _clipboard_source_text=lambda: "", statusBar=lambda: messages)
-        from engine_fixture import Clipboard
-        clipboard = Clipboard()
-        with patch("app.ui.QApplication.clipboard", return_value=clipboard):
-            AutoFillWindow._copy_content_part(host, 1)
-            self.assertTrue(clipboard.mimeData().hasImage())
-            self.assertEqual(clipboard.mimeData().imageData().width(), 25)
-            self.assertIsNone(host._clipboard_lease)
-            AutoFillWindow._copy_content_part(host, None)
-            self.assertFalse(clipboard.mimeData().hasImage())
-            self.assertNotIn("\ufffc", clipboard.text())
-            self.assertNotIn("[Imagem", clipboard.text())
-            self.assertIn("Depois 2", clipboard.text())
 
 
 if __name__ == "__main__":
