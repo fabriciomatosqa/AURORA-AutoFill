@@ -1,9 +1,17 @@
 # Créditos do seletor de emojis
 
-A iconografia vetorial colorida é da coleção **Twemoji** (Twitter/X e contribuidores), licenciada sob [Creative Commons Attribution 4.0 International](https://creativecommons.org/licenses/by/4.0/).
+**Microsoft Fluent Emoji — arte 3D.** Copyright (c) Microsoft Corporation.
+Distribuída sob a licença MIT, incluída integralmente em `LICENSE-Fluent.txt`.
 
-- Fonte dos sprites: [svgmoji — Twemoji](https://github.com/svgmoji/svgmoji), cuja ferramenta é MIT e cuja arte vetorial Twemoji é CC BY 4.0.
-- Complementos modernos: [jdecked/twemoji](https://github.com/jdecked/twemoji), arte sob CC BY 4.0.
-- Adaptação: extração e agrupamento dos símbolos SVG em um mapa JSON indexado por emoji Unicode; sem modificação intencional de formas nem cores.
+Fonte: https://github.com/microsoft/fluentui-emoji
 
-Os gráficos são usados apenas para exibir ícones no seletor; os snippets armazenam caracteres Unicode editáveis. Não é necessário internet para visualizar os ícones.
+Revisão: `1ffb34c752ecf5d402f04cfb4b392c77f57c54bc`.
+
+As imagens originais foram reduzidas para 96 px e agrupadas em um atlas PNG
+transparente, sem alterar as formas ou as cores. `fluent-3d.json` identifica cada
+arquivo de origem e seus checksums. `scripts/build_fluent_emoji.py` reproduz o
+atlas a partir dessa revisão. Os recursos são incluídos no instalador e o seletor
+funciona offline.
+
+Os gráficos são usados no seletor; os comandos armazenam emojis Unicode,
+mantendo a edição e a compatibilidade com os aplicativos de destino.

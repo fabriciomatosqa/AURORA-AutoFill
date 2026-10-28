@@ -55,9 +55,12 @@ def _color(formatting: QTextCharFormat, property_id: int) -> QColor | None:
     if not formatting.hasProperty(property_id):
         return None
     if property_id == QTextFormat.ForegroundBrush:
-        result = formatting.foreground().color()
+        brush = formatting.foreground()
     else:
-        result = formatting.background().color()
+        brush = formatting.background()
+    if brush.style() == Qt.NoBrush:
+        return None
+    result = brush.color()
     return result if result.isValid() and result.alpha() else None
 
 
@@ -113,6 +116,10 @@ def _legacy_interoperable_html(html: str) -> str:
                 decorations.append("line-through")
             if decorations:
                 styles.append("text-decoration:" + " ".join(decorations))
+            if fmt.verticalAlignment() == QTextCharFormat.AlignSuperScript:
+                styles.append('vertical-align:super')
+            elif fmt.verticalAlignment() == QTextCharFormat.AlignSubScript:
+                styles.append('vertical-align:sub')
             # Quebras suaves (Shift+Enter/\u2028) devem viajar dentro do
             # mesmo parágrafo como <br>, não como caracteres invisíveis.
             escaped = escape(text).replace("\r\n", "\n").replace("\r", "\n")

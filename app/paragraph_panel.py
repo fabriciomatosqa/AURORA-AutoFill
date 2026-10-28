@@ -1,6 +1,6 @@
 """Word-style paragraph ribbon with native editing commands."""
 from PySide6.QtCore import Qt, QSize
-from PySide6.QtGui import QPainter, QPen, QTextListFormat, QTextOption
+from PySide6.QtGui import QTextListFormat, QTextOption
 from PySide6.QtWidgets import (QDialog, QHBoxLayout, QInputDialog, QLabel, QMenu,
                                QMessageBox, QToolButton, QVBoxLayout, QWidget)
 
@@ -11,19 +11,7 @@ from .icons import apply_icon
 from .paragraph_dialog import ParagraphDialog, ParagraphSortDialog
 from .paragraph_editor import ParagraphEditor
 from .paragraph_format import options, settings_from_format
-from .themes import ui_color
-
-
-class ParagraphMenuButton(QToolButton):
-    def paintEvent(self, event):
-        super().paintEvent(event)
-        painter = QPainter(self)
-        painter.setRenderHint(QPainter.Antialiasing)
-        painter.setPen(QPen(ui_color('#81e9d9'), 1.25))
-        x, y = self.width()-6, self.height()//2
-        painter.drawLine(x-2,y-1,x,y+1)
-        painter.drawLine(x,y+1,x+2,y-1)
-        painter.end()
+from .ribbon import RibbonFooter, RibbonToolButton
 
 
 class ParagraphPanel(QWidget):
@@ -37,20 +25,25 @@ class ParagraphPanel(QWidget):
         self._border_color = '#4f6b86'
         self._border_width = 1
         self.buttons = {}
-        # Mais 62 px para menu, ícones e seletor não disputarem espaço.
-        self.setFixedSize(300, 91)
+        self.setFixedSize(300, 115)
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0,0,0,0)
         layout.setSpacing(4)
+        self.controls = QWidget()
+        self.controls.setFixedSize(300,91)
+        rows = QVBoxLayout(self.controls)
+        rows.setContentsMargins(0,0,0,0)
+        rows.setSpacing(4)
         row1, row2, row3 = (QHBoxLayout() for _ in range(3))
         for row in (row1,row2,row3):
             row.setSpacing(4)
-            layout.addLayout(row)
-        bullet = self._button('list-bullets','Marcadores',55,
+            rows.addLayout(row)
+        layout.addWidget(self.controls)
+        bullet = self._button('list-bullets','Marcadores',57,
                               lambda _:self.controller.list(QTextListFormat.ListDisc,'bullet',toggle=True), menu=True)
-        number = self._button('list-numbered','Numeração',55,
+        number = self._button('list-numbered','Numeração',57,
                               lambda _:self.controller.list(QTextListFormat.ListDecimal,'number',toggle=True), menu=True)
-        multilevel = self._button('list-multilevel','Lista de vários níveis',55,
+        multilevel = self._button('list-multilevel','Lista de vários níveis',57,
                                   lambda _:self.controller.list(QTextListFormat.ListDecimal,'multilevel',toggle=True), menu=True)
         for button in (bullet,number,multilevel):button.setCheckable(True)
         self.buttons.update(bullet=bullet,number=number,multilevel=multilevel)
@@ -64,13 +57,13 @@ class ParagraphPanel(QWidget):
         self._action(number.menu(),'Definir início da numeração…',self._number_start)
         self._list_menu(multilevel,[('1. → a. → i.',QTextListFormat.ListDecimal)],'multilevel')
         for button in (bullet,number,multilevel,
-                       self._button('indent-less','Diminuir recuo',55,lambda _:self.controller.indent(-1)),
-                       self._button('indent-more','Aumentar recuo',64,lambda _:self.controller.indent(1))):
+                       self._button('indent-less','Diminuir recuo',57,lambda _:self.controller.indent(-1)),
+                       self._button('indent-more','Aumentar recuo',56,lambda _:self.controller.indent(1))):
             button.setFixedHeight(29)
             row1.addWidget(button,1)
         for label, name in (('Alinhar à esquerda','left'),('Centralizar','center'),
                             ('Alinhar à direita','right'),('Justificar','justify')):
-            button = self._button('align-'+name,label,43,lambda _, n=name:self.controller.align(n))
+            button = self._button('align-'+name,label,46,lambda _, n=name:self.controller.align(n))
             button.setCheckable(True)
             self.buttons[name] = button
             row2.addWidget(button,1)
@@ -86,19 +79,19 @@ class ParagraphPanel(QWidget):
         self._action(menu,'Opções de espaçamento…',self.open_dialog)
         line.setMenu(menu)
         row2.addWidget(line,1)
-        marks = self._button(None,'Mostrar ou ocultar marcas de parágrafo',51,
+        marks = self._button(None,'Mostrar ou ocultar marcas de parágrafo',39,
                              self.controller.show_marks,text='¶')
         marks.setCheckable(True)
         self.buttons['marks'] = marks
         row2.addWidget(marks,1)
-        shade = self._button('paragraph-shading','Sombreamento do parágrafo',50,
+        shade = self._button('paragraph-shading','Sombreamento do parágrafo',72,
                              lambda _:self.controller.shade(self._shade_color), menu=True)
         menu = self._menu_factory(shade)
         self._action(menu,'Escolher cor…',self._choose_shading)
         self._action(menu,'Sem cor',lambda:self.controller.shade(None))
         shade.setMenu(menu)
         row3.addWidget(shade,1)
-        border = self._button('paragraph-border','Bordas do parágrafo',50,
+        border = self._button('paragraph-border','Bordas do parágrafo',72,
                               lambda _:self._border('outside'), menu=True)
         menu = self._menu_factory(border)
         for label, mode in (('Sem borda','none'),('Todas as bordas','all'),('Borda externa','outside'),
@@ -109,20 +102,16 @@ class ParagraphPanel(QWidget):
         self._action(menu,'Espessura da borda…',self._border_size)
         border.setMenu(menu)
         row3.addWidget(border,1)
-        row3.addWidget(self._button('sort-text','Classificar parágrafos',38,lambda _:self._sort()),1)
-        # Ícone e rótulo ocupam UM controle: libera espaço para o seletor emoji.
-        self.paragraph_settings_button = self._button(
-            'paragraph-settings','Opções de parágrafo',104,lambda _:self.open_dialog())
-        self.paragraph_settings_button.setText('Parágrafo')
-        self.paragraph_settings_button.setToolButtonStyle(Qt.ToolButtonTextBesideIcon)
-        self.paragraph_settings_button.setIconSize(QSize(16,16))
-        row3.addWidget(self.paragraph_settings_button,1)
-        self.emoji_button = self._button(None,'Inserir emoji',42,lambda _:self.open_emoji_picker())
+        row3.addWidget(self._button('sort-text','Classificar parágrafos',72,lambda _:self._sort()),1)
+        self.emoji_button = self._button(None,'Inserir emoji',72,lambda _:self.open_emoji_picker())
         # Exibir SVG colorido, não um glifo dependente da fonte do Windows.
         self.emoji_button.setIcon(emoji_icon('🙂'))
         self.emoji_button.setIconSize(QSize(26,26))
         self.emoji_button.setToolTip('Inserir emoji no texto')
         row3.addWidget(self.emoji_button,1)
+        self.footer = RibbonFooter('Parágrafo',self.open_dialog)
+        self.paragraph_settings_button = self.footer.launcher
+        layout.addWidget(self.footer)
         self.emoji_picker = None
         self.controller.updated.connect(self.sync)
         self.sync()
@@ -133,7 +122,7 @@ class ParagraphPanel(QWidget):
         self.emoji_picker.show_at(self.emoji_button)
 
     def _button(self, icon, label, width, callback, *, menu=False, text=None):
-        button = ParagraphMenuButton() if menu else QToolButton()
+        button = RibbonToolButton(menu=menu)
         button.setObjectName('fontTool')
         button.setFocusPolicy(Qt.NoFocus)
         button.setFixedSize(width,27)
@@ -141,9 +130,6 @@ class ParagraphPanel(QWidget):
         button.setAccessibleName(label)
         if icon:apply_icon(button,icon,label=label)
         if text:button.setText(text)
-        if menu:
-            button.setProperty('paragraphMenu',True)
-            button.setPopupMode(QToolButton.MenuButtonPopup)
         button.clicked.connect(callback)
         return button
 
