@@ -7,8 +7,8 @@ from datetime import date
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 from PySide6.QtWidgets import QApplication, QComboBox, QPushButton, QLabel
-from PySide6.QtTest import QSignalSpy, QTest
-from PySide6.QtCore import Qt
+from PySide6.QtTest import QTest
+from PySide6.QtCore import Qt, QCoreApplication, QEvent
 
 from app.core import SnippetStore
 from app.productivity_widgets import FieldsDialog, QuickSearchDialog, UsageStatisticsDialog
@@ -29,6 +29,11 @@ class ProductivityWidgetsTests(unittest.TestCase):
                                     "Prezado(a) {{campo:Nome}}")
 
     def tearDown(self):
+        # Recycled calendar cells and popup controls use deleteLater().
+        # Drain Qt's deferred deletes before destroying QApplication at exit.
+        self.app.processEvents()
+        QCoreApplication.sendPostedEvents(None, QEvent.DeferredDelete)
+        self.app.processEvents()
         self.store.close()
         self.tmp.cleanup()
 
@@ -41,6 +46,7 @@ class ProductivityWidgetsTests(unittest.TestCase):
             self.assertEqual(dialog.values()["nome"], "Ana")
         finally:
             dialog.close()
+            dialog.deleteLater()
         picker = QuickSearchDialog(self.store)
         try:
             picker.search.setText("chamado")
@@ -49,6 +55,7 @@ class ProductivityWidgetsTests(unittest.TestCase):
             self.assertEqual(picker.selected_snippet.id, self.item)
         finally:
             picker.close()
+            picker.deleteLater()
 
     def test_statistics_calendar_daily_totals_and_month_navigation(self):
         self.store.register_expansion(self.item, date(2026, 10, 29))
@@ -82,6 +89,7 @@ class ProductivityWidgetsTests(unittest.TestCase):
             self.assertIn("0 usos", stats.day_buttons[29].text())
         finally:
             stats.close()
+            stats.deleteLater()
 
     def test_settings_productivity_buttons_emit_and_explain_usage(self):
         page = SettingsPage(dict(DEFAULTS), startup_supported=False,
@@ -95,12 +103,12 @@ class ProductivityWidgetsTests(unittest.TestCase):
                 "statisticsSettingsButton")
             self.assertIsNotNone(search_button)
             self.assertIsNotNone(stats_button)
-            search_spy = QSignalSpy(page.global_search_requested)
-            stats_spy = QSignalSpy(page.statistics_requested)
+            received = []
+            page.global_search_requested.connect(lambda: received.append("search"))
+            page.statistics_requested.connect(lambda: received.append("statistics"))
             search_button.click()
             stats_button.click()
-            self.assertEqual(search_spy.count(), 1)
-            self.assertEqual(stats_spy.count(), 1)
+            self.assertEqual(received, ["search", "statistics"])
             self.assertTrue(any(
                 "Ctrl + Shift + Espaço" in label.text()
                 for label in page.findChildren(
