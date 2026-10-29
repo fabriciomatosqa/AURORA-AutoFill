@@ -40,8 +40,17 @@ class ProductivityDataTests(unittest.TestCase):
         self.assertEqual((r["today"], r["month"], r["year"], r["total"]), (2, 2, 3, 4))
         self.assertIn((self.one, 2), [(i, n) for i, _title, _shortcut, n in r["top"]])
         self.assertEqual(dict(r["months"])["2026-10"], 2)
+        self.assertEqual(self.store.usage_days(2026, 10), {29: 2})
+        self.assertEqual(self.store.usage_days(2026, 9), {30: 1})
+        self.assertEqual(self.store.usage_days(2026, 11), {})
+        self.assertEqual(self.store.usage_day_top(date(2026, 10, 29)),
+                         [("Saudação", 2)])
+        self.assertEqual(self.store.usage_day_top(date(2026, 10, 28)), [])
+        with self.assertRaises(ValueError):
+            self.store.usage_days(2026, 13)
         self.store.reset_usage()
         self.assertEqual(self.store.usage_report()["total"], 0)
+        self.assertEqual(self.store.usage_days(2026, 10), {})
 
     def test_no_record_before_success_and_backward_compatible_tables(self):
         self.assertFalse(self.store.register_expansion(99999, date(2026, 10, 29)))

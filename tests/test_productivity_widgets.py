@@ -3,12 +3,17 @@ import os
 import tempfile
 import unittest
 from pathlib import Path
+from datetime import date
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
-from PySide6.QtWidgets import QApplication, QComboBox
+from PySide6.QtWidgets import QApplication, QComboBox, QPushButton, QLabel
+from PySide6.QtTest import QSignalSpy, QTest
+from PySide6.QtCore import Qt
 
 from app.core import SnippetStore
 from app.productivity_widgets import FieldsDialog, QuickSearchDialog, UsageStatisticsDialog
+from app.settings_panel import SettingsPage
+from app.preferences import DEFAULTS
 
 
 class ProductivityWidgetsTests(unittest.TestCase):
@@ -45,16 +50,64 @@ class ProductivityWidgetsTests(unittest.TestCase):
         finally:
             picker.close()
 
-    def test_statistics_and_clear_no_data(self):
-        stats = UsageStatisticsDialog(self.store)
+    def test_statistics_calendar_daily_totals_and_month_navigation(self):
+        self.store.register_expansion(self.item, date(2026, 10, 29))
+        self.store.register_expansion(self.item, date(2026, 10, 29))
+        self.store.register_expansion(self.item, date(2026, 9, 30))
+        stats = UsageStatisticsDialog(self.store, today=date(2026, 10, 29))
         try:
-            self.assertIn("Total: 0", stats.summary.text())
-            self.store.register_expansion(self.item)
+            self.assertIn("Hoje: 2", stats.summary.text())
+            self.assertIn("Este mês: 2", stats.summary.text())
+            self.assertIn("Este ano: 3", stats.summary.text())
+            self.assertIn("Total: 3", stats.summary.text())
+            self.assertEqual(stats.month_label.text(), "Outubro 2026")
+            self.assertEqual(len(stats.day_buttons), 31)
+            self.assertIn("2 usos", stats.day_buttons[29].text())
+            QTest.mouseClick(stats.day_buttons[29], Qt.LeftButton)
+            self.assertIn("29/10/2026 — 2 usos", stats.day_details.text())
+            self.assertIn("Chamado inicial (2)", stats.day_details.text())
+            self.assertIn("0 usos", stats.day_buttons[28].text())
+            QTest.mouseClick(stats.previous_button, Qt.LeftButton)
+            self.assertEqual(stats.month_label.text(), "Setembro 2026")
+            self.assertEqual(len(stats.day_buttons), 30)
+            self.assertIn("1 uso", stats.day_buttons[30].text())
+            QTest.mouseClick(stats.day_buttons[30], Qt.LeftButton)
+            self.assertIn("30/09/2026 — 1 uso", stats.day_details.text())
+            QTest.mouseClick(stats.next_button, Qt.LeftButton)
+            self.assertEqual(stats.month_label.text(), "Outubro 2026")
+            self.assertIn("Total: 3", stats.summary.text())
+            self.store.reset_usage()
             stats.refresh()
-            self.assertIn("Total: 1", stats.summary.text())
-            self.assertEqual(stats.months_layout.count(), 13)
+            self.assertIn("Total: 0", stats.summary.text())
+            self.assertIn("0 usos", stats.day_buttons[29].text())
         finally:
             stats.close()
+
+    def test_settings_productivity_buttons_emit_and_explain_usage(self):
+        page = SettingsPage(dict(DEFAULTS), startup_supported=False,
+                            startup_enabled=False)
+        try:
+            search_button = page.findChild(
+                QPushButton,
+                "globalSearchSettingsButton")
+            stats_button = page.findChild(
+                __import__("PySide6.QtWidgets", fromlist=["QPushButton"]).QPushButton,
+                "statisticsSettingsButton")
+            self.assertIsNotNone(search_button)
+            self.assertIsNotNone(stats_button)
+            search_spy = QSignalSpy(page.global_search_requested)
+            stats_spy = QSignalSpy(page.statistics_requested)
+            search_button.click()
+            stats_button.click()
+            self.assertEqual(search_spy.count(), 1)
+            self.assertEqual(stats_spy.count(), 1)
+            self.assertTrue(any(
+                "Ctrl + Shift + Espaço" in label.text()
+                for label in page.findChildren(
+                    QLabel)))
+        finally:
+            page.close()
+            page.deleteLater()
 
 
 if __name__ == "__main__":
