@@ -22,6 +22,7 @@ from PySide6.QtWidgets import (
 from .core import (Snippet, SnippetStore, application_db_path,
                    render_snippet, validate_shortcut, shortcut_key)
 from .wayland_input import is_wayland_session
+from .win_global_search import WindowsQuickSearchHotkey
 from .hotkeys import (GlobalHotkeyListener, replace_shortcut, paste_clipboard,
                       select_previous_characters, copy_selected_text, collapse_selection_to_end,
                       replace_tracked_shortcut)
@@ -297,6 +298,9 @@ class AutoFillWindow(ProductivityMixin, AuroraFeaturesMixin, QMainWindow):
         self.theme_controller.changed.connect(self._apply_banner_theme)
         self.theme_controller.apply()
         self._setup_tray()
+        # HWND registration lives in the Qt/UI thread. It suppresses Space
+        # before external editors receive the global search combination.
+        self._quick_search_hotkey = WindowsQuickSearchHotkey()
         self.signals = HotkeySignals()
         self.signals.triggered.connect(self._expand_global)
         self.signals.listener_state.connect(self._listener_state_changed, Qt.QueuedConnection)
@@ -325,6 +329,7 @@ class AutoFillWindow(ProductivityMixin, AuroraFeaturesMixin, QMainWindow):
         self._slash_focus_watch.start()
         started, message = self.hotkeys.start()
         self._hotkeys_enabled = started
+        quick_search_warning = self._sync_quick_search_hotkey()
         self._focus_monitor = FocusMonitor(self.hotkeys.invalidate) if started else None
         # Inicialização em segundo plano: evita o cold-start do PowerShell/UIA
         # justamente quando o usuário digita o primeiro atalho no navegador.
@@ -336,9 +341,12 @@ class AutoFillWindow(ProductivityMixin, AuroraFeaturesMixin, QMainWindow):
         apply_icon(self.listen_button, "bolt" if started else "pause")
         # Permitir consultar o motivo e tentar novamente após conceder acesso.
         self.listen_button.setEnabled(started or is_wayland_session())
-        self.listen_button.setToolTip("Ativar/desativar expansão em outros programas"
-                                      if started else message + "\nClique para ver o diagnóstico.")
-        self.statusBar().showMessage(message)
+        self.listen_button.setToolTip(
+            ("Ativar/desativar expansão em outros programas"
+             + ("\n" + quick_search_warning if quick_search_warning else ""))
+            if started else message + "\nClique para ver o diagnóstico.")
+        self.statusBar().showMessage(
+            message + (" · " + quick_search_warning if quick_search_warning else ""))
         self._refresh_all()
         self._show_welcome()
         # Consulta no primeiro ciclo Qt; a rede executa em QThread.
@@ -1438,6 +1446,27 @@ class AutoFillWindow(ProductivityMixin, AuroraFeaturesMixin, QMainWindow):
             except (ValueError, OSError, TypeError, sqlite3.Error) as exc:
                 QMessageBox.warning(self, "Erro na importação", str(exc))
 
+    def _sync_quick_search_hotkey(self) -> str:
+        """Keep Win32 registration aligned with the active/pause state."""
+        if not getattr(self, "_hotkeys_enabled", False):
+            self._quick_search_hotkey.unregister()
+            return ""
+        if sys.platform != "win32":
+            return ""  # Non-Windows retains the existing keyboard-hook path.
+        _, warning = self._quick_search_hotkey.register(int(self.winId()))
+        return warning
+
+    def nativeEvent(self, eventType, message):
+        # Win32 delivers WM_HOTKEY on the registered HWND, without forwarding
+        # Space to Word, Notepad, Teams or browser editors. Capture the target
+        # before the queued Qt signal activates our search dialog.
+        hotkey = getattr(self, "_quick_search_hotkey", None)
+        if (hotkey is not None and getattr(self, "_hotkeys_enabled", False)
+                and hotkey.matches(message)):
+            self.signals.quick_search.emit(capture_focus())
+            return True, 0
+        return super().nativeEvent(eventType, message)
+
     def _toggle_listener(self):
         if hasattr(self, "_slash_popup"):
             self._hide_suggestion_popup()
@@ -1456,12 +1485,18 @@ class AutoFillWindow(ProductivityMixin, AuroraFeaturesMixin, QMainWindow):
         else:
             self._hotkeys_enabled = not self._hotkeys_enabled
             self.hotkeys.set_enabled(self._hotkeys_enabled)
+        quick_search_warning = self._sync_quick_search_hotkey()
         self.listen_button.setText("Atalhos ativos" if self._hotkeys_enabled else "Atalhos pausados")
         apply_icon(self.listen_button, "bolt" if self._hotkeys_enabled else "pause")
-        self.listen_button.setToolTip("Ativar/desativar expansão em outros programas")
+        self.listen_button.setToolTip(
+            "Ativar/desativar expansão em outros programas"
+            + ("\n" + quick_search_warning if quick_search_warning else ""))
         if self.tray_toggle_action is not None:
             self.tray_toggle_action.setText("Pausar atalhos" if self._hotkeys_enabled else "Retomar atalhos")
-        self.statusBar().showMessage("Expansão ativa." if self._hotkeys_enabled else "Expansão pausada.", 4000)
+        self.statusBar().showMessage(
+            quick_search_warning or (
+                "Expansão ativa." if self._hotkeys_enabled else "Expansão pausada."
+            ), 8000 if quick_search_warning else 4000)
 
     def _listener_state_changed(self, _state):
         if self._quitting:
@@ -2234,6 +2269,7 @@ class AutoFillWindow(ProductivityMixin, AuroraFeaturesMixin, QMainWindow):
             return
         self._hide_suggestion_popup()
         self._slash_popup.close()
+        self._quick_search_hotkey.unregister()
         self.hotkeys.stop()
         stop_word()
         if self._focus_monitor is not None:
