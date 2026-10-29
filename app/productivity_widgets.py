@@ -7,11 +7,12 @@ from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QComboBox, QDialog, QDialogButtonBox, QFormLayout, QFrame, QHBoxLayout,
     QLabel, QLineEdit, QListWidget, QListWidgetItem, QMessageBox, QProgressBar,
-    QGridLayout, QScrollArea, QVBoxLayout, QWidget, QPushButton,
+    QGridLayout, QScrollArea, QSplitter, QVBoxLayout, QWidget, QPushButton,
 )
 
 from .smart_templates import fields_in
 from .themes import current_theme
+from .inline_images import AuroraReadOnlyPreview
 
 
 def dialog_style():
@@ -83,16 +84,48 @@ class FieldsDialog(QDialog):
 
 
 class QuickSearchDialog(QDialog):
-    """Localiza comandos em todas as pastas sem abrir o editor."""
+    """Pesquisa por nome, atalho e conteúdo com prévia completa e rolável."""
 
     def __init__(self, store, parent=None):
         super().__init__(parent)
         self.store = store
         self.selected_snippet = None
         self.setWindowTitle("AURORA — Pesquisa global de comandos")
-        self.setMinimumSize(510, 430)
-        self.setStyleSheet(dialog_style())
+        self.setMinimumSize(590, 510)
+        self.resize(690, 680)
+        self.setStyleSheet(dialog_style() + """
+            QFrame#searchPreviewPanel {
+                background: transparent; border: 0;
+            }
+            QLabel#searchPreviewHeading {
+                color: #60ddd0; font-size: 12px; font-weight: 700;
+            }
+            QLabel#searchPreviewName {
+                font-weight: 600; padding-bottom: 3px;
+            }
+            QTextEdit#readonlyPreview {
+                background: #172d46; color: #e9f7ff;
+                border: 1px solid #456a81; border-radius: 7px;
+                padding: 9px;
+            }
+            QSplitter::handle:vertical {
+                background: #315770; height: 5px; margin: 4px 0;
+            }
+        """ if current_theme() != "light" else dialog_style() + """
+            QFrame#searchPreviewPanel { background: transparent; border: 0; }
+            QLabel#searchPreviewHeading { color: #167d87; font-weight: 700; }
+            QLabel#searchPreviewName { color: #18314b; font-weight: 600; }
+            QTextEdit#readonlyPreview {
+                background: white; color: #193451;
+                border: 1px solid #8aabbc; border-radius: 7px;
+                padding: 9px;
+            }
+            QSplitter::handle:vertical {
+                background: #a6c9d3; height: 5px; margin: 4px 0;
+            }
+        """)
         root = QVBoxLayout(self)
+        root.setSpacing(9)
         label = QLabel("Pesquise pelo nome, atalho ou conteúdo do comando")
         root.addWidget(label)
         self.search = QLineEdit()
@@ -101,15 +134,39 @@ class QuickSearchDialog(QDialog):
         self.search.textChanged.connect(self.refresh)
         self.search.returnPressed.connect(self.choose)
         root.addWidget(self.search)
+
+        # The user can resize the results and preview without hiding either.
+        self.content_splitter = QSplitter(Qt.Vertical)
+        self.content_splitter.setObjectName("searchContentSplitter")
+        self.content_splitter.setChildrenCollapsible(False)
         self.matches = QListWidget()
         self.matches.setAccessibleName("Resultados da pesquisa")
         self.matches.itemDoubleClicked.connect(lambda _: self.choose())
         self.matches.currentItemChanged.connect(self._update_preview)
-        root.addWidget(self.matches, 1)
-        self.preview = QLabel("")
-        self.preview.setWordWrap(True)
-        self.preview.setMaximumHeight(80)
-        root.addWidget(self.preview)
+        self.content_splitter.addWidget(self.matches)
+
+        preview_panel = QFrame()
+        preview_panel.setObjectName("searchPreviewPanel")
+        preview_layout = QVBoxLayout(preview_panel)
+        preview_layout.setContentsMargins(0, 0, 0, 0)
+        preview_layout.setSpacing(5)
+        preview_title = QLabel("PRÉ-VISUALIZAÇÃO DO COMANDO")
+        preview_title.setObjectName("searchPreviewHeading")
+        preview_layout.addWidget(preview_title)
+        self.preview_name = QLabel("Selecione um comando para visualizar o conteúdo completo.")
+        self.preview_name.setObjectName("searchPreviewName")
+        self.preview_name.setWordWrap(True)
+        preview_layout.addWidget(self.preview_name)
+        self.preview = AuroraReadOnlyPreview()
+        self.preview.setAccessibleName("Texto completo do comando selecionado")
+        self.preview.setMinimumHeight(150)
+        preview_layout.addWidget(self.preview, 1)
+        self.content_splitter.addWidget(preview_panel)
+        self.matches.setMinimumHeight(160)
+        self.content_splitter.setStretchFactor(0, 3)
+        self.content_splitter.setStretchFactor(1, 2)
+        root.addWidget(self.content_splitter, 1)
+
         row = QHBoxLayout()
         row.addStretch()
         close_button = QPushButton("Cancelar")
@@ -133,14 +190,28 @@ class QuickSearchDialog(QDialog):
         if rows:
             self.matches.setCurrentRow(0)
         else:
-            self.preview.setText("Nenhum comando encontrado.")
+            self._clear_preview("Nenhum comando encontrado.")
+
+    def _clear_preview(self, message="Selecione um comando para visualizar o conteúdo completo."):
+        self.preview_name.setText(message)
+        self.preview.clear()
 
     def _update_preview(self, current, _previous):
-        if current:
-            snippet = current.data(Qt.UserRole)
-            self.preview.setText(snippet.content[:230])
+        if current is None:
+            self._clear_preview()
+            return
+        snippet = current.data(Qt.UserRole)
+        self.preview_name.setText(f"{snippet.title}   ·   {snippet.shortcut}")
+        # Show the saved content, not an expanded snippet: this preview must
+        # not evaluate variables, execute steps or read the clipboard.
+        # AuroraReadOnlyPreview understands the same inline images and rich
+        # formatting as the main editor while remaining non-editable.
+        if snippet.rich_content:
+            self.preview.setHtml(snippet.rich_content)
         else:
-            self.preview.clear()
+            self.preview.setPlainText(snippet.content)
+        self.preview.verticalScrollBar().setValue(0)
+        self.preview.horizontalScrollBar().setValue(0)
 
     def choose(self):
         current = self.matches.currentItem()

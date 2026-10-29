@@ -57,6 +57,68 @@ class ProductivityWidgetsTests(unittest.TestCase):
             picker.close()
             picker.deleteLater()
 
+    def test_global_search_preview_shows_entire_text_and_scrolls_independently(self):
+        lines = [f"Linha detalhada {n:03d}: conteúdo completo" for n in range(110)]
+        long_text = "\n".join(lines)
+        snippet_id = self.store.save(
+            self.store.folders()[0][0], "Modelo extenso", "/modeloextenso", long_text)
+        picker = QuickSearchDialog(self.store)
+        try:
+            picker.show()
+            self.app.processEvents()
+            self.assertGreaterEqual(picker.width(), 590)
+            self.assertGreaterEqual(picker.height(), 510)
+            self.assertTrue(picker.content_splitter.isVisible())
+            picker.search.setText("Modelo extenso")
+            self.app.processEvents()
+            self.assertEqual(picker.matches.count(), 1)
+            self.assertEqual(picker.preview.toPlainText(), long_text)
+            self.assertIn("Modelo extenso", picker.preview_name.text())
+            self.assertTrue(picker.preview.isReadOnly())
+            self.assertGreater(picker.preview.verticalScrollBar().maximum(), 0)
+            picker.preview.verticalScrollBar().setValue(
+                picker.preview.verticalScrollBar().maximum())
+            self.assertGreater(picker.preview.verticalScrollBar().value(), 0)
+            # The long text can be reviewed without changing or selecting it.
+            self.assertEqual(picker.selected_snippet, None)
+            picker.choose()
+            self.assertEqual(picker.selected_snippet.id, snippet_id)
+        finally:
+            picker.close()
+            picker.deleteLater()
+
+    def test_global_search_preview_switches_resets_scroll_and_clears_empty_results(self):
+        folder_id = self.store.folders()[0][0]
+        rich_id = self.store.save(
+            folder_id, "Modelo formatado", "/modeloformatado",
+            "Texto alternativo", rich_content="<p><b>Texto em negrito</b></p>"
+            "<p>Segundo parágrafo da prévia.</p>")
+        picker = QuickSearchDialog(self.store)
+        try:
+            picker.show()
+            self.app.processEvents()
+            picker.search.setText("Modelo formatado")
+            self.app.processEvents()
+            self.assertEqual(picker.matches.count(), 1)
+            self.assertIn("Texto em negrito", picker.preview.toPlainText())
+            self.assertIn("Segundo parágrafo", picker.preview.toPlainText())
+            self.assertNotIn("Texto alternativo", picker.preview.toPlainText())
+            self.assertEqual(picker.preview.verticalScrollBar().value(), 0)
+            # The full preview must still point to the original selected item.
+            picker.choose()
+            self.assertEqual(picker.selected_snippet.id, rich_id)
+            picker.selected_snippet = None
+            picker.search.setText("zzzznotfound99999")
+            self.app.processEvents()
+            self.assertEqual(picker.matches.count(), 0)
+            self.assertEqual(picker.preview.toPlainText(), "")
+            self.assertIn("Nenhum comando", picker.preview_name.text())
+            picker.choose()
+            self.assertIsNone(picker.selected_snippet)
+        finally:
+            picker.close()
+            picker.deleteLater()
+
     def test_statistics_calendar_daily_totals_and_month_navigation(self):
         self.store.register_expansion(self.item, date(2026, 10, 29))
         self.store.register_expansion(self.item, date(2026, 10, 29))
