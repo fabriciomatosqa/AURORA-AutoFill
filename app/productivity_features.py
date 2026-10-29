@@ -83,6 +83,7 @@ class ProductivityMixin:
         if not getattr(self, "_slash_prefix", ""):
             return
         if (getattr(self, "_quitting", False) or
+                not self._slash_popup.isVisible() or
                 capture_focus() != self._slash_context or
                 not getattr(self, "_hotkeys_enabled", False)):
             self._hide_suggestion_popup()
