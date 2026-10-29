@@ -177,15 +177,17 @@ class SettingsPage(QWidget):
         outer.setContentsMargins(self.SIDE_PADDING, 16,
                                  self.SIDE_PADDING, 20)
         outer.setSpacing(0)
-        outer.addStretch(1)
+        outer.addStretch(0)
         self.dashboard = QWidget(body)
         self.dashboard.setObjectName("settingsDashboard")
         self.dashboard.setMaximumWidth(self.MAX_DASHBOARD_WIDTH)
         content = QVBoxLayout(self.dashboard)
         content.setContentsMargins(0, 0, 0, 0)
         content.setSpacing(18)
-        outer.addWidget(self.dashboard, 10)
-        outer.addStretch(1)
+        # Give the dashboard all available width below its desktop maximum.
+        # Zero-stretch side spacers center it only when that maximum is reached.
+        outer.addWidget(self.dashboard, 1)
+        outer.addStretch(0)
 
         head = QHBoxLayout()
         heading_column = QVBoxLayout()
