@@ -77,7 +77,7 @@ class WindowsQuickSearchHotkey:
             native = ctypes.cast(int(message), ctypes.POINTER(wintypes.MSG)).contents
             return (
                 native.message == WM_HOTKEY
-                and int(native.hwnd or 0) == self._hwnd
+                and int(native.hWnd or 0) == self._hwnd
                 and int(native.wParam) == QUICK_SEARCH_ID
                 and (int(native.lParam) >> 16) & 0xFFFF == VK_SPACE
                 and (int(native.lParam) & (MOD_CONTROL | MOD_SHIFT))
