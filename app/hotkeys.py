@@ -95,8 +95,8 @@ class ShortcutMatcher:
     def has_matches(self, prefix: str) -> bool:
         """Only a memory predicate; keyboard hooks never query SQLite."""
         lowered = shortcut_key(prefix)
-        return bool(lowered and any(value.startswith(lowered)
-                                    for value in self._shortcuts))
+        return bool(lowered and
+                    (lowered in self._shortcuts or lowered in self._prefixes))
 
     def ambiguous_exact(self) -> str | None:
         """Atalho completo que também é prefixo de outro; sem confirmação ainda."""
