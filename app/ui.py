@@ -41,6 +41,7 @@ from .features import AuroraFeaturesMixin
 from .productivity_features import ProductivityMixin
 from .smart_templates import fields_in, has_steps
 from .slash_popup import SlashCommandPopup
+from .smooth_scrolling import install_smooth_scrolling
 from .version import APP_VERSION
 from .icons import apply_icon
 from .font_catalog import AuroraFontCombo, AuroraFontSizeSpinBox
@@ -290,6 +291,9 @@ class AutoFillWindow(ProductivityMixin, AuroraFeaturesMixin, QMainWindow):
         self.tray_toggle_action = None
         self.tray_exit_action = None
         self._build_ui()
+        # Animate regular mouse-wheel steps throughout the interface, including
+        # editor, command list, settings, previews and floating dialogs.
+        self._smooth_scrolling = install_smooth_scrolling(QApplication.instance())
         self.theme_controller.changed.connect(self._apply_banner_theme)
         self.theme_controller.apply()
         self._setup_tray()
