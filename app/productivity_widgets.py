@@ -3,7 +3,9 @@ from __future__ import annotations
 
 from datetime import date
 from calendar import monthrange
-from PySide6.QtCore import QEvent, Qt
+import ctypes
+import sys
+from PySide6.QtCore import QEvent, Qt, QTimer
 from PySide6.QtWidgets import (
     QComboBox, QDialog, QDialogButtonBox, QFormLayout, QFrame, QHBoxLayout,
     QLabel, QLineEdit, QListWidget, QListWidgetItem, QMessageBox, QProgressBar,
@@ -13,6 +15,24 @@ from PySide6.QtWidgets import (
 from .smart_templates import fields_in
 from .themes import current_theme
 from .inline_images import AuroraReadOnlyPreview
+
+
+def focus_dialog_input(dialog, control):
+    """Bring the just-opened dialog forward once, and focus its primary field.
+
+    Windows may otherwise leave keystrokes in the external editor after
+    Ctrl+Shift+Space, despite setFocus() during dialog construction.
+    """
+    if not dialog.isVisible():
+        return
+    dialog.raise_()
+    dialog.activateWindow()
+    if sys.platform == "win32":
+        try:
+            ctypes.windll.user32.SetForegroundWindow(int(dialog.winId()))
+        except (OSError, AttributeError, ValueError):
+            pass
+    control.setFocus(Qt.ActiveWindowFocusReason)
 
 
 def dialog_style():
@@ -51,11 +71,18 @@ class FieldsDialog(QDialog):
         self.setStyleSheet(dialog_style())
         self.fields = fields_in(template)
         self.controls = {}
+        self._ordered_controls = []
+        self._focus_queued = False
         main = QVBoxLayout(self)
         info = QLabel("Preencha os campos antes de inserir o comando.")
         info.setWordWrap(True)
         main.addWidget(info)
         form = QFormLayout()
+        label_totals = {}
+        for field in self.fields:
+            label_totals[field.label.casefold()] = (
+                label_totals.get(field.label.casefold(), 0) + 1)
+        seen_labels = {}
         for field in self.fields:
             if field.kind == "choice":
                 control = QComboBox()
@@ -65,9 +92,14 @@ class FieldsDialog(QDialog):
                 control.setText(field.default)
                 control.setMaxLength(600)
                 control.setPlaceholderText(field.label)
-            control.setAccessibleName(field.label)
-            form.addRow(field.label + ":", control)
-            self.controls[field.label.casefold()] = control
+            label = field.label.casefold()
+            seen_labels[label] = seen_labels.get(label, 0) + 1
+            caption = (f"{field.label} ({seen_labels[label]})"
+                       if label_totals[label] > 1 else field.label)
+            control.setAccessibleName(caption)
+            form.addRow(caption + ":", control)
+            self.controls[field.key] = control
+            self._ordered_controls.append(control)
         main.addLayout(form)
         buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
         buttons.button(QDialogButtonBox.Ok).setText("Continuar")
@@ -75,8 +107,15 @@ class FieldsDialog(QDialog):
         buttons.accepted.connect(self.accept)
         buttons.rejected.connect(self.reject)
         main.addWidget(buttons)
-        if self.fields:
-            self.controls[self.fields[0].label.casefold()].setFocus()
+        if self._ordered_controls:
+            self._ordered_controls[0].setFocus()
+
+    def showEvent(self, event):
+        super().showEvent(event)
+        if not self._focus_queued and self._ordered_controls:
+            self._focus_queued = True
+            QTimer.singleShot(
+                0, lambda: focus_dialog_input(self, self._ordered_controls[0]))
 
     def values(self) -> dict[str, str]:
         return {name: (widget.currentText() if isinstance(widget, QComboBox)
@@ -182,6 +221,13 @@ class QuickSearchDialog(QDialog):
         root.addLayout(row)
         self.refresh()
         self.search.setFocus()
+        self._focus_queued = False
+
+    def showEvent(self, event):
+        super().showEvent(event)
+        if not self._focus_queued:
+            self._focus_queued = True
+            QTimer.singleShot(0, lambda: focus_dialog_input(self, self.search))
 
     def refresh(self, *_):
         query = self.search.text().strip()
