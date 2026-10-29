@@ -35,6 +35,7 @@ class Field:
     kind: str
     options: tuple[str, ...] = ()
     default: str = ""
+    key: str = ""  # occurrence key, distinct for repeated labels
 
 
 @dataclass(frozen=True)
@@ -46,7 +47,8 @@ class Step:
 def fields_in(template: str) -> tuple[Field, ...]:
     if not isinstance(template, str) or len(template) > 1_000_000:
         raise ValueError("Modelo inválido ou muito grande.")
-    seen: dict[str, Field] = {}
+    occurrences: dict[str, int] = {}
+    found: list[Field] = []
     for match in _FORM_RE.finditer(template):
         kind, detail = match.groups()
         pieces = [part.strip() for part in detail.split("|")]
@@ -62,22 +64,28 @@ def fields_in(template: str) -> tuple[Field, ...]:
             if len(pieces) > 2 or len(pieces[-1]) > 180:
                 raise ValueError(f"O valor inicial de «{title}» é inválido.")
             field = Field(title, "text", default=pieces[1] if len(pieces) == 2 else "")
-        prior = seen.get(title.casefold())
-        if prior and prior != field:
-            raise ValueError(f"O campo «{title}» tem definições diferentes no modelo.")
-        seen[title.casefold()] = field
-        if len(seen) > 12:
+        # Every placeholder is independent, even when its label repeats.
+        # Keep the original first-occurrence key for existing callers.
+        label_key = title.casefold()
+        number = occurrences.get(label_key, 0) + 1
+        occurrences[label_key] = number
+        key = label_key if number == 1 else f"{label_key}#{number}"
+        found.append(Field(field.label, field.kind, field.options,
+                           field.default, key))
+        if len(found) > 12:
             raise ValueError("Máximo de 12 campos por modelo.")
-    return tuple(seen.values())
+    return tuple(found)
 
 
 def fill_fields(template: str, answers: dict[str, str], *, html: bool = False) -> str:
-    field_map = {f.label.casefold(): f for f in fields_in(template)}
+    fields = iter(fields_in(template))
     def replacement(match):
-        detail = match.group(2)
-        label = detail.split("|", 1)[0].strip().casefold()
-        field = field_map[label]
-        value = str(answers.get(label, answers.get(field.label, field.default)))
+        field = next(fields)
+        # Prefer the individual field's key. An old dictionary with just a
+        # label continues to fill every matching occurrence for compatibility.
+        value = str(answers.get(
+            field.key, answers.get(
+                field.label, answers.get(field.label.casefold(), field.default))))
         if len(value) > 600:
             raise ValueError(f"O campo {field.label} ultrapassa 600 caracteres.")
         if field.kind == "choice" and value not in field.options:
