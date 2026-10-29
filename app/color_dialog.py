@@ -91,18 +91,23 @@ class AuroraColorDialog(QColorDialog):
                 apply.setObjectName("auroraApplyColor")
             if cancel:
                 cancel.setText("Cancelar")
-            self.reset_button = button_box.addButton(
-                "Remover realce" if "realce" in title.casefold()
-                else "Cor automática",
-                QDialogButtonBox.ResetRole,
-            )
-            self.reset_button.setObjectName("auroraResetColor")
-            self.reset_button.setToolTip(
-                "Remove somente o realce da seleção, mantendo outros estilos."
-                if "realce" in title.casefold() else
-                "Remove somente a cor fixa do texto e restaura a cor automática."
-            )
-            self.reset_button.clicked.connect(self._reset_to_automatic)
+            # Paragraph/border pickers also use this widget, but do not have
+            # an automatic color to restore. Do not offer an inert reset there.
+            if title.casefold() in {
+                "cor do texto", "cor do realce", "cor da fonte", "realce",
+            }:
+                self.reset_button = button_box.addButton(
+                    "Remover realce" if "realce" in title.casefold()
+                    else "Cor automática",
+                    QDialogButtonBox.ResetRole,
+                )
+                self.reset_button.setObjectName("auroraResetColor")
+                self.reset_button.setToolTip(
+                    "Remove somente o realce da seleção, mantendo outros estilos."
+                    if "realce" in title.casefold() else
+                    "Remove somente a cor fixa do texto e restaura a cor automática."
+                )
+                self.reset_button.clicked.connect(self._reset_to_automatic)
 
     def _localize_qt_controls(self):
         """Translate Qt's built-in color picker (which may lack pt_BR .qm)."""
