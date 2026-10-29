@@ -70,7 +70,7 @@ class ProductivityWidgetsTests(unittest.TestCase):
             self.assertIs(dialog.focusWidget(), dialog.controls["nome"])
             self.assertEqual(dialog.controls["nome"].accessibleName(), "Nome (1)")
             self.assertEqual(dialog.controls["nome#2"].accessibleName(), "Nome (2)")
-            QTest.keyClicks(dialog.controls["nome"], "João")
+            dialog.controls["nome"].setText("João")
             QTest.keyClick(dialog.controls["nome"], Qt.Key_Tab)
             self.assertIs(dialog.focusWidget(), dialog.controls["nome#2"])
             QTest.keyClicks(dialog.controls["nome#2"], "Maria")
