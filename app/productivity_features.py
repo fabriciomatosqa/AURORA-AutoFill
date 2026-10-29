@@ -9,7 +9,7 @@ import ctypes
 import sys
 from html import escape
 from time import monotonic
-from PySide6.QtCore import QTimer
+from PySide6.QtCore import QTimer, QRect
 from PySide6.QtGui import QCursor
 from PySide6.QtWidgets import QApplication, QMessageBox, QToolTip
 
@@ -49,6 +49,10 @@ def safe_clipboard_text(raw: str) -> str:
 
 
 class ProductivityMixin:
+    def _show_linux_setup(self):
+        from .linux_setup_ui import LinuxSetupDialog
+        LinuxSetupDialog(self).exec()
+
     def _show_statistics(self):
         dlg = UsageStatisticsDialog(self.store, self)
         dlg.exec()
@@ -82,7 +86,7 @@ class ProductivityMixin:
                         break
         if matching:
             names = "\n".join(f"{s.shortcut}  ·  {s.title[:38]}" for s in matching)
-            QToolTip.showText(QCursor.pos(), names + "\nCtrl+Shift+Espaço: pesquisar", None, None, 1500)
+            QToolTip.showText(QCursor.pos(), names + "\nCtrl+Shift+Espaço: pesquisar", None, QRect(), 1500)
 
     def _launch_smart_snippet(self, snippet, context, *, from_shortcut):
         fields = fields_in(snippet.content)

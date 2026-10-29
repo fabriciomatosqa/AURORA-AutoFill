@@ -73,6 +73,7 @@ class AuroraFeaturesMixin:
             lambda checked: self._change_preference("include_prereleases", checked))
         self.settings_page.suggestions_toggled.connect(
             lambda checked: self._change_preference("suggest_shortcuts", checked))
+        self.settings_page.linux_setup_requested.connect(self._show_linux_setup)
         self.settings_page.startup_toggled.connect(self._change_startup)
         self.settings_page.start_minimized_toggled.connect(self._change_start_minimized)
         self.settings_page.play_requested.connect(self._play_confirmation)

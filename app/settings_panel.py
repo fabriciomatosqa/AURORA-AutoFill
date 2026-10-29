@@ -4,6 +4,7 @@ from __future__ import annotations
 from .themes import set_ui_style, ui_color
 
 from pathlib import Path
+import sys
 
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (QCheckBox, QComboBox, QFrame, QHBoxLayout, QLabel, QPushButton,
@@ -21,6 +22,7 @@ class SettingsPage(QWidget):
     updates_toggled = Signal(bool)
     prereleases_toggled = Signal(bool)
     suggestions_toggled = Signal(bool)
+    linux_setup_requested = Signal()
     play_requested = Signal()
     backup_requested = Signal()
     restore_requested = Signal()
@@ -118,6 +120,10 @@ class SettingsPage(QWidget):
         info.setObjectName("hint")
         info.setWordWrap(True)
         layout.addWidget(info)
+        if sys.platform.startswith("linux"):
+            setup = QPushButton("Configurar atalhos no Linux Wayland")
+            setup.clicked.connect(self.linux_setup_requested.emit)
+            layout.addWidget(setup)
         self._divider(layout)
         self._label(layout, "ÁUDIO")
         self.sound = QCheckBox("Reproduzir som ao salvar e acionar comandos")

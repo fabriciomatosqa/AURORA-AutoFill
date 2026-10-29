@@ -1389,12 +1389,15 @@ class AutoFillWindow(ProductivityMixin, AuroraFeaturesMixin, QMainWindow):
     def _update_preview(self):
         text = plain_text_fallback(self.body_input.toPlainText())
         current_clipboard = QApplication.clipboard().text()
-        result = render_snippet(text, current_clipboard)
-        rich_html = self.body_input.toHtml()
-        if contains_inline_images(rich_html) or has_rich_formatting(rich_html):
-            self.preview.setHtml(render_rich_html(rich_html, current_clipboard))
-        else:
-            self.preview.setPlainText(result.text)
+        try:
+            result = render_snippet(text, current_clipboard)
+            rich_html = self.body_input.toHtml()
+            if contains_inline_images(rich_html) or has_rich_formatting(rich_html):
+                self.preview.setHtml(render_rich_html(rich_html, current_clipboard))
+            else:
+                self.preview.setPlainText(result.text)
+        except (ValueError, OverflowError) as error:
+            self.preview.setPlainText(f"Variável ainda inválida: {error}")
 
     def _refresh_all(self):
         self._loading = True
@@ -1739,7 +1742,15 @@ class AutoFillWindow(ProductivityMixin, AuroraFeaturesMixin, QMainWindow):
         # Formulários e etapas precisam da confirmação do usuário antes de
         # tentar qualquer alteração no aplicativo de destino.
         snippet = self.store.snippet_by_shortcut(candidate.shortcut)
-        if snippet and (fields_in(snippet.content) or has_steps(snippet.content)):
+        try:
+            smart_needed = snippet is not None and (
+                bool(fields_in(snippet.content)) or has_steps(snippet.content))
+        except ValueError as error:
+            self.statusBar().showMessage(f"Modelo inválido: {error}", 8500)
+            self._active_candidate = None
+            self.hotkeys.invalidate()
+            return
+        if smart_needed:
             self._active_candidate = None
             self.hotkeys.invalidate()
             QTimer.singleShot(0, lambda item=snippet, ctx=candidate.context, key=candidate.shortcut:
