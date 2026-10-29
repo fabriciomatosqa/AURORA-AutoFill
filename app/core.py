@@ -232,6 +232,13 @@ class SnippetStore:
     def reset_usage(self) -> None:
         reset_usage(self.connection)
 
+    def shortcut_catalog(self) -> list[tuple[str, str]]:
+        """The slash popup needs names, not the contents or rich media."""
+        rows = self.connection.execute(
+            "SELECT shortcut, title FROM snippets ORDER BY shortcut COLLATE NOCASE"
+        ).fetchall()
+        return [(str(row[0]), str(row[1])) for row in rows]
+
     def snippet_by_shortcut(self, shortcut: str) -> Snippet | None:
         """Índice Unicode leve + cache limitado, sem reler imagens a cada uso.
 
