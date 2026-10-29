@@ -1663,6 +1663,10 @@ class AutoFillWindow(AuroraFeaturesMixin, QMainWindow):
     def _listener_state_changed(self, _state):
         if self._quitting:
             return
+        if self._input_start_failure:
+            self.listen_button.setText("Atalhos indisponíveis")
+            apply_icon(self.listen_button, "pause")
+            return
         # Signals may be queued across a click on Pause. Render the current
         # requested state, never reactivate from an older recovery notification.
         if not self._hotkeys_enabled:
