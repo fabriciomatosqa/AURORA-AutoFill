@@ -12,7 +12,7 @@ from app.expansion import FocusContext
 from app.productivity_features import ProductivityMixin
 
 
-class DummyHost:
+class DummyHost(ProductivityMixin):
     def __init__(self):
         self.store = object()
         self._quitting = False
