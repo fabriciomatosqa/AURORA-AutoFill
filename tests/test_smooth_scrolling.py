@@ -117,6 +117,19 @@ class SmoothScrollingTests(unittest.TestCase):
         self.assertEqual(bar.value(), 0)
         self.assertNotIn(bar, self.controller._animations)
 
+    def test_repeated_ticks_near_bottom_do_not_jump_past_animation(self):
+        area = self.scroll_area()
+        bar = area.verticalScrollBar()
+        bar.setValue(bar.maximum() - 20)
+        self.assertTrue(self.controller.eventFilter(area.viewport(), wheel()))
+        # The next tick arrives before the previous 20px animation ends.
+        self.assertTrue(self.controller.eventFilter(area.viewport(), wheel()))
+        self.assertLess(bar.value(), bar.maximum())
+        QTest.qWait(220)
+        self.assertEqual(bar.value(), bar.maximum())
+        # Once at rest, the page may propagate further scroll events.
+        self.assertFalse(self.controller.eventFilter(area.viewport(), wheel()))
+
     def test_manual_scrollbar_drag_cancels_animation(self):
         area = self.scroll_area()
         bar = area.verticalScrollBar()
