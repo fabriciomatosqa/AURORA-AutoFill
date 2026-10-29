@@ -39,7 +39,7 @@ def main():
         raise SystemExit("This smoke test requires Windows")
     import websocket
     os.environ["QT_QPA_PLATFORM"] = "windows"
-    from PySide6.QtWidgets import QApplication
+    from PySide6.QtWidgets import QApplication, QDialog
     from PySide6.QtCore import QObject, Signal, Qt
     from app.clipboard_content import clone_mime
     from app.hotkeys import GlobalHotkeyListener
@@ -376,6 +376,64 @@ def main():
                                  "clipboard": clipboard.text()})
             report.append({"iframe": framed, "rich": rich, "mismatch": mismatch,
                            "recovery": fault, "pastes": actual["pastes"]})
+        # Exercise the REAL modal picker: Enter must return to an external
+        # editor and use the same transaction as the slash-command engine.
+        from app.productivity_features import ProductivityMixin
+        from app.productivity_widgets import QuickSearchDialog
+        from PySide6.QtCore import QTimer
+        from PySide6.QtTest import QTest
+        host._insert_search_result=MethodType(ProductivityMixin._insert_search_result,host)
+        def pick_into(context, query='/teste'):
+            dialog=QuickSearchDialog(store)
+            def accept_picker():
+                dialog.search.setText(query)
+                QTest.keyClick(dialog.search,Qt.Key_Return)
+            QTimer.singleShot(200,accept_picker)
+            assert dialog.exec()==QDialog.DialogCode.Accepted
+            host._insert_search_result(dialog.selected_snippet,context)
+            wait(lambda:host._expansion_operation is None and host._clipboard_lease is None
+                 and any('Enviado:' in m or 'Expandido:' in m for m in messages[marker:]),seconds=10)
+            dialog.deleteLater()
+        # Browser/iframe field, keeping the pre-existing abbreviation intact.
+        js("(()=>{const d=document.getElementById('frame').contentDocument;const e=d.getElementById('editor');"
+           "e.textContent='Before /teste|Tail';e.focus();const r=d.createRange();r.setStart(e.firstChild,13);"
+           "r.collapse(true);const s=d.getSelection();s.removeAllRanges();s.addRange(r);window.pastes=0;})()")
+        wait(owned_focus)
+        marker=len(messages)
+        pick_into(capture_focus())
+        assert js("document.getElementById('frame').contentDocument.getElementById('editor').textContent").replace('\u00a0',' ')== 'Before /teste'+body+'|Tail'
+        assert js('window.pastes')==1
+        # Native RichEdit, including insertion over an existing selection.
+        from smoke_accessibility import launch_synthetic_editor
+        from app.windows_context import capture_edit, select_text_range, ContextUnavailable
+        from app.expansion import FocusContext
+        powershell=Path(os.environ['SystemRoot'])/'System32/WindowsPowerShell/v1.0/powershell.exe'
+        fixture_process, handles=launch_synthetic_editor(powershell)
+        try:
+            target=FocusContext(handles['window'],handles['control'])
+            wait(lambda:capture_focus()==target)
+            snapshots=[]
+            def read_native():
+                try:
+                    value=capture_edit(target,accessibility=True)
+                    if value is not None:
+                        snapshots.append(value)
+                        return True
+                except ContextUnavailable:
+                    pass
+                return False
+            wait(read_native);before=snapshots[-1]
+            marker=len(messages);pick_into(target)
+            wait(read_native);after=snapshots[-1]
+            assert after.text==before.replace(before.start,before.end,body), messages[marker:]
+            select_text_range(after,0,5)
+            wait(lambda:read_native() and (snapshots[-1].start,snapshots[-1].end)==(0,5))
+            marker=len(messages);pick_into(target)
+            wait(read_native);actual=snapshots[-1]
+            assert actual.text==after.replace(0,5,body), messages[marker:]
+        finally:
+            fixture_process.kill();fixture_process.communicate(timeout=5)
+        print('Global search native paste passed: modal Enter, iframe and RichEdit selection')
         print("Chromium native expansion cases:", json.dumps(report))
         assert not failures, failures
         print("Chromium native expansion passed")

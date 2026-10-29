@@ -55,6 +55,10 @@ class EditSnapshot:
     identity: tuple[str, ...] = ()
 
     def shortcut_range(self, shortcut: str) -> tuple[int, int] | None:
+        # An explicit picker request inserts at the caret or replaces the
+        # existing selection; there is no typed abbreviation to erase.
+        if shortcut == "":
+            return (self.start, self.end) if 0 <= self.start <= self.end <= utf16_length(self.text) else None
         if self.start != self.end or self.start < utf16_length(shortcut):
             return None
         begin = self.start - utf16_length(shortcut)

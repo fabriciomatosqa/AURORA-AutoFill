@@ -106,20 +106,22 @@ public static class AuroraWordWorker
         bool submitted = false;
         try
         {
-            if (request == null || String.IsNullOrEmpty(request.shortcut) || request.shortcut.Length > 128
+            if (request == null || request.shortcut == null || request.shortcut.Length > 128
                 || request.text == null || request.text.IndexOf('\0') >= 0 || !valid())
                 return new { status = "changed" };
             selection = Get(window, "Selection");
             original = Get(selection, "Range");
             int start = Convert.ToInt32(Get(original, "Start"));
             int end = Convert.ToInt32(Get(original, "End"));
-            if (start != end || start < request.shortcut.Length) return new { status = "changed" };
+            bool inserting = request.shortcut.Length == 0;
+            if (!inserting && (start != end || start < request.shortcut.Length)) return new { status = "changed" };
             range = Get(original, "Duplicate");
-            Call(range, "SetRange", start - request.shortcut.Length, end);
-            if (Convert.ToString(Get(range, "Text")) != request.shortcut) return new { status = "changed" };
+            if (!inserting) Call(range, "SetRange", start - request.shortcut.Length, end);
+            string originalText = inserting ? Convert.ToString(Get(range, "Text")) : request.shortcut;
+            if (Convert.ToString(Get(range, "Text")) != originalText) return new { status = "changed" };
             current = Get(selection, "Range");
             if (Convert.ToInt32(Get(current, "Start")) != start || Convert.ToInt32(Get(current, "End")) != end
-                || !valid() || Convert.ToString(Get(range, "Text")) != request.shortcut)
+                || !valid() || Convert.ToString(Get(range, "Text")) != originalText)
                 return new { status = "changed" };
             int begin = Convert.ToInt32(Get(range, "Start"));
             submitted = true;

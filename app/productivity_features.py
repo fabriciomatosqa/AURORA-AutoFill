@@ -11,7 +11,7 @@ from html import escape
 from time import monotonic
 from PySide6.QtCore import QTimer, QRect
 from PySide6.QtGui import QCursor
-from PySide6.QtWidgets import QApplication, QMessageBox, QToolTip
+from PySide6.QtWidgets import QApplication, QDialog, QMessageBox, QToolTip
 
 from .expansion import FocusContext
 from .core import render_snippet
@@ -20,7 +20,7 @@ from .productivity_widgets import FieldsDialog, QuickSearchDialog, UsageStatisti
 from .formatting import render_rich_html, has_rich_formatting
 from .clipboard_content import expansion_mime
 from .hotkeys import paste_clipboard, replace_shortcut
-from .windows_context import capture_focus, capture_edit, ContextUnavailable
+from .windows_context import capture_focus, capture_edit, restore_focus, ContextUnavailable
 from .wayland_input import is_wayland_session
 
 
@@ -38,8 +38,7 @@ def restore_target(context):
     if same_windows_focus(context):
         return True
     try:
-        ctypes.windll.user32.SetForegroundWindow(context.window)
-        return same_windows_focus(context)
+        return restore_focus(context)
     except (OSError, AttributeError, ValueError):
         return False
 
@@ -72,7 +71,7 @@ class ProductivityMixin:
                    else capture_focus())
         try:
             dlg = QuickSearchDialog(self.store, self)
-            if dlg.exec() != dlg.Accepted or dlg.selected_snippet is None:
+            if dlg.exec() != QDialog.DialogCode.Accepted or dlg.selected_snippet is None:
                 return
             self._launch_smart_snippet(dlg.selected_snippet, context, from_shortcut=None)
         finally:
@@ -180,10 +179,15 @@ class ProductivityMixin:
 
     def _launch_smart_snippet(self, snippet, context, *, from_shortcut):
         fields = fields_in(snippet.content)
+        if (from_shortcut is None and not fields and not has_steps(snippet.content)
+                and sys.platform == 'win32' and context.window and context.control
+                and context.window != int(self.winId())):
+            self._insert_search_result(snippet, context)
+            return
         answers = {}
         if fields:
             dialog = FieldsDialog(snippet.content, self)
-            if dialog.exec() != dialog.Accepted:
+            if dialog.exec() != QDialog.DialogCode.Accepted:
                 if from_shortcut:
                     self.statusBar().showMessage("Formulário cancelado. Atalho preservado.", 5000)
                 return
@@ -246,6 +250,29 @@ class ProductivityMixin:
         except (ValueError, OSError, ContextUnavailable) as error:
             QMessageBox.warning(self, "Comando não inserido", str(error))
 
+    def _insert_search_result(self, snippet, context):
+        # Closing a modal window restores activation asynchronously. Request
+        # focus once, then wait for the original child control, without sending
+        # keystrokes to the search box or repeatedly stealing another app's focus.
+        token = object()
+        self._search_insert_token = token
+        restore_target(context)
+        deadline = monotonic() + .7
+        def ready():
+            if (getattr(self, '_search_insert_token', None) is not token
+                    or getattr(self, '_quitting', False) or not getattr(self, '_hotkeys_enabled', False)):
+                return
+            if same_windows_focus(context):
+                candidate = self.hotkeys.choose_insertion(snippet.shortcut, context)
+                if candidate is not None:
+                    self._expand_global(candidate)
+                return
+            if monotonic() < deadline:
+                QTimer.singleShot(20, ready)
+            else:
+                self.statusBar().showMessage('Não foi possível retornar ao campo selecionado. Clique nele e abra a pesquisa novamente.', 8500)
+        QTimer.singleShot(40, ready)
+
     def _safe_paste_selected(self, context, text, snippet, shortcut):
         if QApplication.clipboard().text() != text:
             self.statusBar().showMessage("Clipboard mudou; nenhuma colagem automática.", 7500)
@@ -254,6 +281,8 @@ class ProductivityMixin:
             self.statusBar().showMessage("Destino alterado: conteúdo copiado, cole com Ctrl+V.", 8500)
             return
         try:
+            from .clipboard_content import materialize_clipboard
+            materialize_clipboard()
             if shortcut:
                 snapshot = capture_edit(context, accessibility=True)
                 if snapshot is None or snapshot.shortcut_range(shortcut) is None:
