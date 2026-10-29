@@ -4,18 +4,21 @@ import tempfile
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import patch, Mock
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PySide6.QtCore import QPoint, QRect, QSize, Qt
-from PySide6.QtWidgets import QApplication
+from PySide6.QtWidgets import QApplication, QTextEdit
+from PySide6.QtTest import QTest
+from PySide6.QtGui import QTextCursor
 
 from app.core import SnippetStore
 from app.expansion import ExpansionCandidate, FocusContext, EditSnapshot
 from app.hotkeys import GlobalHotkeyListener, INJECTION_TAG, ShortcutMatcher
 from app.slash_popup import (POPUP_GAP, ASSETS, SlashCommandPopup,
                              placement_for_caret)
+from app.productivity_features import ProductivityMixin
 
 
 def key(character=None, name=""):
@@ -224,6 +227,92 @@ class SlashPopupTests(unittest.TestCase):
         finally:
             panel.close()
             panel.deleteLater()
+
+    def test_nonactivating_tool_does_not_auto_hide_on_hover_or_click(self):
+        popup = SlashCommandPopup()
+        selected = []
+        popup.command_selected.connect(selected.append)
+        try:
+            self.assertEqual(popup.windowFlags() & Qt.Tool, Qt.Tool)
+            self.assertTrue(popup.testAttribute(Qt.WA_ShowWithoutActivating))
+            self.assertTrue(popup.windowFlags() & Qt.WindowDoesNotAcceptFocus)
+            popup.present("/", [("/a", "Alpha"), ("/b", "Beta")], QPoint(40, 70))
+            self.app.processEvents()
+            item = popup.results.item(1)
+            center = popup.results.visualItemRect(item).center()
+            QTest.mouseMove(popup.results.viewport(), center)
+            self.app.processEvents()
+            self.assertTrue(popup.isVisible())
+            QTest.mouseClick(popup.results.viewport(), Qt.LeftButton, pos=center)
+            self.app.processEvents()
+            self.assertEqual(selected, ["/b"])
+            self.assertTrue(popup.isVisible())
+        finally:
+            popup.close()
+            popup.deleteLater()
+
+    def test_wheel_and_mouse_inside_popup_do_not_erase_typed_prefix(self):
+        listener = GlobalHotkeyListener(lambda _: None)
+        listener.update_shortcuts(["/teste", "/tempo"])
+        for char in "/te":
+            listener._matcher.feed(char)
+        listener.set_popup_hitbox((100, 100, 410, 260))
+        self.assertEqual(listener._matcher.suggestion_prefix(), "/te")
+        listener._on_scroll(300, 180, 0, -2)
+        listener._on_click(300, 180, None, True)
+        self.assertEqual(listener._matcher.suggestion_prefix(), "/te")
+        listener._on_click(20, 20, None, True)
+        self.assertEqual(listener._matcher.suggestion_prefix(), "")
+        listener._matcher.feed("/")
+        listener._on_scroll(20, 20, 0, 1)
+        self.assertEqual(listener._matcher.suggestion_prefix(), "")
+        listener.set_popup_hitbox(None)
+
+    def test_internal_editor_caret_not_mouse_is_the_popup_anchor(self):
+        class LocalHost(ProductivityMixin):
+            def isActiveWindow(self):
+                return True
+
+            def focusWidget(self):
+                return self.test_box
+
+        host = LocalHost()
+        host.test_box = QTextEdit()
+        host.test_box.setGeometry(80, 90, 600, 120)
+        host.test_box.show()
+        host.test_box.setPlainText("Um teste /te")
+        host.test_box.moveCursor(QTextCursor.End)
+        host._slash_popup = SlashCommandPopup()
+        host._suggestion_catalog = [("/teste", "Teste")]
+        host._hotkeys_enabled = True
+        host._quitting = False
+        host.preferences = {"suggest_shortcuts": True}
+        host._slash_prefix = ""
+        host._slash_context = None
+        host.hotkeys = Mock()
+        context = FocusContext(111, 222)
+        try:
+            expected = host.test_box.viewport().mapToGlobal(
+                host.test_box.cursorRect().topLeft())
+            with patch("app.productivity_features.sys.platform", "win32"), \\
+                 patch("app.productivity_features.capture_focus", return_value=context), \\
+                 patch("app.slash_popup.suggestion_anchor",
+                       side_effect=AssertionError("Do not use mouse/fallback")):
+                host._show_suggestions(("/te", context))
+            self.app.processEvents()
+            pos = host._slash_popup.geometry()
+            self.assertLessEqual(abs(pos.left()-expected.x()), 10)
+            self.assertGreater(
+                pos.top(),
+                expected.y() + host.test_box.cursorRect().height())
+            self.assertEqual(host._slash_prefix, "/te")
+            host.hotkeys.set_popup_hitbox.assert_called()
+        finally:
+            host._hide_suggestion_popup()
+            host._slash_popup.close()
+            host._slash_popup.deleteLater()
+            host.test_box.close()
+            host.test_box.deleteLater()
 
     def test_only_shortcut_and_title_are_loaded(self):
         with tempfile.TemporaryDirectory() as folder:
