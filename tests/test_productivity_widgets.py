@@ -57,6 +57,44 @@ class ProductivityWidgetsTests(unittest.TestCase):
             picker.close()
             picker.deleteLater()
 
+    def test_repeated_dynamic_fields_have_individual_values_in_text_order(self):
+        from app.smart_templates import fill_fields
+        pattern = ("O {{campo:Nome}} namora com a {{campo:Nome}}. "
+                   "{{campo:Nome}} está presente.")
+        dialog = FieldsDialog(pattern)
+        try:
+            dialog.show()
+            self.app.processEvents()
+            self.assertEqual(len(dialog.fields), 3)
+            self.assertEqual(list(dialog.controls), ["nome", "nome#2", "nome#3"])
+            self.assertIs(dialog.focusWidget(), dialog.controls["nome"])
+            self.assertEqual(dialog.controls["nome"].accessibleName(), "Nome (1)")
+            self.assertEqual(dialog.controls["nome#2"].accessibleName(), "Nome (2)")
+            QTest.keyClicks(dialog.controls["nome"], "João")
+            QTest.keyClick(dialog.controls["nome"], Qt.Key_Tab)
+            self.assertIs(dialog.focusWidget(), dialog.controls["nome#2"])
+            QTest.keyClicks(dialog.controls["nome#2"], "Maria")
+            QTest.keyClicks(dialog.controls["nome#3"], "Carlos")
+            self.assertEqual(
+                fill_fields(pattern, dialog.values()),
+                "O João namora com a Maria. Carlos está presente.")
+        finally:
+            dialog.close()
+            dialog.deleteLater()
+
+    def test_global_search_activates_search_input_when_shown(self):
+        picker = QuickSearchDialog(self.store)
+        try:
+            picker.show()
+            self.app.processEvents()
+            self.assertTrue(picker.search.hasFocus())
+            QTest.keyClicks(picker.search, "chamado")
+            self.assertEqual(picker.search.text(), "chamado")
+            self.assertEqual(picker.matches.count(), 1)
+        finally:
+            picker.close()
+            picker.deleteLater()
+
     def test_global_search_arrow_navigation_from_search_and_enter_to_insert(self):
         folder_id = self.store.folders()[0][0]
         second_id = self.store.save(
