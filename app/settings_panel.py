@@ -8,7 +8,7 @@ from __future__ import annotations
 from pathlib import Path
 import sys
 
-from PySide6.QtCore import QTimer, Qt, Signal
+from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
     QCheckBox, QComboBox, QFrame, QHBoxLayout, QLabel, QPushButton,
     QScrollArea, QSlider, QVBoxLayout, QWidget,
@@ -208,13 +208,10 @@ class SettingsPage(QWidget):
         self._backup_card()
         self._updates_card(prefs)
 
-        self._compact_columns = None
-        self._reflow_cards(force=True)
         self.scroller.setWidget(body)
         root.addWidget(self.scroller)
-        # The actual viewport width is only reliable after the stacked page
-        # is laid out. Re-evaluate then and after every resize.
-        QTimer.singleShot(0, self._reflow_cards)
+        self._compact_columns = None
+        self._reflow_cards(force=True)
 
     def _card(self, key: str, title: str, summary: str = "") -> QVBoxLayout:
         frame = QFrame(self.dashboard)
@@ -496,6 +493,11 @@ class SettingsPage(QWidget):
         self.columns_layout.setStretch(0, 1)
         self.columns_layout.setStretch(1, 1 if right else 0)
         self.dashboard.updateGeometry()
+
+    def showEvent(self, event):
+        super().showEvent(event)
+        if hasattr(self, "_compact_columns"):
+            self._reflow_cards()
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
