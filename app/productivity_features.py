@@ -13,6 +13,7 @@ from PySide6.QtCore import QTimer, QRect
 from PySide6.QtGui import QCursor
 from PySide6.QtWidgets import QApplication, QMessageBox, QToolTip
 
+from .expansion import FocusContext
 from .core import render_snippet
 from .smart_templates import fields_in, fill_fields, has_steps, action_steps
 from .productivity_widgets import FieldsDialog, QuickSearchDialog, UsageStatisticsDialog
@@ -57,12 +58,18 @@ class ProductivityMixin:
         dlg = UsageStatisticsDialog(self.store, self)
         dlg.exec()
 
-    def _open_global_search(self):
+    def _open_global_search(self, origin_context=None):
+        """Open from hotkey or settings, retaining focus recorded before Qt activation.
+
+        Only a real, previously focused external editor is eligible for automatic
+        insertion; opening from the Aurora settings button keeps clipboard fallback.
+        """
         if getattr(self, "_quitting", False) or getattr(self, "_quick_picker_open", False):
             return
         QToolTip.hideText()
         self._quick_picker_open = True
-        context = capture_focus()
+        context = (origin_context if isinstance(origin_context, FocusContext)
+                   else capture_focus())
         try:
             dlg = QuickSearchDialog(self.store, self)
             if dlg.exec() != dlg.Accepted or dlg.selected_snippet is None:

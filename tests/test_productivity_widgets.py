@@ -57,6 +57,49 @@ class ProductivityWidgetsTests(unittest.TestCase):
             picker.close()
             picker.deleteLater()
 
+    def test_global_search_arrow_navigation_from_search_and_enter_to_insert(self):
+        folder_id = self.store.folders()[0][0]
+        second_id = self.store.save(
+            folder_id, "Segundo comando", "/segundo", "Texto do segundo")
+        third_id = self.store.save(
+            folder_id, "Terceiro comando", "/terceiro", "Texto do terceiro")
+        picker = QuickSearchDialog(self.store)
+        try:
+            picker.show()
+            self.app.processEvents()
+            picker.search.setFocus()
+            self.assertGreaterEqual(picker.matches.count(), 3)
+            self.assertEqual(picker.matches.currentRow(), 0)
+            # The editor retains keyboard focus while ↑/↓ move the result.
+            QTest.keyClick(picker.search, Qt.Key_Down)
+            self.assertEqual(picker.matches.currentRow(), 1)
+            self.assertTrue(picker.search.hasFocus())
+            self.assertIsNone(picker.selected_snippet)
+            QTest.keyClick(picker.search, Qt.Key_Down)
+            self.assertEqual(picker.matches.currentRow(), 2)
+            QTest.keyClick(picker.search, Qt.Key_Up)
+            self.assertEqual(picker.matches.currentRow(), 1)
+            QTest.keyClick(picker.search, Qt.Key_Return)
+            self.assertIsNotNone(picker.selected_snippet)
+            self.assertIn(picker.selected_snippet.id,
+                          (self.item, second_id, third_id))
+        finally:
+            picker.close()
+            picker.deleteLater()
+
+    def test_global_search_enter_from_list_uses_selected_result(self):
+        picker = QuickSearchDialog(self.store)
+        try:
+            picker.show()
+            self.app.processEvents()
+            picker.matches.setFocus()
+            QTest.keyClick(picker.matches, Qt.Key_Return)
+            self.assertIsNotNone(picker.selected_snippet)
+            self.assertEqual(picker.selected_snippet.id, self.item)
+        finally:
+            picker.close()
+            picker.deleteLater()
+
     def test_global_search_preview_shows_entire_text_and_scrolls_independently(self):
         lines = [f"Linha detalhada {n:03d}: conteúdo completo" for n in range(110)]
         long_text = "\n".join(lines)
