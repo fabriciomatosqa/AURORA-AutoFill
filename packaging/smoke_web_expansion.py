@@ -158,7 +158,8 @@ def main():
             _hotkeys_enabled=True,
             isActiveWindow=lambda: False, focusWidget=lambda: None,
             test_box=object(), statusBar=lambda: SimpleNamespace(showMessage=lambda text,*_:messages.append(text)),
-            _play_confirmation=Mock(), listen_button=Mock(), tray_toggle_action=None)
+            _play_confirmation=Mock(), listen_button=Mock(), tray_toggle_action=None,
+            _quick_search_hotkey=SimpleNamespace(unregister=Mock(), register=Mock(return_value=(True, ""))))
         for name in AutoFillWindow.__dict__:
             if name.startswith(('_expand', '_expansion_', '_candidate', '_edit_snapshot', '_owns_clipboard',
                                 '_clipboard_', '_perform_', '_submit_', '_begin_', '_poll_',
@@ -167,6 +168,7 @@ def main():
                 setattr(host, name, MethodType(getattr(AutoFillWindow, name), host))
         host._clone_clipboard_mime = AutoFillWindow._clone_clipboard_mime
         host._normal_text = AutoFillWindow._normal_text
+        host._sync_quick_search_hotkey = MethodType(AutoFillWindow._sync_quick_search_hotkey, host)
         host._toggle_listener = MethodType(AutoFillWindow._toggle_listener, host)
         class Signals(QObject):
             triggered = Signal(object)
