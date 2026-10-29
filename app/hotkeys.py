@@ -76,10 +76,27 @@ class ShortcutMatcher:
             return None
 
     def current_prefix(self) -> str:
-        """Prefixo transitório usado apenas para sugestões opt-in."""
+        """Compatibilidade: as antigas dicas começavam após dois caracteres."""
         with self._lock:
             pos = self._buffer.rfind("/")
             return self._buffer[pos:] if pos >= 0 and len(self._buffer) - pos >= 3 else ""
+
+    def suggestion_prefix(self) -> str:
+        """Menu começa em / e não permanece aberto após espaço ou pontuação."""
+        with self._lock:
+            pos = self._buffer.rfind("/")
+            if pos < 0:
+                return ""
+            typed = self._buffer[pos:]
+            return typed if (1 <= len(typed) <= 31
+                             and all(not char.isspace() for char in typed)
+                             and self.has_matches(typed)) else ""
+
+    def has_matches(self, prefix: str) -> bool:
+        """Only a memory predicate; keyboard hooks never query SQLite."""
+        lowered = shortcut_key(prefix)
+        return bool(lowered and
+                    (lowered in self._shortcuts or lowered in self._prefixes))
 
     def ambiguous_exact(self) -> str | None:
         """Atalho completo que também é prefixo de outro; sem confirmação ainda."""
@@ -110,11 +127,18 @@ class ShortcutMatcher:
 class GlobalHotkeyListener:
     def __init__(self, on_trigger: Callable[[ExpansionCandidate], None],
                  on_state: Callable[[str], None] | None = None,
-                 on_quick_search=None, on_prefix=None):
+                 on_quick_search=None, on_prefix=None,
+                 on_suggestion_state=None, on_navigation=None):
         self._on_trigger = on_trigger
         self._on_state = on_state
         self._on_quick_search = on_quick_search
         self._on_prefix = on_prefix
+        self._on_suggestion_state = on_suggestion_state
+        self._on_navigation = on_navigation
+        self._suggestions_enabled = False
+        self._visible_suggestion_prefix = ""
+        self._visible_suggestion_context = None
+        self._suppressed_nav_keys: set[int] = set()
         self._matcher = ShortcutMatcher()
         self._listener = None
         self._mouse_listener = None
@@ -162,6 +186,10 @@ class GlobalHotkeyListener:
             self._pending = self._pending_key = None
             self._context = None
             self._matcher.clear()
+            self._visible_suggestion_prefix = ""
+            self._visible_suggestion_context = None
+            if self._on_suggestion_state is not None:
+                self._on_suggestion_state(("", self._context))
 
     def is_current(self, candidate: ExpansionCandidate, *, require_fresh: bool = True) -> bool:
         with self._state_lock:
@@ -178,6 +206,52 @@ class GlobalHotkeyListener:
                 return False
             self._claimed_id = candidate.identifier
             return True
+
+    def set_suggestions_enabled(self, enabled: bool) -> None:
+        """Opt-in: never intercept navigation when suggestion mode is off."""
+        with self._state_lock:
+            self._suggestions_enabled = bool(enabled)
+            if not enabled:
+                self._visible_suggestion_prefix = ""
+                self._visible_suggestion_context = None
+
+    def set_suggestion_visible(self, prefix: str, context) -> None:
+        """UI acknowledgement; stale popups never claim keyboard keys."""
+        with self._state_lock:
+            if (self._enabled and self._suggestions_enabled and
+                    prefix == self._matcher.suggestion_prefix() and
+                    context == self._context):
+                self._visible_suggestion_prefix = prefix
+                self._visible_suggestion_context = context
+            else:
+                self._visible_suggestion_prefix = ""
+                self._visible_suggestion_context = None
+
+    def choose_suggestion(self, prefix: str, shortcut: str, context):
+        """Convert a partial abbreviation into a normal, verified candidate."""
+        with self._state_lock:
+            if (not self._enabled or not self._suggestions_enabled or
+                    not prefix or prefix != self._visible_suggestion_prefix or
+                    prefix != self._matcher.suggestion_prefix() or
+                    context != self._context or capture_focus() != context or
+                    not shortcut_key(shortcut).startswith(shortcut_key(prefix))):
+                return None
+            self._cancel_ambiguity()
+            self._matcher.clear()
+            self._visible_suggestion_prefix = ""
+            self._visible_suggestion_context = None
+            self._revision += 1
+            self._latest_id += 1
+            return ExpansionCandidate(self._latest_id, prefix, self._revision,
+                                      context, monotonic(), shortcut)
+
+    def dismiss_suggestions(self, prefix: str, context) -> None:
+        with self._state_lock:
+            if prefix == self._visible_suggestion_prefix and context == self._context:
+                self._visible_suggestion_prefix = ""
+                self._visible_suggestion_context = None
+                self._matcher.clear()
+                self._revision += 1
 
     def set_enabled(self, enabled: bool) -> None:
         with self._state_lock:
@@ -223,8 +297,49 @@ class GlobalHotkeyListener:
         self._health.observe(device, int(data.time))
         return self._win32_event_filter(message, data) if device == "keyboard" else True
 
-    def _win32_event_filter(self, _message, data):
-        return int(data.dwExtraInfo or 0) != INJECTION_TAG
+    def _win32_event_filter(self, message, data):
+        if int(data.dwExtraInfo or 0) == INJECTION_TAG:
+            return False
+        vk = int(getattr(data, "vkCode", 0))
+        if vk not in (0x26, 0x28, 0x09, 0x0D, 0x1B):
+            return True
+        down = int(message) in (0x0100, 0x0104)
+        up = int(message) in (0x0101, 0x0105)
+        if not (down or up):
+            return True
+        listener = self._listener
+        if listener is None or not callable(getattr(listener, "suppress_event", None)):
+            return True
+        with self._state_lock:
+            # Suppress paired key-up, including after Tab/Enter closes the UI.
+            if up:
+                if vk not in self._suppressed_nav_keys:
+                    return True
+                self._suppressed_nav_keys.discard(vk)
+                listener.suppress_event()
+                return False
+            # Suppress repeated keydown until the physical release, even if
+            # pressing Enter/Tab has already dismissed the popup.
+            if vk in self._suppressed_nav_keys:
+                listener.suppress_event()
+                return False
+            if (not self._enabled or not self._suggestions_enabled or
+                    not self._running or self._needs_rearm or
+                    any(not name.startswith("shift") for name in self._modifiers) or
+                    not self._visible_suggestion_prefix or
+                    self._visible_suggestion_prefix != self._matcher.suggestion_prefix() or
+                    self._context != self._visible_suggestion_context or
+                    capture_focus() != self._context or
+                    not self._on_navigation):
+                return True
+            name = {0x26: "up", 0x28: "down", 0x09: "tab",
+                    0x0D: "enter", 0x1B: "escape"}[vk]
+            prefix, context = self._visible_suggestion_prefix, self._context
+            self._suppressed_nav_keys.add(vk)
+            self._on_navigation((name, prefix, context))
+            # pynput raises SuppressException by design, handled by its hook.
+            listener.suppress_event()
+            return False
 
     def _on_click(self, _x, _y, _button, pressed):
         if pressed:
@@ -280,6 +395,7 @@ class GlobalHotkeyListener:
             self._modifiers.clear()
             self._needs_rearm = False
             self._callback_failed = False
+            self._suppressed_nav_keys.clear()
         self._retire_hooks()
         self._health.reset(windows_input_snapshot())
         if is_wayland_session():
@@ -376,6 +492,8 @@ class GlobalHotkeyListener:
             if not name.startswith("shift"):
                 self._matcher.clear()
                 self._pending = self._pending_key = None
+                if self._on_suggestion_state:
+                    self._on_suggestion_state(("", self._context))
             return
         if not self._enabled:
             return
@@ -391,6 +509,8 @@ class GlobalHotkeyListener:
             self._matcher.clear()
             if self._on_prefix:
                 self._on_prefix("")
+            if self._on_suggestion_state:
+                self._on_suggestion_state(("", self._context))
             if self._on_quick_search:
                 self._on_quick_search()
             return
@@ -404,6 +524,10 @@ class GlobalHotkeyListener:
             matched = self._matcher.feed(character, name)
             if self._on_prefix:
                 self._on_prefix(self._matcher.current_prefix() if not matched else "")
+            if self._on_suggestion_state:
+                self._on_suggestion_state((
+                    self._matcher.suggestion_prefix() if not matched else "",
+                    self._context))
             if matched:
                 self._pending = matched
                 self._pending_key = key

@@ -19,6 +19,7 @@ class ExpansionCandidate:
     revision: int
     context: FocusContext
     created: float = field(default_factory=monotonic)
+    selected_shortcut: str | None = None
 
 
 def utf16_length(text: str) -> int:

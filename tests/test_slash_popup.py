@@ -1,0 +1,182 @@
+"""Regressions for the non-activating slash popup and Win32 navigation."""
+import os
+import tempfile
+import unittest
+from pathlib import Path
+from types import SimpleNamespace
+from unittest.mock import patch
+
+os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+
+from PySide6.QtCore import QPoint
+from PySide6.QtWidgets import QApplication
+
+from app.core import SnippetStore
+from app.expansion import ExpansionCandidate, FocusContext, EditSnapshot
+from app.hotkeys import GlobalHotkeyListener, INJECTION_TAG, ShortcutMatcher
+from app.slash_popup import SlashCommandPopup
+
+
+def key(character=None, name=""):
+    return SimpleNamespace(char=character, name=name,
+                           vk=ord(character) if character else None)
+
+
+class NativeSuppressed(Exception):
+    """Pynput raises a special exception to suppress a hardware event."""
+
+
+class FakeHook:
+    def __init__(self):
+        self.suppressed = 0
+
+    def suppress_event(self):
+        self.suppressed += 1
+        raise NativeSuppressed()
+
+
+class SlashMatcherTests(unittest.TestCase):
+    def test_menu_starts_with_single_slash_and_filters_as_typing(self):
+        matcher = ShortcutMatcher(["/teste", "/tempo", "/bomdia"])
+        self.assertEqual(matcher.suggestion_prefix(), "")
+        matcher.feed("/")
+        self.assertEqual(matcher.suggestion_prefix(), "/")
+        matcher.feed("t")
+        self.assertEqual(matcher.suggestion_prefix(), "/t")
+        matcher.feed("e")
+        self.assertEqual(matcher.suggestion_prefix(), "/te")
+        matcher.feed(None, "backspace")
+        self.assertEqual(matcher.suggestion_prefix(), "/t")
+        matcher.feed("x")
+        self.assertEqual(matcher.suggestion_prefix(), "")
+        matcher.clear()
+        matcher.feed("/")
+        matcher.feed(" ")
+        self.assertEqual(matcher.suggestion_prefix(), "")
+        matcher.feed(None, "tab")
+        self.assertEqual(matcher.suggestion_prefix(), "")
+
+    def test_ui_acknowledgment_blocks_unrelated_fields_and_disabled_mode(self):
+        focus = FocusContext(101, 202)
+        other = FocusContext(101, 999)
+        callback = []
+        listener = GlobalHotkeyListener(
+            lambda _: None, on_suggestion_state=callback.append)
+        listener.update_shortcuts(["/teste"])
+        with patch("app.hotkeys.capture_focus", return_value=focus),              patch("app.hotkeys.windows_modifiers", return_value=None):
+            listener._on_press(key("/"))
+            self.assertEqual(callback[-1], ("/", focus))
+            listener.set_suggestion_visible("/", focus)
+            self.assertFalse(listener._visible_suggestion_prefix)
+            listener.set_suggestions_enabled(True)
+            listener.set_suggestion_visible("/", other)
+            self.assertFalse(listener._visible_suggestion_prefix)
+            listener.set_suggestion_visible("/", focus)
+            self.assertEqual(listener._visible_suggestion_prefix, "/")
+            self.assertIsNone(listener.choose_suggestion("/", "/teste", other))
+            selected = listener.choose_suggestion("/", "/teste", focus)
+            self.assertIsInstance(selected, ExpansionCandidate)
+            self.assertEqual((selected.shortcut, selected.selected_shortcut),
+                             ("/", "/teste"))
+            self.assertIsNone(listener.choose_suggestion("/", "/teste", focus))
+            self.assertEqual(listener._matcher.suggestion_prefix(), "")
+
+    def test_windows_only_swallow_selected_navigation_with_paired_keyup(self):
+        focus = FocusContext(101, 202)
+        navigated = []
+        listener = GlobalHotkeyListener(lambda _: None,
+                                       on_navigation=navigated.append)
+        listener.update_shortcuts(["/teste", "/tempo"])
+        listener.set_suggestions_enabled(True)
+        hook = FakeHook()
+        listener._listener = hook
+        listener._running = True
+        data = lambda vk, marker=0: SimpleNamespace(vkCode=vk,
+                                                    dwExtraInfo=marker)
+        with patch("app.hotkeys.capture_focus", return_value=focus),              patch("app.hotkeys.windows_modifiers", return_value=None):
+            for ch in "/te":
+                listener._on_press(key(ch))
+            listener.set_suggestion_visible("/te", focus)
+            with self.assertRaises(NativeSuppressed):
+                listener._win32_event_filter(0x0100, data(0x28))  # Down
+            self.assertEqual(navigated, [("down", "/te", focus)])
+            with self.assertRaises(NativeSuppressed):
+                listener._win32_event_filter(0x0101, data(0x28))
+            self.assertEqual(hook.suppressed, 2)
+            self.assertEqual(listener._suppressed_nav_keys, set())
+            self.assertTrue(listener._win32_event_filter(0x0100, data(0x41)))
+            self.assertFalse(listener._win32_event_filter(
+                0x0100, data(0x41, INJECTION_TAG)))
+            listener.set_suggestions_enabled(False)
+            self.assertTrue(listener._win32_event_filter(0x0100, data(0x09)))
+        listener._running = False
+
+    def test_focus_change_and_modifier_prevent_suppression(self):
+        focus, wrong = FocusContext(1, 2), FocusContext(5, 6)
+        listener = GlobalHotkeyListener(lambda _: None,
+                                       on_navigation=lambda _: None)
+        listener.update_shortcuts(["/teste"])
+        listener.set_suggestions_enabled(True)
+        listener._listener = FakeHook()
+        listener._running = True
+        with patch("app.hotkeys.capture_focus", return_value=focus),              patch("app.hotkeys.windows_modifiers", return_value=None):
+            listener._on_press(key("/"))
+            listener.set_suggestion_visible("/", focus)
+            listener._modifiers.add("ctrl_l")
+            self.assertTrue(listener._win32_event_filter(
+                0x0100, SimpleNamespace(vkCode=9, dwExtraInfo=0)))
+            listener._modifiers.clear()
+        with patch("app.hotkeys.capture_focus", return_value=wrong):
+            self.assertTrue(listener._win32_event_filter(
+                0x0100, SimpleNamespace(vkCode=9, dwExtraInfo=0)))
+        listener._running = False
+
+
+class SlashPopupTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.app = QApplication.instance() or QApplication([])
+
+    def test_focused_command_navigation_and_scrolling(self):
+        panel = SlashCommandPopup()
+        try:
+            choices = [(f"/comando{i}", f"Resposta {i}") for i in range(12)]
+            panel.present("/", choices, QPoint(20, 60))
+            self.app.processEvents()
+            self.assertTrue(panel.isVisible())
+            self.assertFalse(panel.focusPolicy())
+            self.assertEqual(panel.results.count(), 12)
+            self.assertEqual(panel.current_shortcut(), "/comando0")
+            for _ in range(7):
+                panel.navigate(1)
+            self.assertEqual(panel.current_shortcut(), "/comando7")
+            panel.navigate(-1)
+            self.assertEqual(panel.current_shortcut(), "/comando6")
+            panel.present("/com", choices, QPoint(20, 60))
+            self.assertEqual(panel.current_shortcut(), "/comando0")
+            panel.navigate(-1)
+            self.assertEqual(panel.current_shortcut(), "/comando11")
+            panel.dismiss()
+            self.assertFalse(panel.isVisible())
+        finally:
+            panel.close()
+            panel.deleteLater()
+
+    def test_only_shortcut_and_title_are_loaded(self):
+        with tempfile.TemporaryDirectory() as folder:
+            db = SnippetStore(Path(folder) / "snippets.sqlite3")
+            try:
+                group = db.create_folder("Modelos")
+                db.save(group, "Resposta técnica", "/tecnico",
+                        "Conteúdo privado", rich_content="<b>Imagem</b>")
+                self.assertEqual(db.shortcut_catalog(),
+                                 [("/tecnico", "Resposta técnica")])
+                self.assertEqual(
+                    EditSnapshot(FocusContext(1, 2), "Oi /te", 6, 6)
+                    .shortcut_range("/te"), (3, 6))
+            finally:
+                db.close()
+
+
+if __name__ == "__main__":
+    unittest.main()

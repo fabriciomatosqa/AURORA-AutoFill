@@ -117,8 +117,11 @@ class SettingsPage(QWidget):
         self.suggestions.setChecked(prefs.get("suggest_shortcuts", False))
         self.suggestions.toggled.connect(self.suggestions_toggled.emit)
         layout.addWidget(self.suggestions)
-        info = QLabel("Mostra até cinco atalhos ao digitar / e três caracteres. "
-                      "Não utilize em campos de senha. Ctrl+Shift+Espaço abre a pesquisa global.")
+        info = QLabel(
+            "No Windows, digite / para abrir o menu dos seus comandos. Continue "
+            "digitando para filtrar, use ↑/↓ para navegar, Tab ou Enter para inserir "
+            "o selecionado e Esc para fechar. Não use em campos de senha. "
+            "Ctrl+Shift+Espaço abre a pesquisa global.")
         info.setObjectName("hint")
         info.setWordWrap(True)
         layout.addWidget(info)

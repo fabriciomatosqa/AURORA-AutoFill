@@ -71,22 +71,73 @@ class ProductivityMixin:
         finally:
             self._quick_picker_open = False
 
-    def _show_suggestions(self, prefix):
-        QToolTip.hideText()
-        if not self.preferences.get("suggest_shortcuts", False) or not prefix or len(prefix) < 3:
+    def _hide_suggestion_popup(self):
+        if hasattr(self, "_slash_popup"):
+            self._slash_popup.dismiss()
+        self._slash_prefix = ""
+        self._slash_context = None
+        if hasattr(self, "hotkeys"):
+            self.hotkeys.set_suggestion_visible("", None)
+
+    def _check_suggestions_focus(self):
+        if not getattr(self, "_slash_prefix", ""):
             return
-        # Overlay informativo, sem foco e sem substituir caracteres sozinho.
-        matching = []
-        for shortcut in self.store.shortcuts():
-            if shortcut.casefold().startswith(prefix.casefold()):
-                item = self.store.snippet_by_shortcut(shortcut)
-                if item:
-                    matching.append(item)
-                    if len(matching) >= 5:
-                        break
-        if matching:
-            names = "\n".join(f"{s.shortcut}  ·  {s.title[:38]}" for s in matching)
-            QToolTip.showText(QCursor.pos(), names + "\nCtrl+Shift+Espaço: pesquisar", None, QRect(), 1500)
+        if (getattr(self, "_quitting", False) or
+                not self._slash_popup.isVisible() or
+                capture_focus() != self._slash_context or
+                not getattr(self, "_hotkeys_enabled", False)):
+            self._hide_suggestion_popup()
+
+    def _show_suggestions(self, state):
+        # Signal is queued: every payload contains the original focus. An old
+        # slash typed in a previous window must never reopen the menu.
+        if not isinstance(state, tuple) or len(state) != 2:
+            return
+        prefix, context = state
+        if (not prefix or sys.platform != "win32" or
+                not self.preferences.get("suggest_shortcuts", False) or
+                getattr(self, "_quitting", False) or
+                not getattr(self, "_hotkeys_enabled", False) or
+                not getattr(context, "window", None) or
+                not getattr(context, "control", None) or
+                capture_focus() != context or
+                (self.isActiveWindow() and self.focusWidget() is not self.test_box)):
+            self._hide_suggestion_popup()
+            return
+        lowered = prefix.casefold()
+        matches = [(shortcut, title) for shortcut, title in self._suggestion_catalog
+                   if shortcut.casefold().startswith(lowered)][:80]
+        if not matches:
+            self._hide_suggestion_popup()
+            return
+        self._slash_popup.present(prefix, matches)
+        self._slash_prefix, self._slash_context = prefix, context
+        self.hotkeys.set_suggestion_visible(prefix, context)
+
+    def _navigate_suggestions(self, event):
+        if not isinstance(event, tuple) or len(event) != 3:
+            return
+        action, prefix, context = event
+        if (prefix != self._slash_prefix or context != self._slash_context or
+                capture_focus() != context or
+                not self._slash_popup.isVisible()):
+            self._hide_suggestion_popup()
+            return
+        if action == "up":
+            self._slash_popup.navigate(-1)
+        elif action == "down":
+            self._slash_popup.navigate(1)
+        elif action == "escape":
+            self.hotkeys.dismiss_suggestions(prefix, context)
+            self._hide_suggestion_popup()
+        elif action in ("tab", "enter"):
+            shortcut = self._slash_popup.current_shortcut()
+            if not shortcut:
+                return
+            candidate = self.hotkeys.choose_suggestion(prefix, shortcut, context)
+            self._hide_suggestion_popup()
+            if candidate is not None:
+                self._expand_global(candidate)
 
     def _launch_smart_snippet(self, snippet, context, *, from_shortcut):
         fields = fields_in(snippet.content)
