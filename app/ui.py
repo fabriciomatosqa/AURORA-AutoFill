@@ -1051,6 +1051,14 @@ class AutoFillWindow(ProductivityMixin, AuroraFeaturesMixin, QMainWindow):
         if dialog.exec() == QDialog.Accepted:
             self.body_input.setTextCursor(cursor)
             self._merge_text_format(dialog.value())
+            # The empty-brush selection in the advanced Font dialog means
+            # inheritance, not a new solid color; clear only that property.
+            if dialog.reset_foreground:
+                clear_selected_color(self.body_input, highlight=False)
+                self.text_color_button.set_automatic()
+            if dialog.reset_background:
+                clear_selected_color(self.body_input, highlight=True)
+                self.highlight_button.set_automatic()
 
     def _transform_case(self, mode: str):
         cursor = self.body_input.textCursor()
