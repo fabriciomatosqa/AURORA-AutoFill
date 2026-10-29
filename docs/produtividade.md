@@ -7,9 +7,9 @@ não é gravado no corpo do comando.
 
 | Sintaxe | Uso |
 | --- | --- |
-| \`{{campo:Nome}}\` | Campo livre |
-| \`{{campo:Nome|Joana}}\` | Campo com valor inicial |
-| \`{{escolha:Status|Aberto|Concluído}}\` | Lista obrigatória |
+| `{{campo:Nome}}` | Campo livre |
+| `{{campo:Nome|Joana}}` | Campo com valor inicial |
+| `{{escolha:Status|Aberto|Concluído}}` | Lista obrigatória |
 
 Até 12 campos diferentes por comando e 12 opções por lista. Campos repetidos
 com a mesma definição compartilham a resposta. Campos inconsistentes e
@@ -27,38 +27,38 @@ a colagem manual evita apagar texto incerto em outros aplicativos.
 ## Pesquisa global e sugestões
 
 O painel lateral contém **Pesquisa global**, que também é aberta por
-\`Ctrl+Shift+Espaço\` quando o listener de teclado global está funcionando.
+`Ctrl+Shift+Espaço` quando o listener de teclado global está funcionando.
 A busca alcança título, atalho e conteúdo das pastas.
 
 **Sugestões flutuantes** devem ser habilitadas conscientemente em Configurações:
 elas são opt-in, porque apps de expansão não conseguem distinguir todos os
-campos sensíveis. Após \`/\` e mais dois caracteres, mostram até cinco opções.
-O balão é somente informativo: pressione \`Ctrl+Shift+Espaço\` para pesquisar
+campos sensíveis. Após `/` e mais dois caracteres, mostram até cinco opções.
+O balão é somente informativo: pressione `Ctrl+Shift+Espaço` para pesquisar
 e escolher, sem que o balão intercepte teclas.
 
 ## Variáveis avançadas
 
-A versão anterior continua aceitando as variáveis \`{{data}}\`, \`{{hora}}\`,
-\`{{data_hora}}\`, \`{{clipboard}}\`, \`{{area_transferencia}}\` e \`{{cursor}}\`.
+A versão anterior continua aceitando as variáveis `{{data}}`, `{{hora}}`,
+`{{data_hora}}`, `{{clipboard}}`, `{{area_transferencia}}` e `{{cursor}}`.
 
-- \`{{data:+7}}\`: daqui a sete dias.
-- \`{{data:-30}}\`: trinta dias atrás.
-- \`{{data_formato:%d/%m/%Y}}\`: dia/mês/ano; outros formatos seguros
+- `{{data:+7}}`: daqui a sete dias.
+- `{{data:-30}}`: trinta dias atrás.
+- `{{data_formato:%d/%m/%Y}}`: dia/mês/ano; outros formatos seguros
   do strftime permitidos.
-- \`{{calculo:12.5*3}}\`: 37.5, limitado à aritmética simples; nomes,
+- `{{calculo:12.5*3}}`: 37.5, limitado à aritmética simples; nomes,
   arquivos, funções e execução de código são proibidos.
 
 As variáveis são avaliadas por uso; datas usam o horário do computador.
 
 ## Etapas por teclado
 
-\`\`\`text
+```text
 {{campo:Nome}}{{tab}}{{campo:Email}}{{tab}}Pendente{{espera:200}}{{enter}}
-\`\`\`
+```
 
-- \`{{tab}}\` navega para o próximo campo.
-- \`{{enter}}\` envia Enter.
-- \`{{espera:200}}\` aguarda 200 ms. Intervalo permitido 50–2000 ms.
+- `{{tab}}` navega para o próximo campo.
+- `{{enter}}` envia Enter.
+- `{{espera:200}}` aguarda 200 ms. Intervalo permitido 50–2000 ms.
 - São permitidas até 20 etapas por execução e no máximo 5000 ms de espera.
 
 Uma confirmação explica os efeitos antes da sequência. No Windows o mecanismo
@@ -73,7 +73,7 @@ não um fluxo de pressionamentos cegos.
 
 ## Estatísticas de uso
 
-Tabela \`usage_daily(day, snippet_id, shortcut, uses)\` no banco do usuário.
+Tabela `usage_daily(day, snippet_id, shortcut, uses)` no banco do usuário.
 Somente sucessos confirmados pelo mecanismo tradicional contam. Indicadores:
 dia, mês, ano, total, evolução mensal por 12 meses e modelos mais utilizados.
 
@@ -86,7 +86,7 @@ Não há envio de estatísticas por rede.
 Índice de texto completo SQLite sobre título, atalho e texto simples. Triggers
 mantêm o índice com inclusões, alterações e exclusões; migração constrói índice
 uma vez para bases existentes. Com SQLite sem FTS5, e quando não houver
-resultado indexado, o código volta à pesquisa \`LIKE\` anterior.
+resultado indexado, o código volta à pesquisa `LIKE` anterior.
 
 A busca por prefixo de palavra é acelerada; busca de trechos no meio da palavra
 permanece compatível pelo fallback. Resultados preservam ordem personalizada.
