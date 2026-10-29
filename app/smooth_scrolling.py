@@ -72,8 +72,10 @@ class SmoothWheelScroller(QObject):
         if target == current and animation.state() != QAbstractAnimation.Running:
             return False
         if target == origin:
-            # At the endpoint, let any enclosing page handle the wheel.
-            return False
+            # While an animation is still reaching the endpoint, swallow
+            # repeated ticks so the inner area doesn't jump or prematurely
+            # forward them to its enclosing scroll area.
+            return animation.state() == QAbstractAnimation.Running
         self._targets[bar] = target
         animation.stop()
         animation.setStartValue(current)
