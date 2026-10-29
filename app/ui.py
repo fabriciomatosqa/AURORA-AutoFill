@@ -20,7 +20,7 @@ from PySide6.QtWidgets import (
 )
 
 from .core import (Snippet, SnippetStore, application_db_path,
-                   render_snippet, validate_shortcut)
+                   render_snippet, validate_shortcut, shortcut_key)
 from .wayland_input import is_wayland_session
 from .hotkeys import (GlobalHotkeyListener, replace_shortcut, paste_clipboard,
                       select_previous_characters, copy_selected_text, collapse_selection_to_end,
@@ -40,6 +40,7 @@ from .ui_components import (AuroraBanner, AuroraWordmark, AuroraBannerCaption,
 from .features import AuroraFeaturesMixin
 from .productivity_features import ProductivityMixin
 from .smart_templates import fields_in, has_steps
+from .slash_popup import SlashCommandPopup
 from .version import APP_VERSION
 from .icons import apply_icon
 from .font_catalog import AuroraFontCombo, AuroraFontSizeSpinBox
@@ -236,7 +237,8 @@ class HotkeySignals(QObject):
     triggered = Signal(object)
     listener_state = Signal(str)
     quick_search = Signal()
-    suggestions = Signal(str)
+    suggestions = Signal(object)
+    suggestion_navigation = Signal(object)
 
 
 class AutoFillWindow(ProductivityMixin, AuroraFeaturesMixin, QMainWindow):
@@ -295,12 +297,25 @@ class AutoFillWindow(ProductivityMixin, AuroraFeaturesMixin, QMainWindow):
         self.signals.triggered.connect(self._expand_global)
         self.signals.listener_state.connect(self._listener_state_changed, Qt.QueuedConnection)
         self.signals.quick_search.connect(self._open_global_search, Qt.QueuedConnection)
+        self._slash_popup = SlashCommandPopup()
+        self._suggestion_catalog = []
+        self._slash_prefix = ""
+        self._slash_context = None
         self.signals.suggestions.connect(self._show_suggestions, Qt.QueuedConnection)
+        self.signals.suggestion_navigation.connect(
+            self._navigate_suggestions, Qt.QueuedConnection)
         self.hotkeys = GlobalHotkeyListener(
             self.signals.triggered.emit, self.signals.listener_state.emit,
             on_quick_search=self.signals.quick_search.emit,
-            on_prefix=self.signals.suggestions.emit)
+            on_suggestion_state=self.signals.suggestions.emit,
+            on_navigation=self.signals.suggestion_navigation.emit)
+        self.hotkeys.set_suggestions_enabled(
+            self.preferences.get("suggest_shortcuts", False))
         self._update_listener_shortcuts()
+        self._slash_focus_watch = QTimer(self)
+        self._slash_focus_watch.setInterval(130)
+        self._slash_focus_watch.timeout.connect(self._check_suggestions_focus)
+        self._slash_focus_watch.start()
         started, message = self.hotkeys.start()
         self._hotkeys_enabled = started
         self._focus_monitor = FocusMonitor(self.hotkeys.invalidate) if started else None
@@ -1202,7 +1217,11 @@ class AutoFillWindow(ProductivityMixin, AuroraFeaturesMixin, QMainWindow):
 
     def _update_listener_shortcuts(self):
         if hasattr(self, "hotkeys"):
-            self.hotkeys.update_shortcuts(self.store.shortcuts())
+            # Only shortcut/name pairs; no rich HTML or images.
+            self._suggestion_catalog = self.store.shortcut_catalog()
+            self.hotkeys.update_shortcuts(
+                [shortcut for shortcut, _title in self._suggestion_catalog])
+            self._hide_suggestion_popup()
 
     def _get_snippet(self, snippet_id: int | None) -> Snippet | None:
         return next((s for s in self.store.snippets() if s.id == snippet_id), None)
@@ -1412,6 +1431,7 @@ class AutoFillWindow(ProductivityMixin, AuroraFeaturesMixin, QMainWindow):
                 QMessageBox.warning(self, "Erro na importação", str(exc))
 
     def _toggle_listener(self):
+        self._hide_suggestion_popup()
         if getattr(self, "_input_start_failure", ""):
             started, message = self.hotkeys.start()
             if not started:
@@ -1469,6 +1489,9 @@ class AutoFillWindow(ProductivityMixin, AuroraFeaturesMixin, QMainWindow):
             return
         if self.isActiveWindow() and self.focusWidget() is not self.test_box:
             return
+        if candidate.selected_shortcut and not shortcut_key(
+                candidate.selected_shortcut).startswith(shortcut_key(candidate.shortcut)):
+            return
         if sys.platform == "win32" and not (candidate.context.window and candidate.context.control):
             return
         operation = self._expansion_operation
@@ -1483,7 +1506,8 @@ class AutoFillWindow(ProductivityMixin, AuroraFeaturesMixin, QMainWindow):
         self._active_candidate = candidate
         # Formulários e etapas precisam da confirmação do usuário antes de
         # tentar qualquer alteração no aplicativo de destino.
-        snippet = self.store.snippet_by_shortcut(candidate.shortcut)
+        snippet = self.store.snippet_by_shortcut(
+            candidate.selected_shortcut or candidate.shortcut)
         try:
             smart_needed = snippet is not None and (
                 bool(fields_in(snippet.content)) or has_steps(snippet.content))
@@ -1554,7 +1578,7 @@ class AutoFillWindow(ProductivityMixin, AuroraFeaturesMixin, QMainWindow):
                              and supports_verified_copy(candidate.context)
                              and not (self.isActiveWindow() and self.focusWidget() is self.test_box))
             keyboard_verify = False
-            snippet = self.store.snippet_by_shortcut(shortcut)
+            snippet = self.store.snippet_by_shortcut(candidate.selected_shortcut or shortcut)
             if not snippet:
                 self._finish_expansion(None)
                 return
@@ -2103,7 +2127,8 @@ class AutoFillWindow(ProductivityMixin, AuroraFeaturesMixin, QMainWindow):
             return
         operation.stage = "confirmed"
         try:
-            item = self.store.snippet_by_shortcut(operation.candidate.shortcut)
+            item = self.store.snippet_by_shortcut(
+                operation.candidate.selected_shortcut or operation.candidate.shortcut)
             if item:
                 self.store.register_expansion(item.id)
         except (OSError, sqlite3.Error):
@@ -2192,6 +2217,8 @@ class AutoFillWindow(ProductivityMixin, AuroraFeaturesMixin, QMainWindow):
         if not self._prepare_updates_shutdown():
             event.ignore()
             return
+        self._hide_suggestion_popup()
+        self._slash_popup.close()
         self.hotkeys.stop()
         stop_word()
         if self._focus_monitor is not None:

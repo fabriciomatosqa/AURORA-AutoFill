@@ -120,6 +120,11 @@ class AuroraFeaturesMixin:
             return
         if key == "theme":
             self.theme_controller.set_preference(value)
+        elif key == "suggest_shortcuts":
+            if hasattr(self, "hotkeys"):
+                self.hotkeys.set_suggestions_enabled(bool(value))
+                if not value:
+                    self._hide_suggestion_popup()
         elif key == "check_updates":
             if not value and self._update_notice is not None:
                 self._update_notice.hide()
