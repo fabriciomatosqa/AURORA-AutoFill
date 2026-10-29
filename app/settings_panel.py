@@ -8,10 +8,10 @@ from __future__ import annotations
 from pathlib import Path
 import sys
 
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import QEvent, Qt, Signal
 from PySide6.QtWidgets import (
-    QCheckBox, QComboBox, QFrame, QHBoxLayout, QLabel, QPushButton,
-    QScrollArea, QSlider, QVBoxLayout, QWidget,
+    QCheckBox, QComboBox, QFrame, QGridLayout, QHBoxLayout, QLabel,
+    QPushButton, QScrollArea, QSizePolicy, QSlider, QVBoxLayout, QWidget,
 )
 
 from .icons import apply_icon
@@ -38,9 +38,20 @@ class SettingsPage(QWidget):
     check_requested = Signal()
     close_requested = Signal()
 
-    # Two useful columns when room permits; one comfortable reading column
-    # on smaller windows. Based on the *available viewport*, not screen DPI.
-    TWO_COLUMN_MIN_WIDTH = 820
+    # Based on the scroll area's available width, after subtracting its
+    # internal padding. 2 columns already fit in a non-maximized window;
+    # 1920x1080 can show four without making the cards excessively narrow.
+    MIN_CARD_WIDTH = 290
+    CARD_GAP = 12
+    MAX_COLUMNS = 4
+    MAX_DASHBOARD_WIDTH = 1480
+    SIDE_PADDING = 14
+    CARD_ORDER = (
+        "appearance", "productivity", "audio",
+        "startup", "backups", "updates",
+    )
+    # Approximate card heights give balanced stacks without empty grid rows.
+    CARD_WEIGHTS = (205, 475, 245, 155, 245, 255)
 
     def __init__(self, prefs: dict, *, startup_supported: bool, startup_enabled: bool,
                  parent=None):
@@ -51,7 +62,7 @@ class SettingsPage(QWidget):
         set_ui_style(self, r"""
             QWidget#settingsPage, QWidget#settingsContent,
             QWidget#settingsViewport, QWidget#settingsDashboard,
-            QWidget#settingsLeftColumn, QWidget#settingsRightColumn {
+            QWidget#settingsCardsHost, QWidget#settingsCardColumn {
                 background: #091426; color: #eaf4ff;
             }
             QScrollArea#settingsScroll {
@@ -154,12 +165,13 @@ class SettingsPage(QWidget):
         body = QWidget()
         body.setObjectName("settingsContent")
         outer = QHBoxLayout(body)
-        outer.setContentsMargins(18, 18, 18, 22)
+        outer.setContentsMargins(self.SIDE_PADDING, 16,
+                                 self.SIDE_PADDING, 20)
         outer.setSpacing(0)
         outer.addStretch(1)
         self.dashboard = QWidget(body)
         self.dashboard.setObjectName("settingsDashboard")
-        self.dashboard.setMaximumWidth(1080)
+        self.dashboard.setMaximumWidth(self.MAX_DASHBOARD_WIDTH)
         content = QVBoxLayout(self.dashboard)
         content.setContentsMargins(0, 0, 0, 0)
         content.setSpacing(18)
@@ -183,22 +195,29 @@ class SettingsPage(QWidget):
         head.addWidget(back, 0, Qt.AlignTop)
         content.addLayout(head)
 
-        # Independent vertical stacks avoid tall, empty grid rows.
-        self.columns_layout = QHBoxLayout()
-        self.columns_layout.setSpacing(16)
-        self.left_host = QWidget()
-        self.left_host.setObjectName("settingsLeftColumn")
-        self.left_column = QVBoxLayout(self.left_host)
-        self.left_column.setContentsMargins(0, 0, 0, 0)
-        self.left_column.setSpacing(16)
-        self.right_host = QWidget()
-        self.right_host.setObjectName("settingsRightColumn")
-        self.right_column = QVBoxLayout(self.right_host)
-        self.right_column.setContentsMargins(0, 0, 0, 0)
-        self.right_column.setSpacing(16)
-        self.columns_layout.addWidget(self.left_host, 1, Qt.AlignTop)
-        self.columns_layout.addWidget(self.right_host, 1, Qt.AlignTop)
-        content.addLayout(self.columns_layout, 1)
+        # Responsive grid of *columns*, each with its own vertical stack.
+        # Unlike a traditional QGridLayout of cards this avoids blank spaces
+        # beneath short cards when Produtividade is substantially taller.
+        self.cards_host = QWidget(self.dashboard)
+        self.cards_host.setObjectName("settingsCardsHost")
+        self.cards_host.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Maximum)
+        self.cards_grid = QGridLayout(self.cards_host)
+        self.cards_grid.setContentsMargins(0, 0, 0, 0)
+        self.cards_grid.setHorizontalSpacing(self.CARD_GAP)
+        self.cards_grid.setVerticalSpacing(0)
+        self.column_hosts = []
+        self.column_layouts = []
+        for i in range(self.MAX_COLUMNS):
+            host = QWidget(self.cards_host)
+            host.setObjectName("settingsCardColumn")
+            column = QVBoxLayout(host)
+            column.setContentsMargins(0, 0, 0, 0)
+            column.setSpacing(self.CARD_GAP)
+            self.cards_grid.addWidget(host, 0, i, Qt.AlignTop)
+            self.column_hosts.append(host)
+            self.column_layouts.append(column)
+        content.addWidget(self.cards_host, 0, Qt.AlignTop)
+        content.addStretch(1)
 
         self.cards = {}
         self._appearance_card(prefs)
@@ -210,7 +229,11 @@ class SettingsPage(QWidget):
 
         self.scroller.setWidget(body)
         root.addWidget(self.scroller)
-        self._compact_columns = None
+        self._current_columns = None
+        self._reflowing = False
+        # The scroll viewport (not only the parent page) can resize when the
+        # scrollbar appears or disappears, so listen to its geometry too.
+        self.scroller.viewport().installEventFilter(self)
         self._reflow_cards(force=True)
 
     def _card(self, key: str, title: str, summary: str = "") -> QVBoxLayout:
@@ -218,8 +241,8 @@ class SettingsPage(QWidget):
         frame.setObjectName("settingsCard")
         self.cards[key] = frame
         layout = QVBoxLayout(frame)
-        layout.setContentsMargins(17, 16, 17, 18)
-        layout.setSpacing(11)
+        layout.setContentsMargins(14, 14, 14, 16)
+        layout.setSpacing(9)
         header = QHBoxLayout()
         header.setSpacing(9)
         accent = QFrame()
@@ -348,7 +371,8 @@ class SettingsPage(QWidget):
     def _audio_card(self, prefs: dict):
         area = self._card("audio", "Áudio",
                           "Personalize a confirmação sonora dos comandos.")
-        self.sound = QCheckBox("Reproduzir som ao salvar e acionar comandos")
+        self.sound = QCheckBox("Som ao salvar ou usar comandos")
+        self.sound.setAccessibleName("Reproduzir som ao salvar e acionar comandos")
         self.sound.setChecked(prefs["sound_enabled"])
         self.sound.toggled.connect(self.sound_toggled.emit)
         area.addWidget(self.sound)
@@ -432,7 +456,8 @@ class SettingsPage(QWidget):
     def _updates_card(self, prefs):
         area = self._card("updates", "Atualizações",
                           "Controle quando e quais versões serão oferecidas.")
-        self.updates = QCheckBox("Avisar quando houver uma nova versão")
+        self.updates = QCheckBox("Avisar sobre novas versões")
+        self.updates.setAccessibleName("Avisar quando houver uma nova versão")
         self.updates.setChecked(prefs["check_updates"])
         self.updates.toggled.connect(self.updates_toggled.emit)
         area.addWidget(self.updates)
@@ -453,53 +478,70 @@ class SettingsPage(QWidget):
         area.addWidget(self._hint(
             "As preferências são salvas automaticamente neste computador."))
 
+    @classmethod
+    def columns_for_width(cls, viewport_width: int) -> int:
+        """Choose 1–4 columns from actual usable width, not window state."""
+        available = min(
+            cls.MAX_DASHBOARD_WIDTH,
+            max(0, int(viewport_width) - 2 * cls.SIDE_PADDING),
+        )
+        return max(1, min(
+            cls.MAX_COLUMNS,
+            (available + cls.CARD_GAP) // (cls.MIN_CARD_WIDTH + cls.CARD_GAP),
+        ))
+
     def _reflow_cards(self, *, force: bool = False):
-        if not hasattr(self, "cards") or len(self.cards) != 6:
+        if (len(getattr(self, "cards", {})) != len(self.CARD_ORDER)
+                or getattr(self, "_reflowing", False)):
             return
         width = self.scroller.viewport().width()
         if width <= 0:
             width = self.width()
-        compact = width < self.TWO_COLUMN_MIN_WIDTH
-        if compact == self._compact_columns and not force:
+        columns = self.columns_for_width(width)
+        if columns == self._current_columns and not force:
             return
-        self._compact_columns = compact
 
-        # First empty both stacks; card QWidgets themselves remain alive,
-        # preserving all signal bindings and actual checkbox state.
-        for column in (self.left_column, self.right_column):
-            while column.count():
-                item = column.takeAt(0)
-                # QLayoutItem is not a QWidget, and stretch items do not own widgets.
-                del item
+        self._reflowing = True
+        try:
+            self._current_columns = columns
+            # Take layouts out, not QWidgets: their callbacks and contents
+            # must survive any number of window resizes unchanged.
+            for layout in self.column_layouts:
+                while layout.count():
+                    item = layout.takeAt(0)
+                    del item
 
-        if compact:
-            left = ("appearance", "productivity", "audio",
-                    "startup", "backups", "updates")
-            right = ()
-        else:
-            left = ("appearance", "productivity", "backups")
-            right = ("audio", "startup", "updates")
+            accumulated = [0] * columns
+            for name, weight in zip(self.CARD_ORDER, self.CARD_WEIGHTS):
+                column_idx = min(range(columns), key=lambda idx: (accumulated[idx], idx))
+                card = self.cards[name]
+                self.column_layouts[column_idx].addWidget(card)
+                card.show()
+                accumulated[column_idx] += weight + self.CARD_GAP
 
-        for name in left:
-            self.left_column.addWidget(self.cards[name])
-            self.cards[name].show()
-        self.left_column.addStretch(1)
-        for name in right:
-            self.right_column.addWidget(self.cards[name])
-            self.cards[name].show()
-        if right:
-            self.right_column.addStretch(1)
-        self.right_host.setVisible(bool(right))
-        self.columns_layout.setStretch(0, 1)
-        self.columns_layout.setStretch(1, 1 if right else 0)
-        self.dashboard.updateGeometry()
+            for i, host in enumerate(self.column_hosts):
+                host.setVisible(i < columns)
+                self.cards_grid.setColumnStretch(i, 1 if i < columns else 0)
+                self.cards_grid.setColumnMinimumWidth(
+                    i, self.MIN_CARD_WIDTH if i < columns else 0)
+            self.cards_host.updateGeometry()
+            self.dashboard.updateGeometry()
+        finally:
+            self._reflowing = False
+
+    def eventFilter(self, watched, event):
+        if (watched is self.scroller.viewport()
+                and event.type() == QEvent.Resize
+                and getattr(self, "_current_columns", None) is not None):
+            self._reflow_cards()
+        return super().eventFilter(watched, event)
 
     def showEvent(self, event):
         super().showEvent(event)
-        if hasattr(self, "_compact_columns"):
+        if getattr(self, "_current_columns", None) is not None:
             self._reflow_cards()
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
-        if hasattr(self, "_compact_columns"):
+        if getattr(self, "_current_columns", None) is not None:
             self._reflow_cards()
