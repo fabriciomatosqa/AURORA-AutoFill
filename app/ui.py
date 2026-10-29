@@ -51,6 +51,7 @@ from .ribbon import RibbonFooter
 from .font_dialog import FontDialog
 from .color_dialog import AuroraColorDialog
 from .color_button import AuroraColorButton
+from .text_color_reset import clear_selected_color
 from .branding import brand_webp_bytes
 from .inline_images import (AuroraImageEditor, AuroraReadOnlyPreview, contains_inline_images,
                             plain_text_fallback, validate_inline_html, image_sources, read_image_file)
@@ -1005,9 +1006,23 @@ class AutoFillWindow(ProductivityMixin, AuroraFeaturesMixin, QMainWindow):
         previous = (fmt.background() if highlight else fmt.foreground()).color()
         if not previous.isValid():
             previous = QColor("#fff59d" if highlight else "#142b40")
-        color = AuroraColorDialog.get_color(
+        saved_cursor = QTextCursor(self.body_input.textCursor())
+        accepted, color = AuroraColorDialog.get_choice(
             previous, self, "Cor do realce" if highlight else "Cor do texto")
+        if not accepted:
+            return
+        # Qt may move focus when the color dialog opens. Restore the exact
+        # selection before changing any character formatting.
+        self.body_input.setTextCursor(saved_cursor)
+        marker = self.highlight_button if highlight else self.text_color_button
         if not color.isValid():
+            clear_selected_color(self.body_input, highlight=highlight)
+            marker.set_automatic()
+            self._autosave_edit("content")
+            self.statusBar().showMessage(
+                "Realce removido; outras formatações preservadas." if highlight
+                else "Cor automática restaurada; outras formatações preservadas.",
+                4500)
             return
         change = QTextCharFormat()
         if highlight:
@@ -1015,8 +1030,7 @@ class AutoFillWindow(ProductivityMixin, AuroraFeaturesMixin, QMainWindow):
         else:
             change.setForeground(color)
         self._merge_text_format(change)
-        # Reflete a escolha somente após uma cor válida ter sido aplicada.
-        (self.highlight_button if highlight else self.text_color_button).set_marker_color(color)
+        marker.set_marker_color(color)
 
     def _clear_text_format(self):
         cursor = self.body_input.textCursor()
