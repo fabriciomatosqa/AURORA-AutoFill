@@ -8,6 +8,7 @@ from __future__ import annotations
 from threading import Event, RLock, Thread, Timer, current_thread
 from typing import Callable
 import os
+import sys
 from time import monotonic
 
 from .expansion import ExpansionCandidate
