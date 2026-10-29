@@ -65,7 +65,7 @@ O chamado {{campo:Número}} está com situação:
 {{escolha:Situação|Aberto|Em andamento|Concluído}}.
 ```
 
-Quando o comando é escolhido ou o atalho é digitado, uma janela solicita os valores. Os dados preenchidos **não são salvos no modelo**. Ao cancelar, o texto previamente digitado no destino não deve ser apagado.
+Quando o comando é escolhido ou o atalho é digitado, uma janela solicita os valores com o **primeiro campo já em foco**. Campos repetidos aparecem separadamente, em ordem (Nome (1), Nome (2) etc.), podendo receber respostas diferentes. Os dados preenchidos **não são salvos no modelo**. Ao cancelar, o texto previamente digitado no destino não deve ser apagado.
 
 Em Windows, após o formulário, o AURORA tenta restaurar e verificar o campo original antes de colar; se não puder provar o destino, **copia o resultado para Ctrl+V manual**. Linux usa o fluxo seguro de copiar quando não consegue verificar o campo externo.
 
