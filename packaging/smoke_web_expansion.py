@@ -39,7 +39,7 @@ def main():
         raise SystemExit("This smoke test requires Windows")
     import websocket
     os.environ["QT_QPA_PLATFORM"] = "windows"
-    from PySide6.QtWidgets import QApplication
+    from PySide6.QtWidgets import QApplication, QDialog
     from PySide6.QtCore import QObject, Signal, Qt
     from app.clipboard_content import clone_mime
     from app.hotkeys import GlobalHotkeyListener
@@ -389,7 +389,7 @@ def main():
                 dialog.search.setText(query)
                 QTest.keyClick(dialog.search,Qt.Key_Return)
             QTimer.singleShot(200,accept_picker)
-            assert dialog.exec()==dialog.Accepted
+            assert dialog.exec()==QDialog.DialogCode.Accepted
             host._insert_search_result(dialog.selected_snippet,context)
             wait(lambda:host._expansion_operation is None and host._clipboard_lease is None
                  and any('Enviado:' in m or 'Expandido:' in m for m in messages[marker:]),seconds=10)

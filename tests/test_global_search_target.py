@@ -39,7 +39,7 @@ class QuickSearchTargetTests(unittest.TestCase):
     def test_context_from_hotkey_survives_modal_search(self):
         origin = FocusContext(120, 34)
         snippet = SimpleNamespace(id=7, content="Texto", rich_content="")
-        dlg = SimpleNamespace(Accepted=1, exec=lambda: 1,
+        dlg = SimpleNamespace(exec=lambda: 1,
                               selected_snippet=snippet)
         host = DummyHost()
         with patch("app.productivity_features.QuickSearchDialog",
@@ -54,7 +54,7 @@ class QuickSearchTargetTests(unittest.TestCase):
     def test_settings_button_without_context_captures_current_focus(self):
         origin = FocusContext(120, 34)
         snippet = SimpleNamespace(id=8, content="Outro texto", rich_content="")
-        dlg = SimpleNamespace(Accepted=1, exec=lambda: 1,
+        dlg = SimpleNamespace(exec=lambda: 1,
                               selected_snippet=snippet)
         host = DummyHost()
         with patch("app.productivity_features.QuickSearchDialog",
@@ -65,6 +65,35 @@ class QuickSearchTargetTests(unittest.TestCase):
         capture.assert_called_once_with()
         host._launch_smart_snippet.assert_called_once_with(
             snippet, origin, from_shortcut=None)
+
+    def test_real_dialog_acceptance_without_instance_enum_alias(self):
+        import tempfile
+        from pathlib import Path
+        from PySide6.QtCore import QTimer
+        from PySide6.QtWidgets import QWidget
+        from app.core import SnippetStore
+        from app.productivity_widgets import QuickSearchDialog
+        class Host(QWidget, ProductivityMixin):
+            pass
+        class StrictDialog(QuickSearchDialog):
+            def __getattribute__(self, name):
+                if name == 'Accepted':
+                    raise AttributeError('Enums are only available on the Qt class')
+                return super().__getattribute__(name)
+            def __init__(self, *args):
+                super().__init__(*args)
+                QTimer.singleShot(0,self.choose)
+        with tempfile.TemporaryDirectory() as temporary:
+            store=SnippetStore(Path(temporary)/'test.db')
+            folder=store.create_folder('Teste')
+            store.save(folder,'Modal','/modal','Texto escolhido')
+            host=Host();host.store=store;host._launch_smart_snippet=Mock()
+            try:
+                with patch('app.productivity_features.QuickSearchDialog',StrictDialog):
+                    host._open_global_search(FocusContext(120,34))
+                self.assertEqual(host._launch_smart_snippet.call_args.args[0].content,'Texto escolhido')
+            finally:
+                host.deleteLater();store.close();self.app.processEvents()
 
     def test_selected_plain_command_is_sent_to_verified_previous_editor(self):
         origin = FocusContext(120, 34)

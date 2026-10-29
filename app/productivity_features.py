@@ -11,7 +11,7 @@ from html import escape
 from time import monotonic
 from PySide6.QtCore import QTimer, QRect
 from PySide6.QtGui import QCursor
-from PySide6.QtWidgets import QApplication, QMessageBox, QToolTip
+from PySide6.QtWidgets import QApplication, QDialog, QMessageBox, QToolTip
 
 from .expansion import FocusContext
 from .core import render_snippet
@@ -71,7 +71,7 @@ class ProductivityMixin:
                    else capture_focus())
         try:
             dlg = QuickSearchDialog(self.store, self)
-            if dlg.exec() != dlg.Accepted or dlg.selected_snippet is None:
+            if dlg.exec() != QDialog.DialogCode.Accepted or dlg.selected_snippet is None:
                 return
             self._launch_smart_snippet(dlg.selected_snippet, context, from_shortcut=None)
         finally:
@@ -187,7 +187,7 @@ class ProductivityMixin:
         answers = {}
         if fields:
             dialog = FieldsDialog(snippet.content, self)
-            if dialog.exec() != dialog.Accepted:
+            if dialog.exec() != QDialog.DialogCode.Accepted:
                 if from_shortcut:
                     self.statusBar().showMessage("Formulário cancelado. Atalho preservado.", 5000)
                 return
