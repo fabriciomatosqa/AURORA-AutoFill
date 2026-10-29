@@ -6,7 +6,8 @@ from collections import OrderedDict
 
 from .data_paths import application_db_path
 from .welcome import initial_snippets
-from .productivity_data import initialize_productivity, search_ids, record_success, usage_report, reset_usage
+from .productivity_data import (initialize_productivity, search_ids, record_success,
+                                usage_report, usage_days, usage_day_top, reset_usage)
 from .smart_templates import advanced_variables
 from datetime import date, datetime
 from pathlib import Path
@@ -221,6 +222,12 @@ class SnippetStore:
 
     def usage_report(self, today: date | None = None) -> dict:
         return usage_report(self.connection, today)
+
+    def usage_days(self, year: int, month: int) -> dict[int, int]:
+        return usage_days(self.connection, year, month)
+
+    def usage_day_top(self, day: date, limit: int = 5) -> list[tuple[str, int]]:
+        return usage_day_top(self.connection, day, limit)
 
     def reset_usage(self) -> None:
         reset_usage(self.connection)
