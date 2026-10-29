@@ -1,4 +1,4 @@
-"""Responsive settings grid: widths, state persistence and connected actions."""
+"""Settings layout: grouped desktop / full-width compact, with persistent controls."""
 import os
 import unittest
 
@@ -25,71 +25,87 @@ class SettingsCardsTests(unittest.TestCase):
         return page
 
     @staticmethod
-    def visible_columns(page):
-        return [layout for i, layout in enumerate(page.column_layouts)
-                if page.column_hosts[i].isVisible()]
+    def group_positions(page):
+        grid = page.groups_grid
+        return {
+            key: (grid.getItemPosition(grid.indexOf(panel))[:2])
+            for key, panel in page.groups.items()
+        }
 
-    @staticmethod
-    def placed_names(page):
-        return [
-            name for layout in page.column_layouts
-            for i in range(layout.count())
-            for name, widget in page.cards.items()
-            if layout.itemAt(i).widget() is widget
-        ]
-
-    def test_breakpoints_are_based_on_content_width_not_fullscreen_state(self):
+    def test_breakpoints_use_available_content_width(self):
         choose = SettingsPage.columns_for_width
         self.assertEqual(choose(480), 1)
-        self.assertEqual(choose(760), 2)    # non-maximized screenshot
-        self.assertEqual(choose(1100), 3)   # intermediate window
-        self.assertEqual(choose(1660), 4)   # ~1920 desktop minus sidebar
-        self.assertEqual(choose(5000), 4)
+        self.assertEqual(choose(760), 1)     # compact screenshot
+        self.assertEqual(choose(980), 1)     # no squashed desktop columns
+        self.assertEqual(choose(1100), 2)    # two comfortable groups
+        self.assertEqual(choose(1660), 2)    # maximized window
+        self.assertEqual(choose(5000), 2)    # never four tiny cards
 
-    def test_window_resizes_between_one_two_three_four_columns(self):
+    def test_resizing_keeps_groups_controls_and_preferences(self):
         page = self.create_page()
         page.resize(760, 850)
         page.show()
         self.app.processEvents()
-        self.assertEqual(page._current_columns, 2)
-        self.assertEqual(len(self.visible_columns(page)), 2)
-        self.assertEqual(len(self.placed_names(page)), 6)
-        self.assertEqual(set(self.placed_names(page)), set(page.CARD_ORDER))
+        self.assertEqual(page._current_columns, 1)
+        self.assertEqual(self.group_positions(page),
+                         {"general": (0, 0), "tools": (1, 0)})
+        self.assertEqual(set(page.cards), set(page.CARD_ORDER))
+        self.assertEqual(len(page.cards), 8)
 
         page.volume.setValue(42)
         page.prereleases.setChecked(False)
         page.theme.setCurrentIndex(page.theme.findData("light"))
-        for width, expected in ((1100, 3), (1660, 4), (520, 1),
-                                (760, 2), (1660, 4)):
+        for width, expected in ((1100, 2), (1660, 2), (520, 1),
+                                (760, 1), (1660, 2), (980, 1)):
             page.resize(width, 850)
             self.app.processEvents()
             self.assertEqual(page._current_columns, expected, width)
-            self.assertEqual(len(self.visible_columns(page)), expected)
-            self.assertEqual(len(self.placed_names(page)), 6)
-            self.assertEqual(set(self.placed_names(page)), set(page.CARD_ORDER))
-            self.assertEqual(len({id(card) for card in page.cards.values()}), 6)
+            expected_positions = ({"general": (0, 0), "tools": (0, 1)}
+                                  if expected == 2 else
+                                  {"general": (0, 0), "tools": (1, 0)})
+            self.assertEqual(self.group_positions(page), expected_positions)
+            self.assertEqual(set(page.cards), set(page.CARD_ORDER))
+            self.assertEqual(len({id(card) for card in page.cards.values()}), 8)
             self.assertEqual(page.volume.value(), 42)
             self.assertFalse(page.prereleases.isChecked())
             self.assertEqual(page.theme.currentData(), "light")
-        self.assertLessEqual(page.theme.width(), 260)
-        self.assertLessEqual(page.check_button.width(), 270)
 
-    def test_narrow_layout_has_no_horizontal_scroll_and_all_controls_fit(self):
+    def test_compact_groups_fill_width_and_never_scroll_horizontally(self):
         page = self.create_page(supported=False)
         page.resize(520, 730)
         page.show()
         self.app.processEvents()
         self.assertEqual(page._current_columns, 1)
+        self.assertEqual(page.groups["general"].width(),
+                         page.groups["tools"].width())
+        self.assertGreater(page.groups["general"].width(),
+                           page.groups_host.width() - 8)
         self.assertEqual(page.scroller.horizontalScrollBarPolicy(),
                          Qt.ScrollBarAlwaysOff)
         self.assertEqual(page.scroller.horizontalScrollBar().maximum(), 0)
         self.assertFalse(page.startup.isEnabled())
-        self.assertTrue(page.scroller.verticalScrollBar().maximum() > 0)
+        self.assertGreater(page.scroller.verticalScrollBar().maximum(), 0)
         self.assertIn("outros aplicativos", page.suggestions.accessibleName())
         self.assertIn("Reproduzir som", page.sound.accessibleName())
         self.assertIn("nova versão", page.updates.accessibleName())
 
-    def test_buttons_and_dependencies_keep_working_after_reflow(self):
+    def test_backup_buttons_wrap_when_group_is_narrow(self):
+        page = self.create_page()
+        page.resize(1660, 850)
+        page.show()
+        self.app.processEvents()
+        self.assertTrue(page._backup_horizontal)
+        for col, button in enumerate(page.backup_buttons):
+            self.assertIs(page.backup_buttons_grid.itemAtPosition(0, col).widget(),
+                          button)
+        page.resize(520, 850)
+        self.app.processEvents()
+        self.assertFalse(page._backup_horizontal)
+        for row, button in enumerate(page.backup_buttons):
+            self.assertIs(page.backup_buttons_grid.itemAtPosition(row, 0).widget(),
+                          button)
+
+    def test_actions_and_dependencies_survive_multiple_resizes(self):
         page = self.create_page()
         events = []
         for name, signal in (
@@ -106,7 +122,7 @@ class SettingsCardsTests(unittest.TestCase):
             ("suggestions", page.suggestions_toggled),
         ):
             signal.connect(lambda *args, n=name: events.append(n))
-        for width in (530, 760, 1100, 1660):
+        for width in (530, 760, 1100, 1660, 980):
             page.resize(width, 820)
             page.show()
             self.app.processEvents()
