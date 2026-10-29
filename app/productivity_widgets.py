@@ -4,6 +4,7 @@ from __future__ import annotations
 from datetime import date
 from calendar import monthrange
 import ctypes
+from ctypes import wintypes
 import sys
 from PySide6.QtCore import QEvent, Qt, QTimer
 from PySide6.QtWidgets import (
@@ -29,7 +30,10 @@ def focus_dialog_input(dialog, control):
     dialog.activateWindow()
     if sys.platform == "win32":
         try:
-            ctypes.windll.user32.SetForegroundWindow(int(dialog.winId()))
+            foreground = ctypes.windll.user32.SetForegroundWindow
+            foreground.argtypes = [wintypes.HWND]
+            foreground.restype = wintypes.BOOL
+            foreground(int(dialog.winId()))
         except (OSError, AttributeError, ValueError):
             pass
     control.setFocus(Qt.ActiveWindowFocusReason)
