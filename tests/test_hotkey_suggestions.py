@@ -32,6 +32,19 @@ class GlobalProductivityKeysTests(unittest.TestCase):
         self.assertEqual(results, ["quick_search"])
         self.assertEqual(prefixes[-1], "")
 
+    def test_windows_keyboard_hook_does_not_duplicate_native_global_search(self):
+        calls = []
+        listener = GlobalHotkeyListener(
+            lambda candidate: calls.append("snippet"),
+            on_quick_search=lambda: calls.append("legacy_search"))
+        # Even when pynput sees the combination, WM_HOTKEY is the only
+        # authorized Windows trigger. This also avoids the old leaky Space.
+        with patch("app.hotkeys.sys.platform", "win32"), patch(
+                "app.hotkeys.windows_modifiers",
+                return_value={"ctrl_l", "shift"}):
+            listener._press(SimpleNamespace(name="space", char=" "))
+        self.assertEqual(calls, [])
+
     def test_other_shortcuts_are_not_intercepted(self):
         calls = []
         listener = GlobalHotkeyListener(lambda _: None, on_quick_search=lambda: calls.append("open"))
