@@ -28,7 +28,8 @@ def clear_selected_color(editor, *, highlight: bool) -> None:
     changes = []
     block = editor.document().findBlock(start)
     while block.isValid() and block.position() < end:
-        for fragment in block:
+        for item in block:
+            fragment = item.fragment()
             if not fragment.isValid():
                 continue
             left = max(start, fragment.position())
