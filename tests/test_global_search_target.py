@@ -32,6 +32,10 @@ class QuickSearchTargetTests(unittest.TestCase):
     def setUpClass(cls):
         cls.app = QApplication.instance() or QApplication([])
 
+    def tearDown(self):
+        # Release Qt's native MIME object while the application still exists.
+        QApplication.clipboard().clear()
+
     def test_context_from_hotkey_survives_modal_search(self):
         origin = FocusContext(120, 34)
         snippet = SimpleNamespace(id=7, content="Texto", rich_content="")
@@ -66,20 +70,38 @@ class QuickSearchTargetTests(unittest.TestCase):
         origin = FocusContext(120, 34)
         host = DummyHost()
         snippet = SimpleNamespace(id=9, content="Texto do AURORA", rich_content="")
-        calls = []
-        with patch("app.productivity_features.sys.platform", "win32"), patch(
-                "app.productivity_features.QTimer.singleShot",
-                side_effect=lambda delay, cb: calls.append(cb)):
+        host._insert_search_result = Mock()
+        with patch("app.productivity_features.sys.platform", "win32"):
             ProductivityMixin._launch_smart_snippet(
                 host, snippet, origin, from_shortcut=None)
-        self.assertEqual(len(calls), 1)
-        self.assertEqual(QApplication.clipboard().text(), "Texto do AURORA")
-        with patch("app.productivity_features.restore_target",
-                   return_value=True) as restore, patch(
-                   "app.productivity_features.paste_clipboard") as paste:
-            calls[0]()
-        restore.assert_called_once_with(origin)
-        paste.assert_called_once_with()
+        host._insert_search_result.assert_called_once_with(snippet, origin)
+
+    def test_picker_uses_normal_engine_without_erasing_prefix_or_selection(self):
+        from engine_fixture import EngineFixture
+        for selected in (False, True):
+            with self.subTest(selected=selected), EngineFixture() as e:
+                e.save('/pick','Resposta 😀')
+                e.field.insert('Antes /pick|trocar|depois')
+                e.field.anchor = len('Antes /pick|')
+                e.field.caret = e.field.anchor + (6 if selected else 0)
+                candidate = e.listener.choose_insertion('/pick',e.context())
+                self.assertIsNotNone(candidate)
+                e.host._expand_global(candidate);e.drain()
+                self.assertEqual(e.field.text, 'Antes /pick|Resposta 😀'+('' if selected else 'trocar')+'|depois')
+                self.assertFalse(any(vk in (8,46,37,67) for vk,_,_ in e.sent))
+                self.assertEqual(e.clipboard.text(),'original')
+
+    def test_picker_request_is_invalidated_by_new_input_or_focus(self):
+        from engine_fixture import EngineFixture
+        for changed in ('input','focus','pause'):
+            with self.subTest(changed=changed), EngineFixture() as e:
+                e.save('/pick','Resposta')
+                candidate=e.listener.choose_insertion('/pick',e.context())
+                if changed=='input':e.type('X')
+                elif changed=='focus':e.field_id=2
+                else:e.host._hotkeys_enabled=False
+                e.host._expand_global(candidate);e.drain()
+                self.assertEqual(e.api_calls,0)
 
     def test_changed_editor_is_not_pasted_and_content_remains_copyable(self):
         origin = FocusContext(120, 34)

@@ -54,6 +54,42 @@ def capture_focus() -> FocusContext:
         return FocusContext()
 
 
+def restore_focus(context: FocusContext) -> bool:
+    """Return to the captured editor, including its child HWND, after a dialog."""
+    if sys.platform != 'win32' or not context.window or not context.control:
+        return False
+    if capture_focus() == context:
+        return True
+    api = _api()
+    api.IsWindow.argtypes = [wintypes.HWND]
+    api.IsChild.argtypes = [wintypes.HWND, wintypes.HWND]
+    api.SetForegroundWindow.argtypes = [wintypes.HWND]
+    api.SetFocus.argtypes = [wintypes.HWND]
+    api.SetFocus.restype = wintypes.HWND
+    api.GetWindowThreadProcessId.argtypes = [wintypes.HWND, ctypes.POINTER(wintypes.DWORD)]
+    api.AttachThreadInput.argtypes = [wintypes.DWORD, wintypes.DWORD, wintypes.BOOL]
+    if (not api.IsWindow(context.window) or not api.IsWindow(context.control)
+            or context.window != context.control and not api.IsChild(context.window, context.control)):
+        return False
+    thread = api.GetWindowThreadProcessId(context.control, None)
+    ctypes.windll.kernel32.GetCurrentThreadId.restype = wintypes.DWORD
+    current = ctypes.windll.kernel32.GetCurrentThreadId()
+    attached = False
+    try:
+        api.SetForegroundWindow(context.window)
+        if api.GetForegroundWindow() != context.window:
+            return False
+        if thread != current:
+            attached = bool(api.AttachThreadInput(current, thread, True))
+            if not attached:
+                return False
+        api.SetFocus(context.control)
+    finally:
+        if attached:
+            api.AttachThreadInput(current, thread, False)
+    return capture_focus() == context
+
+
 def _message(api, control, message, wparam=0, lparam=0):
     result = ctypes.c_size_t()
     if not api.SendMessageTimeoutW(control, message, wparam, lparam, 2, 40, ctypes.byref(result)):

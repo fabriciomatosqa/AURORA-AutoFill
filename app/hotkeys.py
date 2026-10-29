@@ -247,6 +247,17 @@ class GlobalHotkeyListener:
             return ExpansionCandidate(self._latest_id, prefix, self._revision,
                                       context, monotonic(), shortcut)
 
+    def choose_insertion(self, shortcut: str, context):
+        """Authorize one picker insertion after the original field has focus."""
+        with self._state_lock:
+            if not self._enabled or not shortcut or capture_focus() != context:
+                return None
+            self.invalidate()
+            self._context = context
+            self._latest_id += 1
+            return ExpansionCandidate(self._latest_id, '', self._revision,
+                                      context, monotonic(), shortcut)
+
     def dismiss_suggestions(self, prefix: str, context) -> None:
         with self._state_lock:
             if prefix == self._visible_suggestion_prefix and context == self._context:

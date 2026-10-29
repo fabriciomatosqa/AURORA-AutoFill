@@ -1494,6 +1494,8 @@ class AutoFillWindow(ProductivityMixin, AuroraFeaturesMixin, QMainWindow):
         return native if native is not None else self._clipboard_revision
 
     def _expand_global(self, candidate: ExpansionCandidate):
+        if getattr(self, '_quick_picker_open', False):
+            return
         if not self._hotkeys_enabled or self._quitting or not self.hotkeys.is_current(candidate):
             return
         if self.isActiveWindow() and self.focusWidget() is not self.test_box:
@@ -1583,7 +1585,7 @@ class AutoFillWindow(ProductivityMixin, AuroraFeaturesMixin, QMainWindow):
             if not self._candidate_valid(candidate):
                 raise ValueError("A digitação ou o destino mudou; expansão cancelada.")
             shortcut = candidate.shortcut
-            copy_fallback = (sys.platform == "win32"
+            copy_fallback = (bool(shortcut) and sys.platform == "win32"
                              and supports_verified_copy(candidate.context)
                              and not (self.isActiveWindow() and self.focusWidget() is self.test_box))
             keyboard_verify = False
@@ -1592,7 +1594,8 @@ class AutoFillWindow(ProductivityMixin, AuroraFeaturesMixin, QMainWindow):
                 self._finish_expansion(None)
                 return
             external = not (self.isActiveWindow() and self.focusWidget() is self.test_box)
-            tracked = (sys.platform == 'win32' and external and uses_tracked_replacement(candidate.context)
+            tracked = (sys.platform == 'win32' and external and
+                       (not shortcut or uses_tracked_replacement(candidate.context))
                        or is_wayland_session() and external and '{{cursor}}' not in snippet.content)
             word_native = sys.platform == 'win32' and external and is_word_target(candidate.context)
             direct = word_native or (tracked and '{{cursor}}' not in snippet.content)
@@ -1761,7 +1764,7 @@ class AutoFillWindow(ProductivityMixin, AuroraFeaturesMixin, QMainWindow):
                 # A autorização vem do buffer de digitação, não de Ctrl+C.
                 # Não executar candidatos enfileirados/obsoletos nem repetir
                 # um envio parcial. Mudanças de teclado/mouse/foco invalidam.
-                if (not (is_wayland_session() or uses_tracked_replacement(operation.candidate.context))
+                if (operation.candidate.shortcut and not (is_wayland_session() or uses_tracked_replacement(operation.candidate.context))
                         or not self.hotkeys.is_current(operation.candidate, require_fresh=True)):
                     raise ValueError('A digitação mudou antes da substituição.')
                 if operation.before is not None:
@@ -1770,7 +1773,10 @@ class AutoFillWindow(ProductivityMixin, AuroraFeaturesMixin, QMainWindow):
                             or not self._owns_clipboard(lease)):
                         raise ValueError('O campo mudou antes da substituição.')
                 operation.stage = 'sent'
-                replace_tracked_shortcut(cursor_steps(operation.candidate.shortcut))
+                if operation.candidate.shortcut:
+                    replace_tracked_shortcut(cursor_steps(operation.candidate.shortcut))
+                else:
+                    paste_clipboard()
                 self._expansion_sent(operation)
                 return
             # Quando o destino é UIA, select_text_range() verifica de forma
@@ -2062,7 +2068,7 @@ class AutoFillWindow(ProductivityMixin, AuroraFeaturesMixin, QMainWindow):
                 raise ValueError("Contexto alterado após envio; resultado não confirmado.")
             before = operation.before
             if before is None:
-                self._finish_expansion(operation, f"Enviado: {operation.candidate.shortcut}")
+                self._finish_expansion(operation, f"Enviado: {operation.candidate.selected_shortcut or operation.candidate.shortcut}")
                 return
             snapshot = self._edit_snapshot(accessibility=bool(before.identity))
             if snapshot is not None and snapshot.identity != before.identity:
@@ -2143,7 +2149,7 @@ class AutoFillWindow(ProductivityMixin, AuroraFeaturesMixin, QMainWindow):
         except (OSError, sqlite3.Error):
             # Uma falha de métricas não desfaz uma expansão confirmada.
             pass
-        message = f"Expandido: {operation.candidate.shortcut}"
+        message = f"Expandido: {operation.candidate.selected_shortcut or operation.candidate.shortcut}"
         if operation.image_count and not operation.images_confirmed:
             message += " · Imagens não verificadas no destino. Confira os anexos antes de enviar."
         self.statusBar().showMessage(message, 10000 if operation.image_count else 3000)

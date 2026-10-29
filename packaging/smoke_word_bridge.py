@@ -91,6 +91,10 @@ public static class AuroraWordContract {
         var uncertain=new WordDocStub(prefix+"/word",req.text); uncertain.ThrowAfterPaste=true;
         Check(Status(AuroraWordWorker.Replace(new WordWindowStub(uncertain),req,()=>true))=="uncertain");
         Check(uncertain.Pastes==1);
+        var insert=new WordDocStub("Original /word",req.text);
+        var pick=new AuroraWordWorker.Request {shortcut="",text=req.text};
+        Check(Status(AuroraWordWorker.Replace(new WordWindowStub(insert),pick,()=>true))=="pasted");
+        Check(insert.Pastes==1 && insert.Text=="Original /word"+req.text.Replace("\n","\r")+"\r");
         return "{\"native_clipboard_token\":true,\"format_mode\":16,\"unicode_cursor\":true,\"changed_context_rejected\":true,\"uncertain_not_repeated\":true}";
     }
 }
