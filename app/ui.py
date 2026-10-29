@@ -237,7 +237,7 @@ QToolTip { background: #17354c; color: #fff; border: 1px solid #4eb9b2; }
 class HotkeySignals(QObject):
     triggered = Signal(object)
     listener_state = Signal(str)
-    quick_search = Signal()
+    quick_search = Signal(object)
     suggestions = Signal(object)
     suggestion_navigation = Signal(object)
 
@@ -311,7 +311,9 @@ class AutoFillWindow(ProductivityMixin, AuroraFeaturesMixin, QMainWindow):
             self._navigate_suggestions, Qt.QueuedConnection)
         self.hotkeys = GlobalHotkeyListener(
             self.signals.triggered.emit, self.signals.listener_state.emit,
-            on_quick_search=self.signals.quick_search.emit,
+            # Capture the *external* editor focus inside the keyboard-hook callback.
+            # Capturing later in the queued Qt slot can see the search dialog instead.
+            on_quick_search=lambda: self.signals.quick_search.emit(capture_focus()),
             on_suggestion_state=self.signals.suggestions.emit,
             on_navigation=self.signals.suggestion_navigation.emit)
         self.hotkeys.set_suggestions_enabled(
