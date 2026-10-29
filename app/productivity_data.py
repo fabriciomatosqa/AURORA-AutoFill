@@ -129,3 +129,27 @@ def usage_report(connection: sqlite3.Connection,
 def reset_usage(connection: sqlite3.Connection) -> None:
     with connection:
         connection.execute("DELETE FROM usage_daily")
+
+def usage_days(connection: sqlite3.Connection, year: int, month: int) -> dict[int, int]:
+    """Aggregated daily totals for one month, without reading typed content."""
+    if not 1 <= month <= 12 or not 1 <= year <= 9999:
+        raise ValueError("Mês inválido.")
+    prefix = f"{year:04d}-{month:02d}-"
+    rows = connection.execute(
+        "SELECT day, SUM(uses) FROM usage_daily WHERE day LIKE ? "
+        "GROUP BY day ORDER BY day", (prefix + "%",)
+    ).fetchall()
+    return {int(str(day)[-2:]): int(count) for day, count in rows}
+
+
+def usage_day_top(connection: sqlite3.Connection, day: date,
+                  limit: int = 5) -> list[tuple[str, int]]:
+    """Optional day breakdown; never stores or retrieves text typed elsewhere."""
+    rows = connection.execute("""
+        SELECT COALESCE(s.title, u.shortcut) AS label, SUM(u.uses) AS n
+        FROM usage_daily u
+        LEFT JOIN snippets s ON s.id = u.snippet_id
+        WHERE u.day = ?
+        GROUP BY u.snippet_id ORDER BY n DESC, label LIMIT ?
+    """, (day.isoformat(), max(1, min(int(limit), 10)))).fetchall()
+    return [(str(label), int(count)) for label, count in rows]

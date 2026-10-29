@@ -457,16 +457,6 @@ class AutoFillWindow(ProductivityMixin, AuroraFeaturesMixin, QMainWindow):
         backup.addWidget(export)
         backup.addWidget(imported)
         s.addLayout(backup)
-        tools = QHBoxLayout()
-        finder = QPushButton("Pesquisa global")
-        finder.setToolTip("Localizar comandos · Ctrl+Shift+Espaço")
-        finder.clicked.connect(self._open_global_search)
-        tools.addWidget(finder)
-        stats = QPushButton("Estatísticas")
-        stats.setToolTip("Quantidade de comandos utilizados por dia, mês e ano")
-        stats.clicked.connect(self._show_statistics)
-        tools.addWidget(stats)
-        s.addLayout(tools)
         splitter.addWidget(sidebar)
 
         right = QWidget()
@@ -819,23 +809,42 @@ class AutoFillWindow(ProductivityMixin, AuroraFeaturesMixin, QMainWindow):
         self.token_button.setFixedHeight(36)
         menu = AuroraMenu(self.token_button)
         menu.setObjectName("dynamicTokenMenu")
-        for label, token in [
-            ("Data atual", "{{data}}"), ("Hora atual", "{{hora}}"),
-            ("Data e hora", "{{data_hora}}"), ("Área de transferência", "{{clipboard}}"),
-            ("Posição do cursor", "{{cursor}}"),
-            ("Data +7 dias", "{{data:+7}}"),
-            ("Data -1 dia", "{{data:-1}}"),
-            ("Data personalizada", "{{data_formato:%Y-%m-%d}}"),
-            ("Cálculo seguro", "{{calculo:12*3}}"),
-            ("Campo de formulário", "{{campo:Nome}}"),
-            ("Lista de opções", "{{escolha:Situação|Aberto|Concluído}}"),
-            ("Avançar campo (Tab)", "{{tab}}"),
-            ("Enviar Enter", "{{enter}}"),
-            ("Aguardar 250 ms", "{{espera:250}}"),
-        ]:
-            action = QAction(label, self)
-            action.triggered.connect(lambda checked=False, t=token: self.body_input.insertPlainText(t))
-            menu.addAction(action)
+        # Categorias deixam visíveis as finalidades sem alterar os tokens salvos.
+        groups = (
+            ("Data e hora", (
+                ("Data atual", "{{data}}"), ("Hora atual", "{{hora}}"),
+                ("Data e hora", "{{data_hora}}"),
+                ("Data +7 dias", "{{data:+7}}"), ("Data -1 dia", "{{data:-1}}"),
+                ("Data personalizada", "{{data_formato:%Y-%m-%d}}"),
+            )),
+            ("Área de transferência e cursor", (
+                ("Área de transferência", "{{clipboard}}"),
+                ("Posição do cursor", "{{cursor}}"),
+            )),
+            ("Cálculos", (("Cálculo seguro", "{{calculo:12*3}}"),)),
+            ("Formulários interativos", (
+                ("Campo de formulário", "{{campo:Nome}}"),
+                ("Lista de opções", "{{escolha:Situação|Aberto|Concluído}}"),
+            )),
+            ("Automações", (
+                ("Avançar campo (Tab)", "{{tab}}"),
+                ("Enviar Enter", "{{enter}}"),
+                ("Aguardar 250 ms", "{{espera:250}}"),
+            )),
+        )
+        self.dynamic_token_groups = {}
+        for group_name, choices in groups:
+            submenu = AuroraMenu(menu)
+            submenu.setTitle(group_name)
+            submenu.setAccessibleName(group_name)
+            for label, token in choices:
+                action = QAction(label, submenu)
+                action.setData(token)
+                action.triggered.connect(
+                    lambda checked=False, value=token: self.body_input.insertPlainText(value))
+                submenu.addAction(action)
+            menu.addMenu(submenu)
+            self.dynamic_token_groups[group_name] = submenu
         self.token_button.setMenu(menu)
         image_tools_row.addWidget(self.token_button)
         image_tools_row.addStretch()

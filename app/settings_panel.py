@@ -22,6 +22,8 @@ class SettingsPage(QWidget):
     updates_toggled = Signal(bool)
     prereleases_toggled = Signal(bool)
     suggestions_toggled = Signal(bool)
+    global_search_requested = Signal()
+    statistics_requested = Signal()
     linux_setup_requested = Signal()
     play_requested = Signal()
     backup_requested = Signal()
@@ -120,6 +122,29 @@ class SettingsPage(QWidget):
         info.setObjectName("hint")
         info.setWordWrap(True)
         layout.addWidget(info)
+        search_button = apply_icon(QPushButton("Abrir Pesquisa global"), "home")
+        search_button.setObjectName("globalSearchSettingsButton")
+        search_button.setAccessibleName("Abrir Pesquisa global")
+        search_button.clicked.connect(self.global_search_requested.emit)
+        layout.addWidget(search_button)
+        search_help = QLabel(
+            "Pesquise comandos de todas as pastas pelo nome, atalho ou conteúdo. "
+            "Atalho: Ctrl + Shift + Espaço. Útil quando você não lembra o atalho exato.")
+        search_help.setObjectName("hint")
+        search_help.setWordWrap(True)
+        layout.addWidget(search_help)
+        statistics_button = apply_icon(QPushButton("Abrir Estatísticas locais"), "home")
+        statistics_button.setObjectName("statisticsSettingsButton")
+        statistics_button.setAccessibleName("Abrir Estatísticas locais")
+        statistics_button.clicked.connect(self.statistics_requested.emit)
+        layout.addWidget(statistics_button)
+        statistics_help = QLabel(
+            "Consulte os usos de comandos por dia em um calendário, navegue entre "
+            "os meses e veja os totais de hoje, mês, ano e de todo o período. "
+            "Os dados ficam apenas neste computador.")
+        statistics_help.setObjectName("hint")
+        statistics_help.setWordWrap(True)
+        layout.addWidget(statistics_help)
         if sys.platform.startswith("linux"):
             setup = QPushButton("Configurar atalhos no Linux Wayland")
             setup.clicked.connect(self.linux_setup_requested.emit)
