@@ -1,7 +1,7 @@
-"""Responsive, compact settings dashboard with self-contained AURORA cards.
+"""Adaptive settings page with two coherent groups and a full-width compact mode.
 
-The panels only reorganize controls. All signals, preference keys, accessible
-names and save/update operations keep their established behavior in ui.py.
+Only the presentation changes. Existing signals, preferences and operations
+remain connected to the same controls and handlers in ui.py.
 """
 from __future__ import annotations
 
@@ -14,7 +14,7 @@ from PySide6.QtWidgets import (
     QPushButton, QScrollArea, QSizePolicy, QSlider, QVBoxLayout, QWidget,
 )
 
-from .icons import apply_icon
+from .icons import apply_icon, icon
 from .themes import set_ui_style
 from .version import IS_PRERELEASE
 
@@ -38,20 +38,17 @@ class SettingsPage(QWidget):
     check_requested = Signal()
     close_requested = Signal()
 
-    # Based on the scroll area's available width, after subtracting its
-    # internal padding. 2 columns already fit in a non-maximized window;
-    # 1920x1080 can show four without making the cards excessively narrow.
-    MIN_CARD_WIDTH = 290
-    CARD_GAP = 12
-    MAX_COLUMNS = 4
+    # Two spacious groups on desktop, one full-width group per row when narrow.
+    # Use scroll viewport width, not maximized state, so manual resizing works.
+    MIN_GROUP_WIDTH = 465
+    GROUP_GAP = 14
     MAX_DASHBOARD_WIDTH = 1480
-    SIDE_PADDING = 14
+    SIDE_PADDING = 22
+    GROUP_ORDER = ("general", "tools")
     CARD_ORDER = (
-        "appearance", "productivity", "audio",
-        "startup", "backups", "updates",
+        "appearance", "updates", "audio", "startup",
+        "productivity", "search", "statistics", "backups",
     )
-    # Approximate card heights give balanced stacks without empty grid rows.
-    CARD_WEIGHTS = (205, 475, 245, 155, 245, 255)
 
     def __init__(self, prefs: dict, *, startup_supported: bool, startup_enabled: bool,
                  parent=None):
@@ -62,15 +59,27 @@ class SettingsPage(QWidget):
         set_ui_style(self, r"""
             QWidget#settingsPage, QWidget#settingsContent,
             QWidget#settingsViewport, QWidget#settingsDashboard,
-            QWidget#settingsCardsHost, QWidget#settingsCardColumn {
+            QWidget#settingsGroupsHost {
                 background: #091426; color: #eaf4ff;
             }
             QScrollArea#settingsScroll {
                 border: none; background: #091426;
             }
+            QFrame#settingsGroup {
+                background: #0d253d; border: 1px solid #28627c;
+                border-radius: 13px;
+            }
+            QLabel#settingsGroupTitle {
+                color: #97f0e7; font-size: 17px; font-weight: 750;
+                background: transparent;
+            }
+            QLabel#settingsGroupIntro {
+                color: #b8cde0; font-size: 12px;
+                background: transparent;
+            }
             QFrame#settingsCard {
-                background: #102338; border: 1px solid #24445f;
-                border-radius: 12px;
+                background: #0c2035; border: 1px solid #24465e;
+                border-radius: 10px;
             }
             QFrame#settingsAccent {
                 background: #63dfc9; border: none; border-radius: 2px;
@@ -168,15 +177,17 @@ class SettingsPage(QWidget):
         outer.setContentsMargins(self.SIDE_PADDING, 16,
                                  self.SIDE_PADDING, 20)
         outer.setSpacing(0)
-        outer.addStretch(1)
+        outer.addStretch(0)
         self.dashboard = QWidget(body)
         self.dashboard.setObjectName("settingsDashboard")
         self.dashboard.setMaximumWidth(self.MAX_DASHBOARD_WIDTH)
         content = QVBoxLayout(self.dashboard)
         content.setContentsMargins(0, 0, 0, 0)
         content.setSpacing(18)
-        outer.addWidget(self.dashboard, 10)
-        outer.addStretch(1)
+        # Give the dashboard all available width below its desktop maximum.
+        # Zero-stretch side spacers center it only when that maximum is reached.
+        outer.addWidget(self.dashboard, 1)
+        outer.addStretch(0)
 
         head = QHBoxLayout()
         heading_column = QVBoxLayout()
@@ -195,67 +206,98 @@ class SettingsPage(QWidget):
         head.addWidget(back, 0, Qt.AlignTop)
         content.addLayout(head)
 
-        # Responsive grid of *columns*, each with its own vertical stack.
-        # Unlike a traditional QGridLayout of cards this avoids blank spaces
-        # beneath short cards when Produtividade is substantially taller.
-        self.cards_host = QWidget(self.dashboard)
-        self.cards_host.setObjectName("settingsCardsHost")
-        self.cards_host.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Maximum)
-        self.cards_grid = QGridLayout(self.cards_host)
-        self.cards_grid.setContentsMargins(0, 0, 0, 0)
-        self.cards_grid.setHorizontalSpacing(self.CARD_GAP)
-        self.cards_grid.setVerticalSpacing(0)
-        self.column_hosts = []
-        self.column_layouts = []
-        for i in range(self.MAX_COLUMNS):
-            host = QWidget(self.cards_host)
-            host.setObjectName("settingsCardColumn")
-            column = QVBoxLayout(host)
-            column.setContentsMargins(0, 0, 0, 0)
-            column.setSpacing(self.CARD_GAP)
-            self.cards_grid.addWidget(host, 0, i, Qt.AlignTop)
-            self.column_hosts.append(host)
-            self.column_layouts.append(column)
-        content.addWidget(self.cards_host, 0, Qt.AlignTop)
+        # A pair of large grouped panels, not a masonry grid of six cards.
+        # On narrow windows the panels stack and each fills the viewport.
+        self.groups_host = QWidget(self.dashboard)
+        self.groups_host.setObjectName("settingsGroupsHost")
+        self.groups_host.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Maximum)
+        self.groups_grid = QGridLayout(self.groups_host)
+        self.groups_grid.setContentsMargins(0, 0, 0, 0)
+        self.groups_grid.setHorizontalSpacing(self.GROUP_GAP)
+        self.groups_grid.setVerticalSpacing(self.GROUP_GAP)
+        self.groups = {}
+        self.group_layouts = {}
+        self._group(
+            "general", "Geral",
+            "Personalize a aparência, atualizações, áudio e inicialização do aplicativo.")
+        self._group(
+            "tools", "Produtividade e dados",
+            "Ferramentas para aumentar sua produtividade e gerenciar seus dados.")
+        content.addWidget(self.groups_host, 0, Qt.AlignTop)
         content.addStretch(1)
 
         self.cards = {}
         self._appearance_card(prefs)
-        self._productivity_card(prefs)
+        self._updates_card(prefs)
         self._audio_card(prefs)
         self._startup_card(prefs, startup_supported, startup_enabled)
+        self._productivity_card(prefs)
+        self._search_card()
+        self._statistics_card()
         self._backup_card()
-        self._updates_card(prefs)
 
         self.scroller.setWidget(body)
         root.addWidget(self.scroller)
         self._current_columns = None
+        self._backup_horizontal = None
         self._reflowing = False
         # The scroll viewport (not only the parent page) can resize when the
         # scrollbar appears or disappears, so listen to its geometry too.
         self.scroller.viewport().installEventFilter(self)
-        self._reflow_cards(force=True)
+        self._reflow_groups(force=True)
 
-    def _card(self, key: str, title: str, summary: str = "") -> QVBoxLayout:
-        frame = QFrame(self.dashboard)
-        frame.setObjectName("settingsCard")
-        self.cards[key] = frame
-        layout = QVBoxLayout(frame)
-        layout.setContentsMargins(14, 14, 14, 16)
-        layout.setSpacing(9)
+    def _group(self, key: str, title: str, summary: str):
+        frame = QFrame(self.groups_host)
+        frame.setObjectName("settingsGroup")
+        frame.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Maximum)
+        self.groups[key] = frame
+        area = QVBoxLayout(frame)
+        area.setContentsMargins(12, 14, 12, 12)
+        area.setSpacing(9)
         header = QHBoxLayout()
-        header.setSpacing(9)
+        header.setSpacing(10)
         accent = QFrame()
         accent.setObjectName("settingsAccent")
-        accent.setFixedSize(4, 19)
+        accent.setFixedSize(4, 25)
         header.addWidget(accent, 0, Qt.AlignVCenter)
+        heading = QVBoxLayout()
+        heading.setSpacing(3)
+        name = QLabel(title)
+        name.setObjectName("settingsGroupTitle")
+        heading.addWidget(name)
+        intro = self._hint(summary, name="settingsGroupIntro")
+        heading.addWidget(intro)
+        header.addLayout(heading, 1)
+        area.addLayout(header)
+        self.group_layouts[key] = area
+
+    def _card(self, key: str, title: str, summary: str = "",
+              *, group: str = "general", icon_name: str = "") -> QVBoxLayout:
+        frame = QFrame(self.groups[group])
+        frame.setObjectName("settingsCard")
+        frame.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
+        self.cards[key] = frame
+        layout = QVBoxLayout(frame)
+        layout.setContentsMargins(14, 12, 14, 13)
+        layout.setSpacing(8)
+        header = QHBoxLayout()
+        header.setSpacing(9)
+        if icon_name:
+            icon_label = QLabel()
+            icon_label.setPixmap(icon(icon_name, "#5ce5e0").pixmap(20, 20))
+            icon_label.setFixedSize(22, 22)
+            icon_label.setStyleSheet("background: transparent;")
+            header.addWidget(icon_label, 0, Qt.AlignTop)
+        title_column = QVBoxLayout()
+        title_column.setSpacing(4)
         title_widget = QLabel(title)
         title_widget.setObjectName("settingsCardTitle")
-        header.addWidget(title_widget)
-        header.addStretch()
-        layout.addLayout(header)
+        title_column.addWidget(title_widget)
         if summary:
-            layout.addWidget(self._hint(summary, name="settingsCardIntro"))
+            title_column.addWidget(self._hint(summary, name="settingsCardIntro"))
+        header.addLayout(title_column, 1)
+        layout.addLayout(header)
+        self.group_layouts[group].addWidget(frame)
         return layout
 
     @staticmethod
@@ -294,22 +336,8 @@ class SettingsPage(QWidget):
         row.addStretch(1)
         layout.addLayout(row)
 
-    def _tool_tile(self, layout: QVBoxLayout, title: str, help_text: str,
-                   button: QPushButton):
-        tile = QFrame()
-        tile.setObjectName("settingsToolTile")
-        inner = QVBoxLayout(tile)
-        inner.setContentsMargins(12, 11, 12, 11)
-        inner.setSpacing(7)
-        name = QLabel(title)
-        name.setObjectName("settingsToolName")
-        inner.addWidget(name)
-        inner.addWidget(self._hint(help_text))
-        self._button_row(inner, button, 240)
-        layout.addWidget(tile)
-
     def _appearance_card(self, prefs: dict):
-        area = self._card("appearance", "Aparência", "Escolha a identidade visual do aplicativo.")
+        area = self._card("appearance", "Aparência", "Escolha a identidade visual do aplicativo.", icon_name="settings")
         title = QLabel("Tema do aplicativo")
         title.setObjectName("settingsFieldLabel")
         area.addWidget(title)
@@ -334,7 +362,8 @@ class SettingsPage(QWidget):
 
     def _productivity_card(self, prefs: dict):
         area = self._card("productivity", "Produtividade",
-                          "Acesse seus comandos com mais rapidez.")
+                          "Acesse seus comandos com mais rapidez.",
+                          group="tools", icon_name="bolt")
         self.suggestions = QCheckBox("Mostrar sugestões enquanto digito")
         self.suggestions.setAccessibleName(
             "Mostrar sugestões de atalhos enquanto digito em outros aplicativos")
@@ -346,31 +375,39 @@ class SettingsPage(QWidget):
         area.addWidget(self._hint(
             "Digite / para abrir o menu de comandos. Use ↑/↓ para navegar, "
             "Tab ou Enter para inserir e Esc para fechar. Não use em campos de senha."))
-
-        search_button = self._action(
-            "Abrir Pesquisa global", name="globalSearchSettingsButton")
-        search_button.setAccessibleName("Abrir Pesquisa global")
-        search_button.clicked.connect(self.global_search_requested.emit)
-        self._tool_tile(area, "Pesquisa global",
-                        "Localize comandos pelo nome, atalho ou conteúdo. "
-                        "Atalho: Ctrl + Shift + Espaço.", search_button)
-
-        statistics_button = self._action(
-            "Abrir Estatísticas locais", name="statisticsSettingsButton")
-        statistics_button.setAccessibleName("Abrir Estatísticas locais")
-        statistics_button.clicked.connect(self.statistics_requested.emit)
-        self._tool_tile(area, "Estatísticas",
-                        "Consulte usos por dia em um calendário, navegue pelos "
-                        "meses e veja os totais. Os dados ficam neste computador.",
-                        statistics_button)
         if sys.platform.startswith("linux"):
             setup = self._action("Configurar atalhos no Linux Wayland")
             setup.clicked.connect(self.linux_setup_requested.emit)
             self._button_row(area, setup, 290)
 
+    def _search_card(self):
+        area = self._card(
+            "search", "Pesquisa global",
+            "Localize comandos pelo nome, atalho ou conteúdo.",
+            group="tools", icon_name="home")
+        area.addWidget(self._hint("Atalho: Ctrl + Shift + Espaço."))
+        button = self._action(
+            "Abrir Pesquisa global", name="globalSearchSettingsButton")
+        button.setAccessibleName("Abrir Pesquisa global")
+        button.clicked.connect(self.global_search_requested.emit)
+        self._button_row(area, button, 240)
+
+    def _statistics_card(self):
+        area = self._card(
+            "statistics", "Estatísticas",
+            "Consulte usos por dia em um calendário, navegue pelos meses e "
+            "veja os totais. Os dados ficam neste computador.",
+            group="tools", icon_name="save")
+        button = self._action(
+            "Abrir Estatísticas locais", name="statisticsSettingsButton")
+        button.setAccessibleName("Abrir Estatísticas locais")
+        button.clicked.connect(self.statistics_requested.emit)
+        self._button_row(area, button, 240)
+
     def _audio_card(self, prefs: dict):
         area = self._card("audio", "Áudio",
-                          "Personalize a confirmação sonora dos comandos.")
+                          "Personalize a confirmação sonora dos comandos.",
+                          icon_name="volume")
         self.sound = QCheckBox("Som ao salvar ou usar comandos")
         self.sound.setAccessibleName("Reproduzir som ao salvar e acionar comandos")
         self.sound.setChecked(prefs["sound_enabled"])
@@ -415,7 +452,8 @@ class SettingsPage(QWidget):
 
     def _startup_card(self, prefs, startup_supported, startup_enabled):
         area = self._card("startup", "Inicialização",
-                          "Escolha como o AURORA inicia com o computador.")
+                          "Escolha como o AURORA inicia com o computador.",
+                          icon_name="play")
         self.startup = QCheckBox("Iniciar com o Windows")
         self.startup.setEnabled(startup_supported)
         self.startup.setChecked(startup_enabled)
@@ -437,11 +475,17 @@ class SettingsPage(QWidget):
 
     def _backup_card(self):
         area = self._card("backups", "Segurança dos dados",
-                          "Suas pastas e comandos continuam armazenados localmente.")
+                          "Suas pastas e comandos continuam armazenados localmente.",
+                          group="tools", icon_name="backup")
         area.addWidget(self._hint(
             "O backup inclui pastas, comandos, formatação e ordem. "
             "Outro backup é criado antes da instalação de atualizações."))
-        for label, signal, icon, object_name in (
+        self.backup_buttons_grid = QGridLayout()
+        self.backup_buttons_grid.setContentsMargins(0, 0, 0, 0)
+        self.backup_buttons_grid.setHorizontalSpacing(8)
+        self.backup_buttons_grid.setVerticalSpacing(8)
+        self.backup_buttons = []
+        for label, signal, symbol, object_name in (
             ("Criar backup completo", self.backup_requested,
              "backup", "settingsBackupCreateButton"),
             ("Restaurar backup", self.restore_requested,
@@ -449,13 +493,31 @@ class SettingsPage(QWidget):
             ("Abrir backups", self.open_backups_requested,
              "folder", "settingsBackupOpenButton"),
         ):
-            button = self._action(label, name=object_name, icon=icon)
+            button = self._action(label, name=object_name, icon=symbol)
             button.clicked.connect(signal.emit)
-            self._button_row(area, button, 235)
+            self.backup_buttons.append(button)
+        area.addLayout(self.backup_buttons_grid)
+
+    def _arrange_backup_buttons(self, horizontal: bool):
+        if horizontal == self._backup_horizontal:
+            return
+        self._backup_horizontal = horizontal
+        for button in self.backup_buttons:
+            self.backup_buttons_grid.removeWidget(button)
+        for position, button in enumerate(self.backup_buttons):
+            row = 0 if horizontal else position
+            column = position if horizontal else 0
+            self.backup_buttons_grid.addWidget(button, row, column)
+        # Buttons do not stretch far apart in the desktop layout.
+        for col in range(3):
+            self.backup_buttons_grid.setColumnStretch(
+                col, 0 if horizontal or col else 1)
+        self.backup_buttons_grid.setColumnStretch(3, 1 if horizontal else 0)
 
     def _updates_card(self, prefs):
         area = self._card("updates", "Atualizações",
-                          "Controle quando e quais versões serão oferecidas.")
+                          "Controle quando e quais versões serão oferecidas.",
+                          icon_name="update")
         self.updates = QCheckBox("Avisar sobre novas versões")
         self.updates.setAccessibleName("Avisar quando houver uma nova versão")
         self.updates.setChecked(prefs["check_updates"])
@@ -480,17 +542,15 @@ class SettingsPage(QWidget):
 
     @classmethod
     def columns_for_width(cls, viewport_width: int) -> int:
-        """Choose 1–4 columns from actual usable width, not window state."""
+        """Use two full-width groups when each can breathe; otherwise one."""
         available = min(
             cls.MAX_DASHBOARD_WIDTH,
             max(0, int(viewport_width) - 2 * cls.SIDE_PADDING),
         )
-        return max(1, min(
-            cls.MAX_COLUMNS,
-            (available + cls.CARD_GAP) // (cls.MIN_CARD_WIDTH + cls.CARD_GAP),
-        ))
+        return (2 if available >= 2 * cls.MIN_GROUP_WIDTH + cls.GROUP_GAP
+                else 1)
 
-    def _reflow_cards(self, *, force: bool = False):
+    def _reflow_groups(self, *, force: bool = False):
         if (len(getattr(self, "cards", {})) != len(self.CARD_ORDER)
                 or getattr(self, "_reflowing", False)):
             return
@@ -498,33 +558,32 @@ class SettingsPage(QWidget):
         if width <= 0:
             width = self.width()
         columns = self.columns_for_width(width)
-        if columns == self._current_columns and not force:
+        available = min(
+            self.MAX_DASHBOARD_WIDTH,
+            max(0, width - 2 * self.SIDE_PADDING),
+        )
+        group_width = (available - (self.GROUP_GAP if columns == 2 else 0)) / columns
+        horizontal_buttons = group_width >= 590
+        if (columns == self._current_columns
+                and horizontal_buttons == self._backup_horizontal and not force):
             return
 
         self._reflowing = True
         try:
-            self._current_columns = columns
-            # Take layouts out, not QWidgets: their callbacks and contents
-            # must survive any number of window resizes unchanged.
-            for layout in self.column_layouts:
-                while layout.count():
-                    item = layout.takeAt(0)
-                    del item
-
-            accumulated = [0] * columns
-            for name, weight in zip(self.CARD_ORDER, self.CARD_WEIGHTS):
-                column_idx = min(range(columns), key=lambda idx: (accumulated[idx], idx))
-                card = self.cards[name]
-                self.column_layouts[column_idx].addWidget(card)
-                card.show()
-                accumulated[column_idx] += weight + self.CARD_GAP
-
-            for i, host in enumerate(self.column_hosts):
-                host.setVisible(i < columns)
-                self.cards_grid.setColumnStretch(i, 1 if i < columns else 0)
-                self.cards_grid.setColumnMinimumWidth(
-                    i, self.MIN_CARD_WIDTH if i < columns else 0)
-            self.cards_host.updateGeometry()
+            if columns != self._current_columns or force:
+                self._current_columns = columns
+                for panel in self.groups.values():
+                    self.groups_grid.removeWidget(panel)
+                for index, key in enumerate(self.GROUP_ORDER):
+                    row, col = ((0, index) if columns == 2 else (index, 0))
+                    self.groups_grid.addWidget(
+                        self.groups[key], row, col, Qt.AlignTop)
+                    self.groups[key].show()
+                self.groups_grid.setColumnStretch(0, 1)
+                self.groups_grid.setColumnStretch(1, 1 if columns == 2 else 0)
+                self.groups_grid.setColumnMinimumWidth(1, 0)
+            self._arrange_backup_buttons(horizontal_buttons)
+            self.groups_host.updateGeometry()
             self.dashboard.updateGeometry()
         finally:
             self._reflowing = False
@@ -533,15 +592,15 @@ class SettingsPage(QWidget):
         if (watched is self.scroller.viewport()
                 and event.type() == QEvent.Resize
                 and getattr(self, "_current_columns", None) is not None):
-            self._reflow_cards()
+            self._reflow_groups()
         return super().eventFilter(watched, event)
 
     def showEvent(self, event):
         super().showEvent(event)
         if getattr(self, "_current_columns", None) is not None:
-            self._reflow_cards()
+            self._reflow_groups()
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
         if getattr(self, "_current_columns", None) is not None:
-            self._reflow_cards()
+            self._reflow_groups()
