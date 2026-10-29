@@ -11,9 +11,12 @@ não é gravado no corpo do comando.
 | `{{campo:Nome|Joana}}` | Campo com valor inicial |
 | `{{escolha:Status|Aberto|Concluído}}` | Lista obrigatória |
 
-Até 12 campos diferentes por comando e 12 opções por lista. Campos repetidos
-com a mesma definição compartilham a resposta. Campos inconsistentes e
-respostas muito grandes são rejeitados.
+Até 12 ocorrências de campos por comando e 12 opções por lista. Cada
+ocorrência abre uma entrada independente na ordem em que aparece no texto,
+mesmo com rótulos iguais. Por exemplo, `{{campo:Nome}} namora com
+{{campo:Nome}}` mostra Nome (1) e Nome (2), permitindo João e Maria.
+O formulário coloca o foco no primeiro campo ao abrir; Tab passa para o
+seguinte. Respostas muito grandes são rejeitadas.
 
 O diálogo aparece no momento de escolher o modelo. Se for cancelado,
 nenhuma substituição do atalho digitado é tentada. O resultado é montado
