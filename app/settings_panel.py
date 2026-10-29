@@ -4,6 +4,7 @@ from __future__ import annotations
 from .themes import set_ui_style, ui_color
 
 from pathlib import Path
+import sys
 
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (QCheckBox, QComboBox, QFrame, QHBoxLayout, QLabel, QPushButton,
@@ -20,6 +21,8 @@ class SettingsPage(QWidget):
     start_minimized_toggled = Signal(bool)
     updates_toggled = Signal(bool)
     prereleases_toggled = Signal(bool)
+    suggestions_toggled = Signal(bool)
+    linux_setup_requested = Signal()
     play_requested = Signal()
     backup_requested = Signal()
     restore_requested = Signal()
@@ -103,6 +106,24 @@ class SettingsPage(QWidget):
         appearance_hint.setObjectName("hint")
         appearance_hint.setWordWrap(True)
         layout.addWidget(appearance_hint)
+        self._divider(layout)
+        self._label(layout, "PRODUTIVIDADE")
+        self.suggestions = QCheckBox(
+            "Mostrar sugestões de atalhos enquanto digito em outros aplicativos")
+        self.suggestions.setToolTip(
+            "Opcional e desativado por padrão. Pode mostrar dicas sobre campos privados.")
+        self.suggestions.setChecked(prefs.get("suggest_shortcuts", False))
+        self.suggestions.toggled.connect(self.suggestions_toggled.emit)
+        layout.addWidget(self.suggestions)
+        info = QLabel("Mostra até cinco atalhos ao digitar / e três caracteres. "
+                      "Não utilize em campos de senha. Ctrl+Shift+Espaço abre a pesquisa global.")
+        info.setObjectName("hint")
+        info.setWordWrap(True)
+        layout.addWidget(info)
+        if sys.platform.startswith("linux"):
+            setup = QPushButton("Configurar atalhos no Linux Wayland")
+            setup.clicked.connect(self.linux_setup_requested.emit)
+            layout.addWidget(setup)
         self._divider(layout)
         self._label(layout, "ÁUDIO")
         self.sound = QCheckBox("Reproduzir som ao salvar e acionar comandos")

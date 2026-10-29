@@ -6,7 +6,9 @@ from collections import OrderedDict
 
 from .data_paths import application_db_path
 from .welcome import initial_snippets
-from datetime import datetime
+from .productivity_data import initialize_productivity, search_ids, record_success, usage_report, reset_usage
+from .smart_templates import advanced_variables
+from datetime import date, datetime
 from pathlib import Path
 import json
 import os
@@ -66,6 +68,7 @@ def validate_shortcut(shortcut: str) -> None:
 def render_snippet(template: str, clipboard_text: str = "", now: datetime | None = None) -> RenderResult:
     """Resolve variáveis. {{cursor}} marca onde o cursor termina após a inserção."""
     now = now or datetime.now()
+    template = advanced_variables(template, now)
     values = {
         "data": now.strftime("%d/%m/%Y"),
         "hora": now.strftime("%H:%M"),
@@ -131,6 +134,7 @@ class SnippetStore:
         if "sort_order" not in columns:
             self.connection.execute("ALTER TABLE snippets ADD COLUMN sort_order INTEGER NOT NULL DEFAULT 0")
         self.connection.commit()
+        self._fts_available = initialize_productivity(self.connection)
         self._shortcut_version = None
         self._shortcut_ids = {}
         self._snippet_cache = OrderedDict()
@@ -200,10 +204,26 @@ class SnippetStore:
             sql += " AND folder_id = ?"
             params.append(folder_id)
         if query:
-            sql += " AND (title LIKE ? OR shortcut LIKE ? OR content LIKE ?)"
-            params.extend([f"%{query}%"] * 3)
+            hit_ids = search_ids(self.connection, query) if self._fts_available else None
+            if hit_ids:
+                # Sem reordenação: a pasta e a organização manual prevalecem.
+                sql += " AND id IN (" + ",".join("?" for _ in hit_ids) + ")"
+                params.extend(hit_ids)
+            else:
+                # Compatibilidade com buscas por trechos no meio da palavra.
+                sql += " AND (title LIKE ? OR shortcut LIKE ? OR content LIKE ?)"
+                params.extend([f"%{query}%"] * 3)
         sql += " ORDER BY sort_order ASC, id DESC"
         return [Snippet(**dict(row)) for row in self.connection.execute(sql, params)]
+
+    def register_expansion(self, snippet_id: int, when: date | None = None) -> bool:
+        return record_success(self.connection, snippet_id, when)
+
+    def usage_report(self, today: date | None = None) -> dict:
+        return usage_report(self.connection, today)
+
+    def reset_usage(self) -> None:
+        reset_usage(self.connection)
 
     def snippet_by_shortcut(self, shortcut: str) -> Snippet | None:
         """Índice Unicode leve + cache limitado, sem reler imagens a cada uso.
