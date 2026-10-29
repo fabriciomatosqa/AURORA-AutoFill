@@ -123,6 +123,8 @@ class ListenerLifecycleTests(unittest.TestCase):
         self.stack.enter_context(patch.dict("sys.modules", {"pynput": SimpleNamespace(
             keyboard=SimpleNamespace(Listener=self.keyboard), mouse=SimpleNamespace(Listener=self.mouse))}))
         self.stack.enter_context(patch("app.hotkeys.Thread"))
+        # Estes testes exercitam o backend pynput, não o evdev do Wayland.
+        self.stack.enter_context(patch("app.wayland_input.is_wayland_session", return_value=False))
         self.stack.enter_context(patch("app.hotkeys.windows_modifiers", return_value=None))
         self.snapshot = self.stack.enter_context(patch("app.hotkeys.windows_input_snapshot",
                                                      return_value=InputSnapshot(100)))

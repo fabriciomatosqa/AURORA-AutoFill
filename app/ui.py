@@ -1638,7 +1638,7 @@ class AutoFillWindow(AuroraFeaturesMixin, QMainWindow):
                 QMessageBox.warning(self, "Erro na importação", str(exc))
 
     def _toggle_listener(self):
-        if self._input_start_failure:
+        if getattr(self, "_input_start_failure", ""):
             started, message = self.hotkeys.start()
             if not started:
                 self._input_start_failure = message

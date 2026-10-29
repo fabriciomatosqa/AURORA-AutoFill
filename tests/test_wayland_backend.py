@@ -6,6 +6,8 @@ from unittest.mock import patch, Mock
 
 from app import wayland_input
 
+_REAL_SESSION_CHECK = wayland_input.is_wayland_session
+
 
 class FakeDevice:
     def __init__(self, path, keys):
@@ -44,15 +46,14 @@ class WaylandBackendTests(unittest.TestCase):
         self.addCleanup(self.wayland.stop)
 
     def test_detect_session_only_when_linux_wayland(self):
-        with patch("app.wayland_input.is_wayland_session", wraps=wayland_input.is_wayland_session):
-            self.assertTrue(wayland_input.is_wayland_session(
-                {"XDG_SESSION_TYPE": "wayland", "DISPLAY": ":0"}, platform="linux"))
-            self.assertTrue(wayland_input.is_wayland_session(
-                {"WAYLAND_DISPLAY": "wayland-0"}, platform="linux"))
-            self.assertFalse(wayland_input.is_wayland_session(
-                {"XDG_SESSION_TYPE": "x11", "DISPLAY": ":0"}, platform="linux"))
-            self.assertFalse(wayland_input.is_wayland_session(
-                {"XDG_SESSION_TYPE": "wayland"}, platform="win32"))
+        self.assertTrue(_REAL_SESSION_CHECK(
+            {"XDG_SESSION_TYPE": "wayland", "DISPLAY": ":0"}, platform="linux"))
+        self.assertTrue(_REAL_SESSION_CHECK(
+            {"WAYLAND_DISPLAY": "wayland-0"}, platform="linux"))
+        self.assertFalse(_REAL_SESSION_CHECK(
+            {"XDG_SESSION_TYPE": "x11", "DISPLAY": ":0"}, platform="linux"))
+        self.assertFalse(_REAL_SESSION_CHECK(
+            {"XDG_SESSION_TYPE": "wayland"}, platform="win32"))
 
     def test_missing_uinput_permission_is_actionable(self):
         with patch("app.wayland_input.os.access", return_value=False):
