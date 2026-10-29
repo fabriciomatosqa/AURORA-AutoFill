@@ -109,7 +109,8 @@ class EngineFixture:
             _clipboard_revision=0,
             statusBar=lambda: self.status, _play_confirmation=Mock(),
             listen_button=Mock(), tray_toggle_action=None,
-            _quick_search_hotkey=SimpleNamespace(unregister=Mock(), register=Mock(return_value=(True, ""))))
+            _quick_search_hotkey=SimpleNamespace(unregister=Mock(), register=Mock(return_value=(True, ""))),
+            winId=lambda: 9999)
         for name, value in ui.AutoFillWindow.__dict__.items():
             if name in {'_clone_clipboard_mime', '_normal_text'}:
                 setattr(self.host, name, value.__func__)
