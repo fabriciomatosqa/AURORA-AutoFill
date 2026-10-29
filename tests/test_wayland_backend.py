@@ -94,7 +94,8 @@ class WaylandBackendTests(unittest.TestCase):
     def test_virtual_keys_are_sent_in_safe_order_and_count_is_bounded(self):
         ec = FakeEvdev().ecodes
         events = []
-        driver = wayland_input.WaylandInputListener(lambda _: None, lambda _: None, lambda: None)
+        with patch.dict("sys.modules", {"evdev": FakeEvdev()}):
+            driver = wayland_input.WaylandInputListener(lambda _: None, lambda _: None, lambda: None)
         driver.running = True
         driver._virtual = SimpleNamespace(write=lambda kind, code, pressed: events.append((code, pressed)),
                                            syn=lambda: None)
