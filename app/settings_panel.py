@@ -510,8 +510,7 @@ class SettingsPage(QWidget):
         for col in range(3):
             self.backup_buttons_grid.setColumnStretch(
                 col, 0 if horizontal or col else 1)
-        if horizontal:
-            self.backup_buttons_grid.setColumnStretch(3, 1)
+        self.backup_buttons_grid.setColumnStretch(3, 1 if horizontal else 0)
 
     def _updates_card(self, prefs):
         area = self._card("updates", "Atualizações",
