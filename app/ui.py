@@ -35,6 +35,8 @@ from .word_context import submit_word, warm_word, stop_word
 from time import monotonic
 from .formatting import has_rich_formatting, render_rich_html
 from .features import AuroraFeaturesMixin
+from .productivity_features import ProductivityMixin
+from .smart_templates import fields_in, has_steps
 from .version import APP_VERSION
 from .icons import apply_icon
 from .font_catalog import AuroraFontCombo, AuroraFontSizeSpinBox
@@ -230,6 +232,8 @@ QToolTip { background: #17354c; color: #fff; border: 1px solid #4eb9b2; }
 class HotkeySignals(QObject):
     triggered = Signal(object)
     listener_state = Signal(str)
+    quick_search = Signal()
+    suggestions = Signal(str)
 
 
 class AuroraBanner(QWidget):
@@ -502,7 +506,7 @@ class ReorderableSnippetList(QListWidget):
             self.reordered.emit()
 
 
-class AutoFillWindow(AuroraFeaturesMixin, QMainWindow):
+class AutoFillWindow(ProductivityMixin, AuroraFeaturesMixin, QMainWindow):
     def __init__(self):
         super().__init__()
         self.store = SnippetStore(application_db_path())
@@ -557,7 +561,12 @@ class AutoFillWindow(AuroraFeaturesMixin, QMainWindow):
         self.signals = HotkeySignals()
         self.signals.triggered.connect(self._expand_global)
         self.signals.listener_state.connect(self._listener_state_changed, Qt.QueuedConnection)
-        self.hotkeys = GlobalHotkeyListener(self.signals.triggered.emit, self.signals.listener_state.emit)
+        self.signals.quick_search.connect(self._open_global_search, Qt.QueuedConnection)
+        self.signals.suggestions.connect(self._show_suggestions, Qt.QueuedConnection)
+        self.hotkeys = GlobalHotkeyListener(
+            self.signals.triggered.emit, self.signals.listener_state.emit,
+            on_quick_search=self.signals.quick_search.emit,
+            on_prefix=self.signals.suggestions.emit)
         self._update_listener_shortcuts()
         started, message = self.hotkeys.start()
         self._hotkeys_enabled = started
@@ -715,6 +724,16 @@ class AutoFillWindow(AuroraFeaturesMixin, QMainWindow):
         backup.addWidget(export)
         backup.addWidget(imported)
         s.addLayout(backup)
+        tools = QHBoxLayout()
+        finder = QPushButton("Pesquisa global")
+        finder.setToolTip("Localizar comandos · Ctrl+Shift+Espaço")
+        finder.clicked.connect(self._open_global_search)
+        tools.addWidget(finder)
+        stats = QPushButton("Estatísticas")
+        stats.setToolTip("Quantidade de comandos utilizados por dia, mês e ano")
+        stats.clicked.connect(self._show_statistics)
+        tools.addWidget(stats)
+        s.addLayout(tools)
         splitter.addWidget(sidebar)
 
         right = QWidget()
@@ -1071,6 +1090,15 @@ class AutoFillWindow(AuroraFeaturesMixin, QMainWindow):
             ("Data atual", "{{data}}"), ("Hora atual", "{{hora}}"),
             ("Data e hora", "{{data_hora}}"), ("Área de transferência", "{{clipboard}}"),
             ("Posição do cursor", "{{cursor}}"),
+            ("Data +7 dias", "{{data:+7}}"),
+            ("Data -1 dia", "{{data:-1}}"),
+            ("Data personalizada", "{{data_formato:%Y-%m-%d}}"),
+            ("Cálculo seguro", "{{calculo:12*3}}"),
+            ("Campo de formulário", "{{campo:Nome}}"),
+            ("Lista de opções", "{{escolha:Situação|Aberto|Concluído}}"),
+            ("Avançar campo (Tab)", "{{tab}}"),
+            ("Enviar Enter", "{{enter}}"),
+            ("Aguardar 250 ms", "{{espera:250}}"),
         ]:
             action = QAction(label, self)
             action.triggered.connect(lambda checked=False, t=token: self.body_input.insertPlainText(t))
@@ -1708,6 +1736,15 @@ class AutoFillWindow(AuroraFeaturesMixin, QMainWindow):
         if capture_focus() != candidate.context or not self.hotkeys.claim(candidate):
             return
         self._active_candidate = candidate
+        # Formulários e etapas precisam da confirmação do usuário antes de
+        # tentar qualquer alteração no aplicativo de destino.
+        snippet = self.store.snippet_by_shortcut(candidate.shortcut)
+        if snippet and (fields_in(snippet.content) or has_steps(snippet.content)):
+            self._active_candidate = None
+            self.hotkeys.invalidate()
+            QTimer.singleShot(0, lambda item=snippet, ctx=candidate.context, key=candidate.shortcut:
+                              self._launch_smart_snippet(item, ctx, from_shortcut=key))
+            return
         # Aciona imediatamente ao terminar o atalho, sem atraso mínimo.
         # A segurança permanece no verificador de foco/texto/seleção; campos
         # web assíncronos são tentados novamente somente quando necessário.
@@ -2309,7 +2346,16 @@ class AutoFillWindow(AuroraFeaturesMixin, QMainWindow):
             self._finish_expansion(operation, "Texto inserido; posição do cursor não confirmada.")
 
     def _expansion_succeeded(self, operation):
+        if operation.stage == "confirmed":
+            return
         operation.stage = "confirmed"
+        try:
+            item = self.store.snippet_by_shortcut(operation.candidate.shortcut)
+            if item:
+                self.store.register_expansion(item.id)
+        except (OSError, sqlite3.Error):
+            # Uma falha de métricas não desfaz uma expansão confirmada.
+            pass
         message = f"Expandido: {operation.candidate.shortcut}"
         if operation.image_count and not operation.images_confirmed:
             message += " · Imagens não verificadas no destino. Confira os anexos antes de enviar."

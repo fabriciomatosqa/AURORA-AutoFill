@@ -19,7 +19,9 @@ _FORMATTED_RE = re.compile(
     r'|aurora-paragraphs|<(?:b|strong|i|em|u|s|strike|sup|sub|ol|ul|li|h[1-6])(?:\s|>))',
     re.I)
 
-_TOKEN_RE = re.compile(r'\{\{(?:data_hora|data|hora|clipboard|area_transferencia|cursor)\}\}')
+_TOKEN_RE = re.compile(
+    r'\{\{(?:data_hora|data|hora|clipboard|area_transferencia|cursor'
+    r'|data:[+-]\d{1,4}|data_formato:[^{}]{1,48}|calculo:[^{}]{1,75})\}\}')
 
 
 def has_rich_formatting(html: str) -> bool:

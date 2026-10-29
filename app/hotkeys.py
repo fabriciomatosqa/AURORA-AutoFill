@@ -75,6 +75,12 @@ class ShortcutMatcher:
                 return typed
             return None
 
+    def current_prefix(self) -> str:
+        """Prefixo transitório usado apenas para sugestões opt-in."""
+        with self._lock:
+            pos = self._buffer.rfind("/")
+            return self._buffer[pos:] if pos >= 0 and len(self._buffer) - pos >= 3 else ""
+
     def ambiguous_exact(self) -> str | None:
         """Atalho completo que também é prefixo de outro; sem confirmação ainda."""
         with self._lock:
@@ -103,9 +109,12 @@ class ShortcutMatcher:
 
 class GlobalHotkeyListener:
     def __init__(self, on_trigger: Callable[[ExpansionCandidate], None],
-                 on_state: Callable[[str], None] | None = None):
+                 on_state: Callable[[str], None] | None = None,
+                 on_quick_search=None, on_prefix=None):
         self._on_trigger = on_trigger
         self._on_state = on_state
+        self._on_quick_search = on_quick_search
+        self._on_prefix = on_prefix
         self._matcher = ShortcutMatcher()
         self._listener = None
         self._mouse_listener = None
@@ -377,6 +386,14 @@ class GlobalHotkeyListener:
             # Outra tecla chegou antes da expansão: não editar texto incerto.
             self._pending = self._pending_key = None
             self._matcher.clear()
+        if name == "space" and any(m.startswith("ctrl") for m in self._modifiers) and any(
+                m.startswith("shift") for m in self._modifiers):
+            self._matcher.clear()
+            if self._on_prefix:
+                self._on_prefix("")
+            if self._on_quick_search:
+                self._on_quick_search()
+            return
         if any(not m.startswith("shift") for m in self._modifiers):
             return
         try:
@@ -385,6 +402,8 @@ class GlobalHotkeyListener:
             if name == "space":
                 character = " "
             matched = self._matcher.feed(character, name)
+            if self._on_prefix:
+                self._on_prefix(self._matcher.current_prefix() if not matched else "")
             if matched:
                 self._pending = matched
                 self._pending_key = key

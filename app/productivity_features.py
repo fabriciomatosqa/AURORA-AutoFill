@@ -72,8 +72,14 @@ class ProductivityMixin:
         if not self.preferences.get("suggest_shortcuts", False) or not prefix or len(prefix) < 3:
             return
         # Overlay informativo, sem foco e sem substituir caracteres sozinho.
-        matching = [item for item in self.store.snippets() if
-                    item.shortcut.casefold().startswith(prefix.casefold())][:5]
+        matching = []
+        for shortcut in self.store.shortcuts():
+            if shortcut.casefold().startswith(prefix.casefold()):
+                item = self.store.snippet_by_shortcut(shortcut)
+                if item:
+                    matching.append(item)
+                    if len(matching) >= 5:
+                        break
         if matching:
             names = "\n".join(f"{s.shortcut}  ·  {s.title[:38]}" for s in matching)
             QToolTip.showText(QCursor.pos(), names + "\nCtrl+Shift+Espaço: pesquisar", None, None, 1500)

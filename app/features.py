@@ -71,6 +71,8 @@ class AuroraFeaturesMixin:
             lambda checked: self._change_preference("check_updates", checked))
         self.settings_page.prereleases_toggled.connect(
             lambda checked: self._change_preference("include_prereleases", checked))
+        self.settings_page.suggestions_toggled.connect(
+            lambda checked: self._change_preference("suggest_shortcuts", checked))
         self.settings_page.startup_toggled.connect(self._change_startup)
         self.settings_page.start_minimized_toggled.connect(self._change_start_minimized)
         self.settings_page.play_requested.connect(self._play_confirmation)
@@ -99,6 +101,7 @@ class AuroraFeaturesMixin:
                       "check_updates": self.settings_page.updates,
                       "include_prereleases": self.settings_page.prereleases,
                       "start_minimized": self.settings_page.start_minimized,
+                      "suggest_shortcuts": self.settings_page.suggestions,
                       "theme": self.settings_page.theme}.get(key)
             if widget is not None:
                 widget.blockSignals(True)

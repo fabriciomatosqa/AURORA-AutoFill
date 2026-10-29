@@ -17,6 +17,7 @@ DEFAULTS = {
     "check_updates": True,
     "include_prereleases": IS_PRERELEASE,
     "start_minimized": False,
+    "suggest_shortcuts": False,
     "theme": "system",
     "paragraph_defaults": {},
 }
@@ -35,7 +36,7 @@ def normalize_preferences(raw: dict) -> dict:
     if isinstance(raw, dict):
         # A settings file predating themes belongs to an existing dark profile.
         settings["theme"] = raw.get("theme") if raw.get("theme") in ("light", "dark", "system") else "dark"
-        for key in ("sound_enabled", "check_updates", "include_prereleases", "start_minimized"):
+        for key in ("sound_enabled", "check_updates", "include_prereleases", "start_minimized", "suggest_shortcuts"):
             if type(raw.get(key)) is bool:
                 settings[key] = raw[key]
         volume = raw.get("sound_volume")
