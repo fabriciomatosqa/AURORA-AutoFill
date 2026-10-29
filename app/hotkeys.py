@@ -318,6 +318,11 @@ class GlobalHotkeyListener:
                 self._suppressed_nav_keys.discard(vk)
                 listener.suppress_event()
                 return False
+            # Suppress repeated keydown until the physical release, even if
+            # pressing Enter/Tab has already dismissed the popup.
+            if vk in self._suppressed_nav_keys:
+                listener.suppress_event()
+                return False
             if (not self._enabled or not self._suggestions_enabled or
                     not self._running or self._needs_rearm or
                     any(not name.startswith("shift") for name in self._modifiers) or
@@ -487,6 +492,8 @@ class GlobalHotkeyListener:
             if not name.startswith("shift"):
                 self._matcher.clear()
                 self._pending = self._pending_key = None
+                if self._on_suggestion_state:
+                    self._on_suggestion_state(("", self._context))
             return
         if not self._enabled:
             return
