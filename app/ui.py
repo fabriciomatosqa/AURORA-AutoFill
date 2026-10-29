@@ -21,6 +21,7 @@ from PySide6.QtWidgets import (
 
 from .core import (Snippet, SnippetStore, application_db_path,
                    render_snippet, validate_shortcut)
+from .wayland_input import is_wayland_session
 from .hotkeys import (GlobalHotkeyListener, replace_shortcut, paste_clipboard,
                       select_previous_characters, copy_selected_text, collapse_selection_to_end,
                       replace_tracked_shortcut)
@@ -565,10 +566,13 @@ class AutoFillWindow(AuroraFeaturesMixin, QMainWindow):
         if started:
             warm_accessibility()
             warm_word()
+        self._input_start_failure = "" if started else message
         self.listen_button.setText("Atalhos ativos" if started else "Atalhos indisponíveis")
         apply_icon(self.listen_button, "bolt" if started else "pause")
-        self.listen_button.setEnabled(started)
-        self.listen_button.setToolTip("Ativar/desativar expansão em outros programas")
+        # Permitir consultar o motivo e tentar novamente após conceder acesso.
+        self.listen_button.setEnabled(started or is_wayland_session())
+        self.listen_button.setToolTip("Ativar/desativar expansão em outros programas"
+                                      if started else message + "\nClique para ver o diagnóstico.")
         self.statusBar().showMessage(message)
         self._refresh_all()
         self._show_welcome()
@@ -1634,16 +1638,34 @@ class AutoFillWindow(AuroraFeaturesMixin, QMainWindow):
                 QMessageBox.warning(self, "Erro na importação", str(exc))
 
     def _toggle_listener(self):
-        self._hotkeys_enabled = not self._hotkeys_enabled
-        self.hotkeys.set_enabled(self._hotkeys_enabled)
+        if getattr(self, "_input_start_failure", ""):
+            started, message = self.hotkeys.start()
+            if not started:
+                self._input_start_failure = message
+                self.listen_button.setToolTip(message)
+                QMessageBox.warning(self, "Atalhos no Ubuntu / Wayland", message)
+                self.statusBar().showMessage(message)
+                return
+            self._input_start_failure = ""
+            self._hotkeys_enabled = True
+            if self._focus_monitor is None:
+                self._focus_monitor = FocusMonitor(self.hotkeys.invalidate)
+        else:
+            self._hotkeys_enabled = not self._hotkeys_enabled
+            self.hotkeys.set_enabled(self._hotkeys_enabled)
         self.listen_button.setText("Atalhos ativos" if self._hotkeys_enabled else "Atalhos pausados")
         apply_icon(self.listen_button, "bolt" if self._hotkeys_enabled else "pause")
+        self.listen_button.setToolTip("Ativar/desativar expansão em outros programas")
         if self.tray_toggle_action is not None:
             self.tray_toggle_action.setText("Pausar atalhos" if self._hotkeys_enabled else "Retomar atalhos")
         self.statusBar().showMessage("Expansão ativa." if self._hotkeys_enabled else "Expansão pausada.", 4000)
 
     def _listener_state_changed(self, _state):
         if self._quitting:
+            return
+        if self._input_start_failure:
+            self.listen_button.setText("Atalhos indisponíveis")
+            apply_icon(self.listen_button, "pause")
             return
         # Signals may be queued across a click on Pause. Render the current
         # requested state, never reactivate from an older recovery notification.
@@ -1746,7 +1768,8 @@ class AutoFillWindow(AuroraFeaturesMixin, QMainWindow):
                 self._finish_expansion(None)
                 return
             external = not (self.isActiveWindow() and self.focusWidget() is self.test_box)
-            tracked = sys.platform == 'win32' and external and uses_tracked_replacement(candidate.context)
+            tracked = (sys.platform == 'win32' and external and uses_tracked_replacement(candidate.context)
+                       or is_wayland_session() and external and '{{cursor}}' not in snippet.content)
             word_native = sys.platform == 'win32' and external and is_word_target(candidate.context)
             direct = word_native or (tracked and '{{cursor}}' not in snippet.content)
             try:
@@ -1814,6 +1837,8 @@ class AutoFillWindow(AuroraFeaturesMixin, QMainWindow):
             if not rendered.text:
                 self._finish_expansion(None)
                 return
+            if is_wayland_session() and external and '{{cursor}}' in snippet.content:
+                raise ValueError("No Wayland, {{cursor}} ainda exige uma seleção acessível do destino; atalho preservado.")
             # NUL não pode ser transportado integralmente por CF_UNICODETEXT.
             if "\x00" in rendered.text:
                 raise ValueError("O texto contém um caractere NUL e não pode ser colado.")
@@ -1912,7 +1937,7 @@ class AutoFillWindow(AuroraFeaturesMixin, QMainWindow):
                 # A autorização vem do buffer de digitação, não de Ctrl+C.
                 # Não executar candidatos enfileirados/obsoletos nem repetir
                 # um envio parcial. Mudanças de teclado/mouse/foco invalidam.
-                if (not uses_tracked_replacement(operation.candidate.context)
+                if (not (is_wayland_session() or uses_tracked_replacement(operation.candidate.context))
                         or not self.hotkeys.is_current(operation.candidate, require_fresh=True)):
                     raise ValueError('A digitação mudou antes da substituição.')
                 if operation.before is not None:
