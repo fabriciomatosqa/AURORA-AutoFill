@@ -4,7 +4,7 @@ from PySide6.QtGui import QColor, QPainter, QPen
 from PySide6.QtWidgets import QHBoxLayout, QLabel, QToolButton, QWidget
 
 from .icons import apply_icon, icon
-from .themes import ui_color
+from .themes import current_theme, ui_color
 
 
 class RibbonToolButton(QToolButton):
@@ -19,39 +19,60 @@ class RibbonToolButton(QToolButton):
             self.setProperty('paragraphMenu', True)
             self.setPopupMode(QToolButton.MenuButtonPopup)
 
+    def visual_rect(self):
+        """Center the visible square inside a wider grid column."""
+        arrow = 13 if self._split_menu else 0
+        width = max(0, min(self.width()-2, self.height()+1+arrow))
+        return QRect((self.width()-width)//2, 0, width, self.height())
+
     def icon_rect(self):
-        size = self.iconSize().boundedTo(self.size()-QSize(8,6))
-        return QRect((self.width()-size.width())//2, (self.height()-size.height())//2,
+        visible = self.visual_rect()
+        square_width = max(0, visible.width()-(13 if self._split_menu else 0))
+        size = self.iconSize().boundedTo(
+            QSize(max(0, square_width-6), max(0, visible.height()-6)))
+        return QRect(visible.left()+(square_width-size.width())//2,
+                     visible.top()+(visible.height()-size.height())//2,
                      size.width(), size.height())
 
     def paintEvent(self, event):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.Antialiasing)
+        painter.setRenderHint(QPainter.SmoothPixmapTransform)
         if not self.isEnabled():
             painter.setOpacity(.4)
         active = self.isChecked() or self.isDown()
         hover = self.underMouse()
-        background = '#2c6870' if active else '#28546a' if hover else '#19364b'
-        border = '#79ead8' if active or hover else '#365a71'
+        light = current_theme() == 'light'
+        background = ('#d8f1ef' if active else '#eaf4fa' if hover else '#f5f9fc') if light else (
+            '#2c6870' if active else '#28546a' if hover else '#19364b')
+        border = ('#228b8b' if active or hover else '#b5cbd9') if light else (
+            '#79ead8' if active or hover else '#365a71')
+        visible = self.visual_rect()
         if not self._launcher or hover or active:
-            painter.setPen(QPen(ui_color(border),1))
+            painter.setPen(QPen(ui_color(border), 1))
             painter.setBrush(ui_color(background))
-            painter.drawRoundedRect(QRectF(self.rect()).adjusted(.5,.5,-.5,-.5),4,4)
+            painter.drawRoundedRect(QRectF(visible).adjusted(.5,.5,-.5,-.5),5,5)
         if self._split_menu:
-            x = self.width()-13.5
-            painter.setPen(QPen(ui_color('#365a71'),1))
-            painter.drawLine(QPointF(x,2),QPointF(x,self.height()-2))
-            painter.setPen(QPen(ui_color('#81e9d9'),1.4,Qt.SolidLine,Qt.RoundCap,Qt.RoundJoin))
-            x, y = self.width()-7, self.height()/2
+            divider = visible.right()-12
+            painter.setPen(QPen(ui_color('#aac6d7' if light else '#365a71'),1))
+            painter.drawLine(QPointF(divider,3),QPointF(divider,self.height()-3))
+            painter.setPen(QPen(ui_color('#176571' if light else '#81e9d9'),
+                                1.5,Qt.SolidLine,Qt.RoundCap,Qt.RoundJoin))
+            x,y = visible.right()-6,visible.center().y()
             painter.drawLine(QPointF(x-2,y-1),QPointF(x,y+1))
             painter.drawLine(QPointF(x,y+1),QPointF(x+2,y-1))
         if not self.icon().isNull():
-            artwork = icon(self._aurora_icon[0],'#f1fffd') if active and hasattr(self,'_aurora_icon') else self.icon()
+            artwork = (icon(self._aurora_icon[0],'#f1fffd')
+                       if active and hasattr(self,'_aurora_icon') and not light
+                       else self.icon())
             artwork.paint(painter,self.icon_rect())
         elif self.text():
             painter.setFont(self.font())
-            painter.setPen(QColor('#ffffff') if active else ui_color('#effaff'))
-            painter.drawText(self.rect(),Qt.AlignCenter,self.text())
+            painter.setPen(QColor('#16324f' if light else '#ffffff' if active else '#effaff'))
+            content = QRect(visible)
+            if self._split_menu:
+                content.setWidth(max(0,content.width()-13))
+            painter.drawText(content,Qt.AlignCenter,self.text())
         painter.end()
 
 
@@ -71,6 +92,6 @@ class RibbonFooter(QWidget):
         self.launcher.setObjectName('ribbonLauncher')
         self.launcher.setFixedSize(22,20)
         apply_icon(self.launcher,'paragraph-settings',label='Abrir opções de '+title.lower())
-        self.launcher.setToolTip('Abrir opções de '+title.lower())
+        self.launcher.setToolTip('Abrir opções completas de '+title.lower())
         self.launcher.clicked.connect(callback)
         layout.addWidget(self.launcher)
