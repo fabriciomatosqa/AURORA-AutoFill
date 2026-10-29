@@ -315,7 +315,8 @@ class SettingsPage(QWidget):
     def _productivity_card(self, prefs: dict):
         area = self._card("productivity", "Produtividade",
                           "Acesse seus comandos com mais rapidez.")
-        self.suggestions = QCheckBox(
+        self.suggestions = QCheckBox("Mostrar sugestões enquanto digito")
+        self.suggestions.setAccessibleName(
             "Mostrar sugestões de atalhos enquanto digito em outros aplicativos")
         self.suggestions.setToolTip(
             "Opcional e desativado por padrão. Pode mostrar dicas sobre campos privados.")
