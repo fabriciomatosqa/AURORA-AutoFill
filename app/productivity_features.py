@@ -107,6 +107,11 @@ class ProductivityMixin:
                     and has_rich_formatting(snippet.rich_content)):
                 source_html = fill_fields(snippet.rich_content, answers, html=True)
                 rich = render_rich_html(source_html, source_clipboard)
+            if rich and ("{{campo:" in rich or "{{escolha:" in rich):
+                # Qt pode dividir um token entre spans ao aplicar formatação.
+                # Nessa situação preferir o texto preenchido, nunca colar um
+                # token bruto no documento final.
+                rich = ""
             if has_steps(raw):
                 stages = action_steps(raw)
                 prompt = ("Este comando irá enviar texto, Tab/Enter e pequenas esperas "
@@ -152,6 +157,9 @@ class ProductivityMixin:
             QMessageBox.warning(self, "Comando não inserido", str(error))
 
     def _safe_paste_selected(self, context, text, snippet, shortcut):
+        if QApplication.clipboard().text() != text:
+            self.statusBar().showMessage("Clipboard mudou; nenhuma colagem automática.", 7500)
+            return
         if not restore_target(context):
             self.statusBar().showMessage("Destino alterado: conteúdo copiado, cole com Ctrl+V.", 8500)
             return
@@ -183,6 +191,9 @@ class ProductivityMixin:
     def _next_stage(self):
         state = getattr(self, "_stage_state", None)
         if state is None:
+            return
+        if getattr(self, "_quitting", False):
+            self._abort_steps("Aplicativo encerrado.")
             return
         context = state["context"]
         if state["index"] == 0:
