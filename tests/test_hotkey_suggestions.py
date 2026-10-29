@@ -25,7 +25,10 @@ class GlobalProductivityKeysTests(unittest.TestCase):
             lambda candidate: results.append(candidate),
             on_quick_search=lambda: results.append("quick_search"),
             on_prefix=prefixes.append)
-        with patch("app.hotkeys.windows_modifiers", return_value=None):
+        # Keyboard-hook shortcut remains available on non-Windows systems.
+        # Windows now exclusively dispatches this via RegisterHotKey.
+        with patch("app.hotkeys.sys.platform", "linux"), patch(
+                "app.hotkeys.windows_modifiers", return_value=None):
             listener._press(SimpleNamespace(name="ctrl_l", char=None))
             listener._press(SimpleNamespace(name="shift_l", char=None))
             listener._press(SimpleNamespace(name="space", char=" "))
