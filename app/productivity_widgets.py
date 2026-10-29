@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from datetime import date
 from calendar import monthrange
-from PySide6.QtCore import Qt
+from PySide6.QtCore import QEvent, Qt
 from PySide6.QtWidgets import (
     QComboBox, QDialog, QDialogButtonBox, QFormLayout, QFrame, QHBoxLayout,
     QLabel, QLineEdit, QListWidget, QListWidgetItem, QMessageBox, QProgressBar,
@@ -133,6 +133,8 @@ class QuickSearchDialog(QDialog):
         self.search.setAccessibleName("Pesquisar comandos")
         self.search.textChanged.connect(self.refresh)
         self.search.returnPressed.connect(self.choose)
+        # Keep typing focus in the search box while arrows navigate results.
+        self.search.installEventFilter(self)
         root.addWidget(self.search)
 
         # The user can resize the results and preview without hiding either.
@@ -141,6 +143,8 @@ class QuickSearchDialog(QDialog):
         self.content_splitter.setChildrenCollapsible(False)
         self.matches = QListWidget()
         self.matches.setAccessibleName("Resultados da pesquisa")
+        # Enter on the results list must insert, not just change selection.
+        self.matches.installEventFilter(self)
         self.matches.itemDoubleClicked.connect(lambda _: self.choose())
         self.matches.currentItemChanged.connect(self._update_preview)
         self.content_splitter.addWidget(self.matches)
@@ -212,6 +216,24 @@ class QuickSearchDialog(QDialog):
             self.preview.setPlainText(snippet.content)
         self.preview.verticalScrollBar().setValue(0)
         self.preview.horizontalScrollBar().setValue(0)
+
+    def eventFilter(self, watched, event):
+        if event.type() == QEvent.KeyPress:
+            key = event.key()
+            if watched is self.search and key in (Qt.Key_Down, Qt.Key_Up):
+                count = self.matches.count()
+                if count:
+                    current = self.matches.currentRow()
+                    step = 1 if key == Qt.Key_Down else -1
+                    target = max(0, min(count - 1, current + step))
+                    self.matches.setCurrentRow(target)
+                    self.matches.scrollToItem(self.matches.item(target))
+                # Arrow keys should never move the caret inside the search.
+                return True
+            if watched is self.matches and key in (Qt.Key_Return, Qt.Key_Enter):
+                self.choose()
+                return True
+        return super().eventFilter(watched, event)
 
     def choose(self):
         current = self.matches.currentItem()
