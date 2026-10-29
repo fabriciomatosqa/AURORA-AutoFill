@@ -25,7 +25,7 @@ class RibbonToolButton(QToolButton):
         arrow = self.visual_rect()
         if (self._split_menu and self.menu() is not None and
                 event.button() == Qt.LeftButton and
-                arrow.right()-12 <= event.position().x() <= arrow.right()):
+                arrow.right()-12 <= event.position().x() < self.width()):
             event.accept()
             self.showMenu()
             return
