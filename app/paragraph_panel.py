@@ -106,7 +106,7 @@ class ParagraphPanel(QWidget):
         self.emoji_button = self._button(None,'Inserir emoji',72,lambda _:self.open_emoji_picker())
         # Exibir SVG colorido, não um glifo dependente da fonte do Windows.
         self.emoji_button.setIcon(emoji_icon('🙂'))
-        self.emoji_button.setIconSize(QSize(26,26))
+        self.emoji_button.setIconSize(QSize(23,23))
         self.emoji_button.setToolTip('Inserir emoji no texto')
         row3.addWidget(self.emoji_button,1)
         self.footer = RibbonFooter('Parágrafo',self.open_dialog)

@@ -31,5 +31,5 @@ def emoji_icon(emoji):
     if len(rect)!=4:
         return QIcon()
     pixmap = _atlas().copy(*rect)
-    pixmap.setDevicePixelRatio(3)
+    pixmap.setDevicePixelRatio(1)
     return QIcon(pixmap)

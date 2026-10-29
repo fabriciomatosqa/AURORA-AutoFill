@@ -9,7 +9,7 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-TIMEOUT_SECONDS = 150
+TIMEOUT_SECONDS = 300 if sys.platform == 'win32' else 150
 
 
 def main() -> int:

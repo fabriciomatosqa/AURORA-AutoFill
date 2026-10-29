@@ -121,7 +121,7 @@ QFrame#fontToolbar QToolButton#fontTool[paragraphMenu="true"]::menu-button {
 QFrame#fontToolbar QToolButton#fontTool[paragraphMenu="true"]::menu-arrow {
   image: none; width: 0px; height: 0px;
 }
-QLabel#ribbonGroupTitle { color: #a8bfd2; font-size: 11px; font-weight: 500; }
+QLabel#ribbonGroupTitle { color: #c1dbe8; font-size: 11px; font-weight: 700; }
 QFrame#fontToolbar QComboBox#fontFamily,
 QFrame#fontToolbar QSpinBox#fontSize {
   min-height: 27px; max-height: 27px; padding: 0px 5px;
