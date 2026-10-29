@@ -1221,7 +1221,8 @@ class AutoFillWindow(ProductivityMixin, AuroraFeaturesMixin, QMainWindow):
             self._suggestion_catalog = self.store.shortcut_catalog()
             self.hotkeys.update_shortcuts(
                 [shortcut for shortcut, _title in self._suggestion_catalog])
-            self._hide_suggestion_popup()
+            if hasattr(self, "_slash_popup"):
+                self._hide_suggestion_popup()
 
     def _get_snippet(self, snippet_id: int | None) -> Snippet | None:
         return next((s for s in self.store.snippets() if s.id == snippet_id), None)
@@ -1431,7 +1432,8 @@ class AutoFillWindow(ProductivityMixin, AuroraFeaturesMixin, QMainWindow):
                 QMessageBox.warning(self, "Erro na importação", str(exc))
 
     def _toggle_listener(self):
-        self._hide_suggestion_popup()
+        if hasattr(self, "_slash_popup"):
+            self._hide_suggestion_popup()
         if getattr(self, "_input_start_failure", ""):
             started, message = self.hotkeys.start()
             if not started:
