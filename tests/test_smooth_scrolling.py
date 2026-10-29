@@ -70,7 +70,12 @@ class SmoothScrollingTests(unittest.TestCase):
         area = self.scroll_area()
         bar = area.verticalScrollBar()
         self.assertTrue(self.controller.eventFilter(area.viewport(), wheel()))
-        QTest.qWait(35)
+        # Windows CI may take longer than a single 35ms animation tick;
+        # allow several event-loop cycles but still require actual movement.
+        for _ in range(10):
+            QTest.qWait(18)
+            if bar.value() > 0:
+                break
         first_position = bar.value()
         self.assertGreater(first_position, 0)
         self.assertTrue(self.controller.eventFilter(area.viewport(), wheel()))
