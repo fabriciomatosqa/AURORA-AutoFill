@@ -53,7 +53,7 @@ class WinQuickSearchTests(unittest.TestCase):
     def test_wm_hotkey_matches_only_our_window_and_key(self):
         def msg(hwnd, event, identity, lparam):
             native = wintypes.MSG()
-            native.hwnd = hwnd
+            native.hWnd = hwnd
             native.message = event
             native.wParam = identity
             native.lParam = lparam
