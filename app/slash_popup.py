@@ -8,13 +8,13 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-from PySide6.QtCore import QPoint, QRect, QSize, Qt
-from PySide6.QtGui import QCursor
+from PySide6.QtCore import QPoint, QRect, QSize, Qt, Signal
 from PySide6.QtWidgets import (QAbstractItemView, QApplication, QFrame,
                                QLabel, QListWidget, QListWidgetItem, QVBoxLayout)
 
 from .themes import current_theme
-from .windows_context import _GUIInfo, _api
+from .windows_context import _GUIInfo, _api, capture_focus
+from .accessibility_context import capture_caret_bounds
 
 
 POPUP_GAP = 11
@@ -22,40 +22,62 @@ FRAME_MARGIN = 3
 ASSETS = Path(__file__).resolve().parent.parent / "assets" / "icons"
 
 
-def suggestion_anchor() -> QRect:
-    """Caret's *line* in screen coordinates, not just an ambiguous point.
+def suggestion_anchor(context=None) -> QRect | None:
+    """Screen rect of the *focused text caret*, never the mouse position.
 
-    Most Win32 text controls publish rcCaret via GetGUIThreadInfo. Browsers
-    that do not publish one fall back to the mouse, padded to a line height.
-    Neither path reads the text in the target application.
+    Prefer Win32 rcCaret. Chromium/Teams often have no HWND caret, so query
+    their UI Automation TextPattern range. A final fallback is the focused
+    *control boundary* (outside its text), not an arbitrary pointer position.
     """
-    cursor = QCursor.pos()
-    fallback = QRect(cursor.x(), cursor.y() - 12, 1, 27)
     if sys.platform != "win32":
-        return fallback
+        return None
+    if context is None:
+        context = capture_focus()
+    if not getattr(context, "window", None) or capture_focus() != context:
+        return None
     try:
         import ctypes
         from ctypes import wintypes
-        info = _GUIInfo(cbSize=ctypes.sizeof(_GUIInfo))
         api = _api()
-        if not api.GetGUIThreadInfo(0, ctypes.byref(info)) or not info.caret:
-            return fallback
-        first = wintypes.POINT(info.rect.left, info.rect.top)
-        last = wintypes.POINT(info.rect.right, info.rect.bottom)
-        api.ClientToScreen.argtypes = [wintypes.HWND, ctypes.POINTER(wintypes.POINT)]
-        if not (api.ClientToScreen(info.caret, ctypes.byref(first))
-                and api.ClientToScreen(info.caret, ctypes.byref(last))):
-            return fallback
-        height = last.y - first.y
-        if not 8 <= height <= 120:
-            # An empty/invalid rcCaret must not place the popup on the text.
-            return fallback
-        if abs(first.x) > 100000 or abs(first.y) > 100000:
-            return fallback
-        return QRect(first.x, first.y, max(1, last.x-first.x), height)
+        info = _GUIInfo(cbSize=ctypes.sizeof(_GUIInfo))
+        if api.GetGUIThreadInfo(0, ctypes.byref(info)):
+            if (info.caret and info.focus == context.control and
+                    (info.caret == context.control or
+                     api.IsChild(context.control, info.caret))):
+                first = wintypes.POINT(info.rect.left, info.rect.top)
+                last = wintypes.POINT(info.rect.right, info.rect.bottom)
+                api.ClientToScreen.argtypes = [wintypes.HWND, ctypes.POINTER(wintypes.POINT)]
+                if (api.ClientToScreen(info.caret, ctypes.byref(first)) and
+                        api.ClientToScreen(info.caret, ctypes.byref(last))):
+                    height = last.y - first.y
+                    if (8 <= height <= 120 and
+                            abs(first.x) < 100000 and abs(first.y) < 100000):
+                        return QRect(first.x, first.y, max(1, last.x-first.x), height)
     except (OSError, AttributeError, TypeError, ValueError):
-        return fallback
+        pass
 
+    geometry = capture_caret_bounds(context)
+    if geometry is not None:
+        x, y, height = geometry
+        return QRect(round(x), round(y), 1, max(1, round(height)))
+
+    # Some legacy editors expose neither an HWND caret nor UIA TextPattern.
+    # Place outside the focused field rather than guessing from the mouse.
+    try:
+        import ctypes
+        from ctypes import wintypes
+        bounds = wintypes.RECT()
+        api = _api()
+        api.GetWindowRect.argtypes = [wintypes.HWND, ctypes.POINTER(wintypes.RECT)]
+        control = context.control or context.window
+        if api.GetWindowRect(control, ctypes.byref(bounds)):
+            if (bounds.right > bounds.left and bounds.bottom > bounds.top and
+                    bounds.right - bounds.left < 10000 and
+                    bounds.bottom - bounds.top < 10000):
+                return QRect(bounds.left + 8, bounds.bottom - 1, 1, 1)
+    except (OSError, AttributeError, TypeError, ValueError):
+        pass
+    return None
 
 def placement_for_caret(caret: QRect, screen: QRect, size: QSize,
                         gap: int = POPUP_GAP) -> tuple[QPoint, str, int]:
@@ -82,13 +104,16 @@ def placement_for_caret(caret: QRect, screen: QRect, size: QSize,
 
 
 class SlashCommandPopup(QFrame):
-    """Scrollable, non-activating command picker with genuinely rounded corners."""
+    """Interactive, non-activating command picker with rounded corners."""
+
+    command_selected = Signal(str)
 
     MAX_VISIBLE = 6
     ROW_HEIGHT = 39
 
     def __init__(self):
-        flags = Qt.ToolTip | Qt.FramelessWindowHint | Qt.WindowDoesNotAcceptFocus
+        flags = (Qt.Tool | Qt.FramelessWindowHint | Qt.WindowDoesNotAcceptFocus
+                 | Qt.WindowStaysOnTopHint)
         super().__init__(None, flags)
         self.setObjectName("auroraSlashPopup")
         self.setAttribute(Qt.WA_ShowWithoutActivating, True)
@@ -122,6 +147,7 @@ class SlashCommandPopup(QFrame):
         self.results.setVerticalScrollMode(QAbstractItemView.ScrollPerPixel)
         self.results.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.results.setSpacing(3)
+        self.results.itemClicked.connect(self._click_command)
         layout.addWidget(self.results)
 
         self.hint = QLabel("↑ ↓  navegar     Tab / Enter  inserir     Esc  fechar")
@@ -205,6 +231,11 @@ class SlashCommandPopup(QFrame):
             }}
         """)
 
+    def _click_command(self, item):
+        shortcut = item.data(Qt.UserRole)
+        if shortcut:
+            self.command_selected.emit(str(shortcut))
+
     def _resize_for_rows(self, rows: int):
         self.results.setFixedHeight(rows * self.ROW_HEIGHT + 3)
         self.adjustSize()
@@ -231,6 +262,9 @@ class SlashCommandPopup(QFrame):
         caret = anchor if isinstance(anchor, QRect) else (
             QRect(anchor.x(), anchor.y() - 12, 1, 27)
             if isinstance(anchor, QPoint) else suggestion_anchor())
+        if caret is None:
+            self.dismiss()
+            return
         screen = QApplication.screenAt(caret.center()) or QApplication.primaryScreen()
         self._resize_for_rows(min(len(matches), self.MAX_VISIBLE))
         if screen is not None:
