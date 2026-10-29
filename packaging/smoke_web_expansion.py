@@ -159,7 +159,8 @@ def main():
             isActiveWindow=lambda: False, focusWidget=lambda: None,
             test_box=object(), statusBar=lambda: SimpleNamespace(showMessage=lambda text,*_:messages.append(text)),
             _play_confirmation=Mock(), listen_button=Mock(), tray_toggle_action=None,
-            _quick_search_hotkey=SimpleNamespace(unregister=Mock(), register=Mock(return_value=(True, ""))))
+            _quick_search_hotkey=SimpleNamespace(unregister=Mock(), register=Mock(return_value=(True, ""))),
+            winId=lambda: 9999)
         for name in AutoFillWindow.__dict__:
             if name.startswith(('_expand', '_expansion_', '_candidate', '_edit_snapshot', '_owns_clipboard',
                                 '_clipboard_', '_perform_', '_submit_', '_begin_', '_poll_',
