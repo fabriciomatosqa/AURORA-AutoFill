@@ -4,9 +4,10 @@ import unittest
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-from PySide6.QtCore import Qt, QSize
+from PySide6.QtCore import Qt, QSize, QPoint
 from PySide6.QtTest import QTest
-from PySide6.QtWidgets import QApplication, QWidget
+from PySide6.QtWidgets import QApplication, QMenu
+from unittest.mock import patch
 
 from app.emoji_art import emoji_icon
 from app.icons import apply_icon
@@ -44,6 +45,26 @@ class RibbonGeometryTests(unittest.TestCase):
                     button.deleteLater()
         finally:
             theme.set_preference('dark')
+
+    def test_split_arrow_opens_menu_in_its_visible_region(self):
+        button = RibbonToolButton(menu=True)
+        button.setFixedSize(72,27)
+        apply_icon(button,'list-bullets')
+        menu = QMenu(button)
+        menu.addAction('Teste')
+        button.setMenu(menu)
+        button.show()
+        self.app.processEvents()
+        try:
+            visible = button.visual_rect()
+            arrow_x = visible.right()-6
+            with patch.object(button,'showMenu') as open_menu:
+                QTest.mouseClick(button, Qt.LeftButton,
+                                 pos=QPoint(arrow_x,visible.center().y()))
+                open_menu.assert_called_once()
+        finally:
+            button.hide()
+            button.deleteLater()
 
     def test_word_footer_has_caption_and_operable_launcher(self):
         calls = []
