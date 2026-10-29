@@ -294,8 +294,8 @@ class SlashPopupTests(unittest.TestCase):
         try:
             expected = host.test_box.viewport().mapToGlobal(
                 host.test_box.cursorRect().topLeft())
-            with patch("app.productivity_features.sys.platform", "win32"), \\
-                 patch("app.productivity_features.capture_focus", return_value=context), \\
+            with patch("app.productivity_features.sys.platform", "win32"), \
+                 patch("app.productivity_features.capture_focus", return_value=context), \
                  patch("app.slash_popup.suggestion_anchor",
                        side_effect=AssertionError("Do not use mouse/fallback")):
                 host._show_suggestions(("/te", context))
