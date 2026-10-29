@@ -7,6 +7,7 @@ from collections import OrderedDict
 from .data_paths import application_db_path
 from .welcome import initial_snippets
 from .productivity_data import initialize_productivity, search_ids, record_success, usage_report, reset_usage
+from .smart_templates import advanced_variables
 from datetime import date, datetime
 from pathlib import Path
 import json
@@ -67,6 +68,7 @@ def validate_shortcut(shortcut: str) -> None:
 def render_snippet(template: str, clipboard_text: str = "", now: datetime | None = None) -> RenderResult:
     """Resolve variáveis. {{cursor}} marca onde o cursor termina após a inserção."""
     now = now or datetime.now()
+    template = advanced_variables(template, now)
     values = {
         "data": now.strftime("%d/%m/%Y"),
         "hora": now.strftime("%H:%M"),
