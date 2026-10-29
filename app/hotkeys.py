@@ -550,7 +550,11 @@ class GlobalHotkeyListener:
                 self._on_prefix("")
             if self._on_suggestion_state:
                 self._on_suggestion_state(("", self._context))
-            if self._on_quick_search:
+            # Windows now uses RegisterHotKey/WM_HOTKEY to consume Space
+            # before it reaches the focused editor. Never open a second picker
+            # from pynput; if registration is unavailable, do not fall back to
+            # a path that inserts an unwanted space.
+            if self._on_quick_search and sys.platform != "win32":
                 self._on_quick_search()
             return
         if any(not m.startswith("shift") for m in self._modifiers):
