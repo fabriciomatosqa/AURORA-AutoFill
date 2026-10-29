@@ -8,13 +8,14 @@ from unittest.mock import patch
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-from PySide6.QtCore import QPoint
+from PySide6.QtCore import QPoint, QRect, QSize, Qt
 from PySide6.QtWidgets import QApplication
 
 from app.core import SnippetStore
 from app.expansion import ExpansionCandidate, FocusContext, EditSnapshot
 from app.hotkeys import GlobalHotkeyListener, INJECTION_TAG, ShortcutMatcher
-from app.slash_popup import SlashCommandPopup
+from app.slash_popup import (POPUP_GAP, ASSETS, SlashCommandPopup,
+                             placement_for_caret)
 
 
 def key(character=None, name=""):
@@ -158,6 +159,68 @@ class SlashPopupTests(unittest.TestCase):
             self.assertEqual(panel.current_shortcut(), "/comando11")
             panel.dismiss()
             self.assertFalse(panel.isVisible())
+        finally:
+            panel.close()
+            panel.deleteLater()
+
+    def test_placement_below_when_room_and_above_near_bottom(self):
+        area = QRect(0, 0, 800, 600)
+        popup = QSize(410, 275)
+        near_top = QRect(50, 30, 1, 22)
+        point, side, room = placement_for_caret(near_top, area, popup)
+        self.assertEqual(side, "below")
+        self.assertGreaterEqual(point.y(), near_top.bottom() + POPUP_GAP)
+        self.assertGreaterEqual(room, popup.height())
+        near_bottom = QRect(50, 550, 1, 22)
+        point, side, room = placement_for_caret(near_bottom, area, popup)
+        self.assertEqual(side, "above")
+        self.assertLess(point.y() + popup.height(), near_bottom.top())
+        self.assertGreaterEqual(room, popup.height())
+
+    def test_popup_clamps_horizontal_and_shrinks_results_before_covering_caret(self):
+        panel = SlashCommandPopup()
+        try:
+            screen = self.app.primaryScreen()
+            area = screen.availableGeometry()
+            choices = [(f"/comando{i}", f"Modelo {i}") for i in range(25)]
+            anchor = QRect(area.right() - 8, area.top() + 26, 1, 22)
+            panel.present("/", choices, anchor)
+            self.app.processEvents()
+            self.assertLessEqual(panel.geometry().right(), area.right())
+            self.assertGreaterEqual(panel.geometry().left(), area.left())
+            self.assertGreaterEqual(panel.geometry().top(),
+                                    anchor.bottom() + POPUP_GAP)
+            self.assertEqual(panel.results.count(), 25)
+            bottom_anchor = QRect(area.left() + 40, area.bottom() - 29, 1, 22)
+            panel.present("/", choices, bottom_anchor)
+            self.app.processEvents()
+            self.assertLess(panel.geometry().bottom(), bottom_anchor.top())
+            self.assertTrue(panel.results.verticalScrollBar().maximum() > 0)
+        finally:
+            panel.close()
+            panel.deleteLater()
+
+    def test_translucent_window_real_rounded_card_and_matching_scroll_arrows(self):
+        panel = SlashCommandPopup()
+        try:
+            self.assertTrue(panel.testAttribute(Qt.WA_TranslucentBackground))
+            self.assertEqual(panel.card.objectName(), "slashCard")
+            self.assertFalse(panel.autoFillBackground())
+            self.assertEqual(panel.focusPolicy(), Qt.NoFocus)
+            style = panel.styleSheet()
+            self.assertIn("border-radius: 12px", style)
+            self.assertIn("QFrame#auroraSlashPopup", style)
+            self.assertIn("background: transparent", style)
+            self.assertIn("QScrollBar::up-arrow:vertical", style)
+            self.assertIn("QScrollBar::down-arrow:vertical", style)
+            for name in ("scroll-up-dark.svg", "scroll-down-dark.svg",
+                         "scroll-up-light.svg", "scroll-down-light.svg"):
+                self.assertTrue((ASSETS / name).is_file(), name)
+            self.assertEqual(
+                (ASSETS / "scroll-up-dark.svg").read_text().count("<path"), 1)
+            panel.present("/", [("/teste", "Teste")], QPoint(30, 70))
+            self.app.processEvents()
+            self.assertTrue(panel.isVisible())
         finally:
             panel.close()
             panel.deleteLater()
