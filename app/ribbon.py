@@ -17,7 +17,19 @@ class RibbonToolButton(QToolButton):
         self.setAttribute(Qt.WA_Hover)
         if menu:
             self.setProperty('paragraphMenu', True)
-            self.setPopupMode(QToolButton.MenuButtonPopup)
+            self.setPopupMode(QToolButton.DelayedPopup)
+
+    def mousePressEvent(self, event):
+        # Native MenuButtonPopup reserves an invisible arrow at the far edge.
+        # Use the arrow we actually paint in the centered split control.
+        arrow = self.visual_rect()
+        if (self._split_menu and self.menu() is not None and
+                event.button() == Qt.LeftButton and
+                arrow.right()-12 <= event.position().x() <= arrow.right()):
+            event.accept()
+            self.showMenu()
+            return
+        super().mousePressEvent(event)
 
     def visual_rect(self):
         """Center the visible square inside a wider grid column."""
