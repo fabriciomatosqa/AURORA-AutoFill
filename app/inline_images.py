@@ -287,3 +287,39 @@ class AuroraImageEditor(QTextEdit):
         restore_metadata(self.document(), html)
         normalize_contextual_spacing(self.document())
         self.document().clearUndoRedoStacks()
+
+
+class AuroraReadOnlyPreview(AuroraImageEditor):
+    """Visualizador de texto rico, sem nenhuma interação de edição.
+
+    Mantém o mesmo renderizador de imagens, fontes e parágrafos do editor,
+    mas não aceita colar, digitar, arrastar arquivos nem inserir imagens.
+    Apenas setHtml/setPlainText, chamados pela atualização do editor principal,
+    alteram o conteúdo exibido.
+    """
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setObjectName("readonlyPreview")
+        self.setAccessibleName("Pré-visualização (somente leitura)")
+        self.setReadOnly(True)
+        self.setTextInteractionFlags(Qt.NoTextInteraction)
+        self.setFocusPolicy(Qt.NoFocus)
+        self.setContextMenuPolicy(Qt.NoContextMenu)
+        self.setAcceptDrops(False)
+        self.setUndoRedoEnabled(False)
+
+    def insertFromMimeData(self, source) -> None:
+        # O AuroraImageEditor suporta inserção programática mesmo em widgets
+        # read-only; não expor esse atalho na visualização.
+        return
+
+    def insert_image(self, image: QImage | QPixmap) -> bool:
+        return False
+
+    def keyPressEvent(self, event) -> None:
+        # Um evento enviado diretamente ao widget também não pode modificá-lo.
+        event.ignore()
+
+    def dropEvent(self, event) -> None:
+        event.ignore()

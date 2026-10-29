@@ -44,7 +44,8 @@ from .font_dialog import FontDialog
 from .color_dialog import AuroraColorDialog
 from .color_button import AuroraColorButton
 from .branding import brand_webp_bytes
-from .inline_images import AuroraImageEditor, contains_inline_images, plain_text_fallback, validate_inline_html, image_sources, read_image_file
+from .inline_images import (AuroraImageEditor, AuroraReadOnlyPreview, contains_inline_images,
+                            plain_text_fallback, validate_inline_html, image_sources, read_image_file)
 from .clipboard_content import (clone_mime, expansion_mime,
                                 prepare_mixed_content, materialize_clipboard)
 
@@ -1084,8 +1085,8 @@ class AutoFillWindow(AuroraFeaturesMixin, QMainWindow):
         preview_label = QLabel("PRÉ-VISUALIZAÇÃO")
         preview_label.setObjectName("sectionTitle")
         v.addWidget(preview_label)
-        self.preview = AuroraImageEditor()
-        self.preview.setReadOnly(True)
+        # O visualizador não compartilha os comandos de edição do campo acima.
+        self.preview = AuroraReadOnlyPreview()
         self.preview.setMinimumHeight(145)
         self.preview.setPlaceholderText("O resultado do modelo aparecerá aqui.")
         # A pré-visualização cresce no espaço liberado pelo antigo menu de cópia.
