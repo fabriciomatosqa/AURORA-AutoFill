@@ -598,9 +598,9 @@ class SettingsPage(QWidget):
     def showEvent(self, event):
         super().showEvent(event)
         if getattr(self, "_current_columns", None) is not None:
-            self._reflow_cards()
+            self._reflow_groups()
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
         if getattr(self, "_current_columns", None) is not None:
-            self._reflow_cards()
+            self._reflow_groups()
