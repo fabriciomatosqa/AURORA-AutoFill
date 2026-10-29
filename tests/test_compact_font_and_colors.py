@@ -92,7 +92,7 @@ class FontUiTests(unittest.TestCase):
                 self.assertIn("Cancelar", texts)
                 picker.reset_button.click()
                 self.assertTrue(picker.reset_requested)
-                self.assertEqual(picker.result(), picker.Accepted)
+                self.assertEqual(picker.result(), 1)
             finally:
                 picker.close()
                 picker.deleteLater()
