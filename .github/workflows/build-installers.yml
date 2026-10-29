@@ -271,7 +271,7 @@ jobs:
           xvfb-run -a -s '-screen 0 1366x768x24' python -m PyInstaller \
             --noconfirm --clean --windowed --onedir \
             --name "AURORA AutoFill" --add-data "assets:assets" \
-            --collect-submodules pynput main.py
+            --collect-submodules pynput --collect-submodules evdev main.py
       - name: Verificar recursos empacotados
         run: |
           printf '%s\n' "$GITHUB_SHA" > 'dist/AURORA AutoFill/SOURCE-COMMIT.txt'

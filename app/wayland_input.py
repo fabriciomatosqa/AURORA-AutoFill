@@ -264,12 +264,16 @@ class WaylandInputListener:
             if self._virtual:
                 self._virtual.close()
                 self._virtual = None
-        for dev, _ in list(self._devices.values()):
-            dev.close()
-        self._devices.clear()
-        if self._translator:
-            self._translator.close()
-            self._translator = None
+        # Fechar os dispositivos só após terminar o loop de leitura.
+        if self._thread is not None and self._thread is not __import__("threading").current_thread():
+            self._thread.join(timeout=.7)
+        if not self.is_alive():
+            for dev, _ in list(self._devices.values()):
+                dev.close()
+            self._devices.clear()
+            if self._translator:
+                self._translator.close()
+                self._translator = None
 
     def _send(self, code, down):
         ec = self.evdev.ecodes

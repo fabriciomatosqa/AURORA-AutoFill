@@ -221,10 +221,12 @@ class GlobalHotkeyListener:
             self.invalidate()
 
     def start(self) -> tuple[bool, str]:
-        import os
         import sys
-        if sys.platform.startswith("linux") and os.environ.get("XDG_SESSION_TYPE", "").lower() == "wayland":
-            return False, "Wayland restringe atalhos globais. Use uma sessão X11/Xorg para essa função."
+        from .wayland_input import is_wayland_session, diagnose_wayland
+        if is_wayland_session():
+            problem = diagnose_wayland()
+            if problem:
+                return False, problem
         try:
             with self._lifecycle_lock:
                 if self._running:
@@ -260,7 +262,7 @@ class GlobalHotkeyListener:
 
     def _install_hooks(self) -> None:
         """Only the lifecycle owner may replace listeners; never enable here."""
-        from pynput import keyboard, mouse
+        from .wayland_input import is_wayland_session
         with self._state_lock:
             self._generation += 1
             generation = self._generation
@@ -270,19 +272,35 @@ class GlobalHotkeyListener:
             self._callback_failed = False
         self._retire_hooks()
         self._health.reset(windows_input_snapshot())
-        self._keyboard = keyboard
-        self._listener = keyboard.Listener(
-            on_press=lambda key: self._dispatch(generation, self._on_press, key),
-            on_release=lambda key: self._dispatch(generation, self._on_release, key),
-            win32_event_filter=lambda msg, data: self._native_filter(generation, "keyboard", msg, data))
-        self._mouse_listener = mouse.Listener(
-            on_click=lambda x, y, button, pressed, _injected=False:
-                self._dispatch(generation, self._on_click, x, y, button, pressed),
-            on_scroll=lambda *_: self._dispatch(generation, self.invalidate),
-            win32_event_filter=lambda msg, data: self._native_filter(generation, "mouse", msg, data))
+        if is_wayland_session():
+            from .wayland_input import WaylandInputListener
+            self._keyboard = None
+            self._listener = WaylandInputListener(
+                lambda key: self._dispatch(generation, self._on_press, key),
+                lambda key: self._dispatch(generation, self._on_release, key),
+                lambda: self._dispatch(generation, self.invalidate))
+            self._mouse_listener = None
+        else:
+            from pynput import keyboard, mouse
+            self._keyboard = keyboard
+            kb_args = {}
+            ms_args = {}
+            if sys.platform == "win32":
+                kb_args["win32_event_filter"] = lambda msg, data: self._native_filter(generation, "keyboard", msg, data)
+                ms_args["win32_event_filter"] = lambda msg, data: self._native_filter(generation, "mouse", msg, data)
+            self._listener = keyboard.Listener(
+                on_press=lambda key: self._dispatch(generation, self._on_press, key),
+                on_release=lambda key: self._dispatch(generation, self._on_release, key),
+                **kb_args)
+            self._mouse_listener = mouse.Listener(
+                on_click=lambda x, y, button, pressed, _injected=False:
+                    self._dispatch(generation, self._on_click, x, y, button, pressed),
+                on_scroll=lambda *_: self._dispatch(generation, self.invalidate),
+                **ms_args)
         try:
             self._listener.start()
-            self._mouse_listener.start()
+            if self._mouse_listener is not None:
+                self._mouse_listener.start()
         except Exception:
             with self._state_lock:
                 self._generation += 1
@@ -307,9 +325,11 @@ class GlobalHotkeyListener:
                     self._modifiers.clear()
                 self._report_state("recovering")
                 return
+            from .wayland_input import is_wayland_session
+            listeners = (self._listener,) if is_wayland_session() else (self._listener, self._mouse_listener)
             if (not self._needs_rearm and not self._callback_failed and not reason
                     and all(listener is not None and listener.is_alive() and listener.running
-                            for listener in (self._listener, self._mouse_listener))):
+                            for listener in listeners)):
                 return
             self._report_state("recovering")
             self._install_hooks()
@@ -695,9 +715,13 @@ def select_previous_characters(count: int) -> None:
 
 def replace_tracked_shortcut(count: int) -> None:
     """Só chamar para candidato recente validado pelo hook, nunca como retry."""
+    from .wayland_input import is_wayland_session, replace_wayland_shortcut
+    if is_wayland_session():
+        replace_wayland_shortcut(count)
+        return
     import sys
     if sys.platform != 'win32':
-        raise OSError('Substituição acompanhada disponível apenas no Windows.')
+        raise OSError('Substituição acompanhada disponível apenas no Windows ou Wayland autorizado.')
     _send_windows_paste(count, phase='tracked')
 
 
