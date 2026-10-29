@@ -103,7 +103,8 @@ class SmoothWheelScroller(QObject):
         # Prefer vertical scrolling, horizontal only for horizontal wheels.
         vertical = angle.y() != 0
         degrees = angle.y() if vertical else angle.x()
-        lines = max(1, min(5, QApplication.wheelScrollLines()))
+        app = QApplication.instance()
+        lines = max(1, min(5, app.wheelScrollLines() if app else 3))
         pixels = round(degrees * self.PIXELS_PER_LINE * lines / 120)
         if pixels == 0:
             return False
