@@ -29,6 +29,8 @@ class FontDialog(QDialog):
         self._original = QTextCharFormat(formatting)
         self._foreground = formatting.foreground() if formatting.hasProperty(QTextFormat.ForegroundBrush) else QBrush(Qt.NoBrush)
         self._background = formatting.background() if formatting.hasProperty(QTextFormat.BackgroundBrush) else QBrush(Qt.NoBrush)
+        self.reset_foreground = False
+        self.reset_background = False
         self._sample = sample.replace('\u2029',' ').strip()[:240] or 'AaBbCc ÁÉÍÓÚ 123'
         layout = QVBoxLayout(self)
         group = QGroupBox('Fonte')
@@ -103,13 +105,19 @@ class FontDialog(QDialog):
 
     def _choose_color(self,highlight):
         brush = self._background if highlight else self._foreground
-        color = AuroraColorDialog.get_color(brush.color(),self,'Realce' if highlight else 'Cor da fonte')
-        if color.isValid():
-            self._set_color(highlight,QBrush(color))
+        accepted, color = AuroraColorDialog.get_choice(
+            brush.color(), self, 'Realce' if highlight else 'Cor da fonte')
+        if accepted:
+            self._set_color(
+                highlight, QBrush(color) if color.isValid() else QBrush(Qt.NoBrush))
 
     def _set_color(self,highlight,brush):
-        if highlight:self._background=brush
-        else:self._foreground=brush
+        if highlight:
+            self._background = brush
+            self.reset_background = brush.style() == Qt.NoBrush
+        else:
+            self._foreground = brush
+            self.reset_foreground = brush.style() == Qt.NoBrush
         self._refresh_color_label(self.highlight if highlight else self.text_color,highlight)
         self._update_preview()
 
