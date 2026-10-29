@@ -100,7 +100,10 @@ def _math(expression: str) -> str:
             return -value if isinstance(node.op, ast.USub) else value
         if isinstance(node, ast.BinOp) and type(node.op) in _ALLOWED_MATH:
             left, right = evaluate(node.left, depth + 1), evaluate(node.right, depth + 1)
-            result = _ALLOWED_MATH[type(node.op)](left, right)
+            try:
+                result = _ALLOWED_MATH[type(node.op)](left, right)
+            except (ZeroDivisionError, OverflowError) as exc:
+                raise ValueError("Cálculo inválido ou divisão por zero.") from exc
             if abs(result) > 1_000_000_000:
                 raise ValueError("Resultado fora do limite.")
             return result

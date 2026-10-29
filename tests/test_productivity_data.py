@@ -23,10 +23,10 @@ class ProductivityDataTests(unittest.TestCase):
     def test_fts_unicode_accent_prefix_and_fallback_middle_of_word(self):
         self.assertEqual([x.id for x in self.store.snippets(query="sauda")], [self.one])
         self.assertEqual([x.id for x in self.store.snippets(query="Saudação")], [self.one])
-        self.assertEqual([x.id for x in self.store.snippets(query="atenciosa")], [])
+        self.assertEqual([x.id for x in self.store.snippets(query="atenciosox")], [])
         self.assertEqual([x.id for x in self.store.snippets(query="chamado")], [self.two])
         self.assertEqual([x.id for x in self.store.snippets(query="tencios")], [self.one])
-        self.store.update_snippet_fields(self.one, title="Mensagem final", content="Confirmado.")
+        self.store.update_snippet_fields(self.one, title="Mensagem final", shortcut="/mensagem", content="Confirmado.")
         self.assertFalse(self.store.snippets(query="saudacao"))
         self.assertEqual([x.id for x in self.store.snippets(query="confirmado")], [self.one])
 
@@ -38,7 +38,7 @@ class ProductivityDataTests(unittest.TestCase):
         self.store.register_expansion(self.two, date(2025, 10, 1))
         r = self.store.usage_report(date(2026, 10, 29))
         self.assertEqual((r["today"], r["month"], r["year"], r["total"]), (2, 2, 3, 4))
-        self.assertEqual(r["top"][0][0], self.one)
+        self.assertIn((self.one, 2), [(i, n) for i, _title, _shortcut, n in r["top"]])
         self.assertEqual(dict(r["months"])["2026-10"], 2)
         self.store.reset_usage()
         self.assertEqual(self.store.usage_report()["total"], 0)

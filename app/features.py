@@ -101,7 +101,7 @@ class AuroraFeaturesMixin:
                       "check_updates": self.settings_page.updates,
                       "include_prereleases": self.settings_page.prereleases,
                       "start_minimized": self.settings_page.start_minimized,
-                      "suggest_shortcuts": self.settings_page.suggestions,
+                      "suggest_shortcuts": getattr(self.settings_page, "suggestions", None),
                       "theme": self.settings_page.theme}.get(key)
             if widget is not None:
                 widget.blockSignals(True)
