@@ -178,6 +178,21 @@ def _request_context(context, **fields):
         raise AccessibilityUnavailable('Janela de acessibilidade indisponível.')
     response = _client.request(process_id.value, window=str(context.window),
                                control=str(context.control), **fields)
+    if fields.get('action') == 'caret':
+        # Unlike a text snapshot this returns only screen geometry. The
+        # untrusted worker response is strictly scoped and bounds checked.
+        if not isinstance(response, dict) or response.get('status') != 'caret':
+            raise AccessibilityUnavailable('Posição do cursor indisponível.')
+        if (response.get('window') != str(context.window) or
+                response.get('control') != str(context.control)):
+            raise AccessibilityUnavailable('O foco mudou durante a leitura do cursor.')
+        coords = (response.get('x'), response.get('y'), response.get('height'))
+        from math import isfinite
+        if (any(type(value) not in (int, float) or not isfinite(value)
+                for value in coords) or not (6 <= coords[2] <= 160)
+                or any(abs(value) > 100000 for value in coords[:2])):
+            raise AccessibilityUnavailable('Coordenadas do cursor inválidas.')
+        return tuple(float(value) for value in coords)
     if isinstance(response, dict) and response.get('status') == 'selection_requested':
         # O ACK precisa vir EXCLUSIVAMENTE da ação de seleção, ecoando
         # contexto e identidade verificados pelo worker antes de Select().
@@ -223,3 +238,17 @@ def warm_accessibility():
 
 def stop_accessibility():
     _client.stop()
+
+
+def capture_caret_bounds(context):
+    """Screen position of the UIA caret without reading the editor content."""
+    if sys.platform != "win32":
+        return None
+    from .windows_context import capture_focus
+    if capture_focus() != context:
+        return None
+    try:
+        position = _request_context(context, action='caret')
+        return position if capture_focus() == context else None
+    except (AccessibilityUnavailable, OSError, ValueError):
+        return None

@@ -77,6 +77,7 @@ class ProductivityMixin:
         self._slash_prefix = ""
         self._slash_context = None
         if hasattr(self, "hotkeys"):
+            self.hotkeys.set_popup_hitbox(None)
             self.hotkeys.set_suggestion_visible("", None)
 
     def _check_suggestions_focus(self):
@@ -110,9 +111,40 @@ class ProductivityMixin:
         if not matches:
             self._hide_suggestion_popup()
             return
-        self._slash_popup.present(prefix, matches)
+        anchor = None
+        if self.isActiveWindow() and self.focusWidget() is self.test_box:
+            # QTextEdit has its own caret rect in viewport coordinates. This
+            # works even when Win32 provides no HWND caret for a Qt editor.
+            rect = self.test_box.cursorRect()
+            pos = self.test_box.viewport().mapToGlobal(rect.topLeft())
+            anchor = QRect(pos, rect.size())
+        else:
+            from .slash_popup import suggestion_anchor
+            anchor = suggestion_anchor(context)
+        if anchor is None:
+            self._hide_suggestion_popup()
+            return
+        self._slash_popup.present(prefix, matches, anchor)
         self._slash_prefix, self._slash_context = prefix, context
+        bounds = self._slash_popup.geometry()
+        self.hotkeys.set_popup_hitbox(
+            (bounds.x(), bounds.y(), bounds.width(), bounds.height()))
         self.hotkeys.set_suggestion_visible(prefix, context)
+
+    def _choose_suggestion_from_mouse(self, shortcut: str):
+        """Click on an entry uses the exact same focus-safe path as Enter."""
+        prefix, context = self._slash_prefix, self._slash_context
+        if (not prefix or context is None or
+                not self._slash_popup.isVisible() or
+                shortcut not in [row[0] for row in self._suggestion_catalog
+                                 if row[0].casefold().startswith(prefix.casefold())] or
+                capture_focus() != context):
+            self._hide_suggestion_popup()
+            return
+        candidate = self.hotkeys.choose_suggestion(prefix, shortcut, context)
+        self._hide_suggestion_popup()
+        if candidate is not None:
+            self._expand_global(candidate)
 
     def _navigate_suggestions(self, event):
         if not isinstance(event, tuple) or len(event) != 3:

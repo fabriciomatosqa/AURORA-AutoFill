@@ -298,6 +298,7 @@ class AutoFillWindow(ProductivityMixin, AuroraFeaturesMixin, QMainWindow):
         self.signals.listener_state.connect(self._listener_state_changed, Qt.QueuedConnection)
         self.signals.quick_search.connect(self._open_global_search, Qt.QueuedConnection)
         self._slash_popup = SlashCommandPopup()
+        self._slash_popup.command_selected.connect(self._choose_suggestion_from_mouse)
         self._suggestion_catalog = []
         self._slash_prefix = ""
         self._slash_context = None

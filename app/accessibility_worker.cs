@@ -183,8 +183,68 @@ public static class AuroraAccessibilityWorker
                      identity = state.Identity, window = request.window, control = request.control };
     }
 
+    private static object Caret(Request request)
+    {
+        // Read geometry only. Never retrieve or store the user's text.
+        var focused = AutomationElement.FocusedElement;
+        if (!InScope(focused, request)) return new { status = "changed" };
+        if (focused.Current.IsPassword) return new { status = "unsupported" };
+        TextPattern pattern = null;
+        var element = focused;
+        for (int depth = 0; element != null && depth < 8; depth++)
+        {
+            if (element.Current.IsPassword) return new { status = "unsupported" };
+            object value;
+            if (element.TryGetCurrentPattern(TextPattern.Pattern, out value))
+            {
+                pattern = (TextPattern)value;
+                break;
+            }
+            element = TreeWalker.ControlViewWalker.GetParent(element);
+        }
+        if (pattern == null) return new { status = "unsupported" };
+        var ranges = pattern.GetSelection();
+        if (ranges.Length != 1) return new { status = "unsupported" };
+        var cursor = ranges[0].Clone();
+        cursor.MoveEndpointByRange(End, cursor, Start);
+        System.Windows.Rect[] bounds = cursor.GetBoundingRectangles();
+        bool previous = false;
+        // Chromium may return no rectangles for a collapsed caret. Use the
+        // nearest character only to infer geometry, not its textual content.
+        if (bounds.Length == 0)
+        {
+            var next = cursor.Clone();
+            if (next.MoveEndpointByUnit(End, TextUnit.Character, 1) > 0)
+                bounds = next.GetBoundingRectangles();
+        }
+        if (bounds.Length == 0)
+        {
+            var last = cursor.Clone();
+            if (last.MoveEndpointByUnit(Start, TextUnit.Character, -1) < 0)
+            {
+                bounds = last.GetBoundingRectangles();
+                previous = true;
+            }
+        }
+        if (bounds.Length == 0) return new { status = "unsupported" };
+        // A wrapped selection may report more than one line. With the
+        // collapsed/one-character range, the final usable rectangle suffices.
+        var rect = bounds[bounds.Length - 1];
+        if (rect.IsEmpty || rect.Height < 6 || rect.Height > 160 ||
+            rect.Width > 400 || Double.IsNaN(rect.X) || Double.IsNaN(rect.Y) ||
+            Math.Abs(rect.X) > 100000 || Math.Abs(rect.Y) > 100000 ||
+            !InScope(AutomationElement.FocusedElement, request))
+            return new { status = "unsupported" };
+        return new {
+            status = "caret", x = previous ? rect.Right : rect.Left,
+            y = rect.Top, height = rect.Height,
+            window = request.window, control = request.control
+        };
+    }
+
     public static object Handle(Request request)
     {
+        if (request.action == "caret") return Caret(request);
         string status;
         var state = Read(request, out status);
         if (state == null) return new { status = status };

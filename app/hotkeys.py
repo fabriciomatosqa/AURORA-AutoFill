@@ -138,6 +138,7 @@ class GlobalHotkeyListener:
         self._suggestions_enabled = False
         self._visible_suggestion_prefix = ""
         self._visible_suggestion_context = None
+        self._popup_hitbox: tuple[int, int, int, int] | None = None
         self._suppressed_nav_keys: set[int] = set()
         self._matcher = ShortcutMatcher()
         self._listener = None
@@ -188,6 +189,7 @@ class GlobalHotkeyListener:
             self._matcher.clear()
             self._visible_suggestion_prefix = ""
             self._visible_suggestion_context = None
+            self._popup_hitbox = None
             if self._on_suggestion_state is not None:
                 self._on_suggestion_state(("", self._context))
 
@@ -252,6 +254,29 @@ class GlobalHotkeyListener:
                 self._visible_suggestion_context = None
                 self._matcher.clear()
                 self._revision += 1
+
+    def set_popup_hitbox(self, rect: tuple[int, int, int, int] | None):
+        """GUI records visible popup bounds; pynput callbacks never call Qt."""
+        with self._state_lock:
+            if rect is None:
+                self._popup_hitbox = None
+            else:
+                x, y, width, height = (int(value) for value in rect)
+                self._popup_hitbox = ((x, y, width, height)
+                                      if width > 0 and height > 0 else None)
+
+    def _inside_popup(self, x: int, y: int) -> bool:
+        with self._state_lock:
+            hitbox = self._popup_hitbox
+            if hitbox is None or not self._enabled:
+                return False
+            left, top, width, height = hitbox
+            return left <= x < left + width and top <= y < top + height
+
+    def _on_scroll(self, x, y, *_):
+        # Mouse wheel over the menu must scroll the commands, not dismiss it.
+        if not self._inside_popup(x, y):
+            self.invalidate()
 
     def set_enabled(self, enabled: bool) -> None:
         with self._state_lock:
@@ -341,8 +366,10 @@ class GlobalHotkeyListener:
             listener.suppress_event()
             return False
 
-    def _on_click(self, _x, _y, _button, pressed):
-        if pressed:
+    def _on_click(self, x, y, _button, pressed):
+        # Preserve the active prefix on the popup so itemClicked/scrollbars
+        # can use the same verified expansion path as Enter.
+        if pressed and not self._inside_popup(x, y):
             self.invalidate()
 
     def start(self) -> tuple[bool, str]:
@@ -421,7 +448,8 @@ class GlobalHotkeyListener:
             self._mouse_listener = mouse.Listener(
                 on_click=lambda x, y, button, pressed, _injected=False:
                     self._dispatch(generation, self._on_click, x, y, button, pressed),
-                on_scroll=lambda *_: self._dispatch(generation, self.invalidate),
+                on_scroll=lambda x, y, dx, dy: self._dispatch(
+                    generation, self._on_scroll, x, y, dx, dy),
                 **ms_args)
         try:
             self._listener.start()
