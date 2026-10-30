@@ -144,13 +144,13 @@ class AutosaveAndFontUiTests(unittest.TestCase):
                 win._apply_font_size(22)
                 win._apply_format('bold', True)
                 win._apply_format('strike', True)
-                with patch('app.ui.AuroraColorDialog.get_color', return_value=QColor('#aa3300')):
+                with patch('app.ui.AuroraColorDialog.get_choice', return_value=(True, QColor('#aa3300'))):
                     win._choose_font_color(False)
                 self.assertEqual(win.text_color_button.marker_color().name(), '#aa3300')
-                with patch('app.ui.AuroraColorDialog.get_color', return_value=QColor('#ffee22')):
+                with patch('app.ui.AuroraColorDialog.get_choice', return_value=(True, QColor('#ffee22'))):
                     win._choose_font_color(True)
                 self.assertEqual(win.highlight_button.marker_color().name(), '#ffee22')
-                with patch('app.ui.AuroraColorDialog.get_color', return_value=QColor()):
+                with patch('app.ui.AuroraColorDialog.get_choice', return_value=(False, QColor())):
                     win._choose_font_color(False)
                 self.assertEqual(win.text_color_button.marker_color().name(), '#aa3300')
                 saved = win.store.snippet_by_shortcut('/fonte')

@@ -13,6 +13,7 @@ class AuroraColorButton(QPushButton):
         super().__init__(parent)
         self._glyph = glyph
         self._marker_color = QColor(initial_color)
+        self._automatic = False
         if not self._marker_color.isValid():
             self._marker_color = QColor("#ffffff")
         self.setObjectName("fontTool")
@@ -21,13 +22,19 @@ class AuroraColorButton(QPushButton):
         self.setCursor(Qt.PointingHandCursor)
 
     def marker_color(self) -> QColor:
-        return QColor(self._marker_color)
+        return QColor() if self._automatic else QColor(self._marker_color)
+
+    def set_automatic(self) -> None:
+        """Show a neutral indicator instead of the last manually chosen color."""
+        self._automatic = True
+        self.update()
 
     def set_marker_color(self, color: QColor | str) -> None:
         chosen = QColor(color)
         if not chosen.isValid():
             return
         self._marker_color = chosen
+        self._automatic = False
         self.update()
 
     def marker_rect(self) -> QRect:
@@ -50,7 +57,8 @@ class AuroraColorButton(QPushButton):
         marker = self.marker_rect()
         # A borda fina mantém a amostra visível até com tons muito escuros.
         painter.fillRect(marker.adjusted(-1, -1, 1, 1), QColor("#89adba"))
-        painter.fillRect(marker, self._marker_color)
+        painter.fillRect(
+            marker, QColor("#9aabb6") if self._automatic else self._marker_color)
         painter.setPen(QPen(foreground, 1.2))
         x = self.width() - 7
         y = self.height() // 2

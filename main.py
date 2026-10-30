@@ -21,6 +21,10 @@ def main() -> int:
     # Strip our own flag before Qt parses application command-line options.
     qt_arguments = [sys.argv[0], *(arg for arg in launch_arguments if arg != "--minimized")]
     app = QApplication(qt_arguments)
+    # Prefer the system's Portuguese Qt translations for native dialogs.
+    # AURORA's color picker also translates its controls if catalogs are absent.
+    from app.locale_ptbr import install_portuguese_qt
+    install_portuguese_qt(app)
     from app.version import APP_VERSION
     app.setApplicationName("AURORA AutoFill")
     app.setApplicationVersion(APP_VERSION)
