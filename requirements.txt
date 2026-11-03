@@ -2,3 +2,4 @@ PySide6>=6.7,<7
 pynput>=1.7.7,<2
 evdev>=1.9,<2; sys_platform == "linux"
 keyring>=25,<27
+SecretStorage>=3.3,<4; sys_platform == "linux"
