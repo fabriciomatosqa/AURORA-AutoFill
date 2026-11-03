@@ -8,6 +8,7 @@ ASSETS = ('aurora_banner.jpg', 'aurora_banner_day.png', 'aurora_icon.ico', 'auro
           'aurora_icon_256.png', 'command_click.wav', 'AUDIO-LICENSE.txt',
           'checkmark.svg', 'chevron_down.svg')
 ASSETS += ('cloud-oauth-clients.json',)
+ASSETS += ('brands/google-drive.svg', 'brands/onedrive.svg')
 ASSETS += ('emoji/fluent-3d.png','emoji/fluent-3d.json','emoji/ATTRIBUTION.md',
            'emoji/LICENSE-Fluent.txt')
 ASSETS += tuple('icons/' + name + '.svg' for name in (
