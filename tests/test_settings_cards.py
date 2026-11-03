@@ -95,6 +95,9 @@ class SettingsCardsTests(unittest.TestCase):
         page.show()
         self.app.processEvents()
         self.assertTrue(page._backup_horizontal)
+        self.assertEqual(set(page.cloud_provider_chips), {"google", "onedrive"})
+        self.assertEqual(page.cards["backups"].findChildren(QPushButton)[-1].text(),
+                         "Gerenciar backup em nuvem")
         for col, button in enumerate(page.backup_buttons):
             self.assertIs(page.backup_buttons_grid.itemAtPosition(0, col).widget(),
                           button)
@@ -114,6 +117,7 @@ class SettingsCardsTests(unittest.TestCase):
             ("backup", page.backup_requested),
             ("restore", page.restore_requested),
             ("open", page.open_backups_requested),
+            ("cloud", page.cloud_backup_requested),
             ("check", page.check_requested),
             ("sound", page.sound_toggled),
             ("startup", page.startup_toggled),
@@ -131,6 +135,7 @@ class SettingsCardsTests(unittest.TestCase):
             "globalSearchSettingsButton", "statisticsSettingsButton",
             "settingsBackupCreateButton", "settingsBackupRestoreButton",
             "settingsBackupOpenButton", "settingsCheckUpdatesButton",
+            "settingsCloudBackupButton",
         ):
             button = page.findChild(QPushButton, object_name)
             self.assertIsNotNone(button, object_name)
@@ -146,7 +151,7 @@ class SettingsCardsTests(unittest.TestCase):
         page.updates.setChecked(False)
         page.suggestions.setChecked(True)
         self.assertTrue({
-            "search", "stats", "backup", "restore", "open", "check",
+            "search", "stats", "backup", "restore", "open", "cloud", "check",
             "sound", "startup", "updates", "preview", "suggestions",
         } <= set(events))
 
