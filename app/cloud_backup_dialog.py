@@ -111,7 +111,7 @@ class CloudBackupDialog(QDialog):
         self.upload_button.clicked.connect(self._upload)
         self.download_button = QPushButton("Baixar / restaurar")
         self.download_button.clicked.connect(self._download)
-        self.cancel_button = QPushButton("Cancelar operação")
+        self.cancel_button = QPushButton("Cancelar autorização")
         self.cancel_button.clicked.connect(self._cancel)
         for button in (self.upload_button, self.download_button, self.cancel_button):
             actions.addWidget(button)
@@ -130,7 +130,7 @@ class CloudBackupDialog(QDialog):
 
     def _refresh_buttons(self):
         active = self._worker is not None and self._worker.isRunning()
-        self.cancel_button.setEnabled(active)
+        self.cancel_button.setEnabled(active and self._worker.action == "connect")
         try:
             connected = self._client().connected()
             message = ("Conta conectada neste dispositivo." if connected
@@ -228,9 +228,9 @@ class CloudBackupDialog(QDialog):
             self._start("disconnect")
 
     def _cancel(self):
-        if self._worker is not None:
+        if self._worker is not None and self._worker.action == "connect":
             self._worker.requestInterruption()
-            self.status.setText("Cancelamento solicitado. Aguardando a operação segura.")
+            self.status.setText("Cancelamento da autorização solicitado.")
 
     def reject(self):
         if self._worker is not None and self._worker.isRunning():
