@@ -126,7 +126,7 @@ def _https(url: str, hosts: set[str]) -> str:
 
 def _call(url: str, token: str = "", *, method="GET", body=None,
           content_type="", allowed_hosts=None, response_limit=2*1024*1024,
-          allow_redirect=False) -> tuple[bytes, dict, int]:
+          allow_redirect=False, extra_headers=None) -> tuple[bytes, dict, int]:
     hosts = allowed_hosts or {"www.googleapis.com", "graph.microsoft.com",
                               "oauth2.googleapis.com", "login.microsoftonline.com"}
     _https(url, hosts)
@@ -135,6 +135,8 @@ def _call(url: str, token: str = "", *, method="GET", body=None,
         headers["Authorization"] = "Bearer " + token
     if content_type:
         headers["Content-Type"] = content_type
+    if extra_headers:
+        headers.update(extra_headers)
     request = Request(url, data=body, headers=headers, method=method)
     opener = build_opener(NoRedirect)
     try:
@@ -363,15 +365,18 @@ class CloudBackupClient:
             # Resumable works for both small and larger backups.
             metadata = json.dumps({"name": name, "parents": ["appDataFolder"]}).encode()
             url = "https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable"
-            blob, headers, _ = _call(url, token, method="POST", body=metadata,
-                                     content_type="application/json; charset=UTF-8")
+            _, headers, _ = _call(
+                url, token, method="POST", body=metadata,
+                content_type="application/json; charset=UTF-8",
+                extra_headers={"X-Upload-Content-Type": "application/zip",
+                               "X-Upload-Content-Length": str(len(content))})
             # Start requests must include size/type; headers below are also accepted
             # by Google even if the initial metadata request omits them.
             location = next((v for k, v in headers.items() if k.lower() == "location"), "")
             if not location:
                 raise CloudBackupError("Google Drive não abriu a sessão de upload.")
             host = (urlparse(location).hostname or "").lower()
-            if host not in {"www.googleapis.com", "www.googleapis.com"}:
+            if host != "www.googleapis.com":
                 raise CloudBackupError("Endereço de upload do Google não autorizado.")
             _json_call(location, token, method="PUT", body=content,
                        content_type="application/zip")
