@@ -206,8 +206,14 @@ class AuroraFeaturesMixin:
 
     def _open_cloud_backup(self):
         from .cloud_backup_dialog import CloudBackupDialog
-        # The modal owns its worker and cannot close during an active upload.
-        CloudBackupDialog(self.store, self._restore_user_backup, self).exec()
+        if getattr(self, "_cloud_backup_dialog", None) is not None:
+            return
+        dialog = CloudBackupDialog(self.store, self._restore_user_backup, self)
+        self._cloud_backup_dialog = dialog
+        try:
+            dialog.exec()
+        finally:
+            self._cloud_backup_dialog = None
 
     def _restore_user_backup(self, source=None):
         if not self._confirm_change():
