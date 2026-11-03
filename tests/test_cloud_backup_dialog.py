@@ -5,7 +5,7 @@ from unittest.mock import patch
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import QCoreApplication, QEvent, Qt
 from PySide6.QtTest import QTest
 from PySide6.QtWidgets import QApplication
 
@@ -20,6 +20,15 @@ class CloudBackupUiTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.app = QApplication.instance() or QApplication([])
+
+    @staticmethod
+    def _dispose(widget):
+        # Delete native Qt widgets while QApplication is still alive.
+        # Windows Qt can crash on interpreter shutdown if a deferred dialog
+        # (with nested signal connections) outlives QApplication.
+        widget.close()
+        widget.deleteLater()
+        QCoreApplication.sendPostedEvents(None, QEvent.DeferredDelete)
 
     def test_settings_button_is_explicit_opt_in(self):
         page = SettingsPage(dict(DEFAULTS), startup_supported=False,
@@ -36,7 +45,7 @@ class CloudBackupUiTests(unittest.TestCase):
             page.cloud_backup_button.click()
             self.assertEqual(emitted, [True])
         finally:
-            page.close()
+            self._dispose(page)
 
     def test_missing_oauth_configuration_disables_remote_actions(self):
         with patch.object(CloudBackupDialog, "_client",
@@ -52,7 +61,7 @@ class CloudBackupUiTests(unittest.TestCase):
                 dialog.details_button.click()
                 self.assertFalse(dialog.technical_details.isHidden())
             finally:
-                dialog.close()
+                self._dispose(dialog)
 
     def test_dialog_does_not_create_a_backup_just_by_opening(self):
         with patch("app.cloud_backup_dialog.create_backup") as created, patch.object(
@@ -64,7 +73,7 @@ class CloudBackupUiTests(unittest.TestCase):
                 self.assertFalse(dialog.upload_button.isEnabled())
                 created.assert_not_called()
             finally:
-                dialog.close()
+                self._dispose(dialog)
 
     def test_provider_cards_have_real_bundled_logos(self):
         for provider in ("google", "onedrive"):
@@ -93,21 +102,21 @@ class CloudBackupUiTests(unittest.TestCase):
                 self.assertFalse(dialog._list_loaded)
                 self.assertFalse(dialog.upload_button.isEnabled())
             finally:
-                dialog.close()
+                self._dispose(dialog)
 
     def test_provider_can_be_selected_by_keyboard(self):
         with patch.object(CloudBackupDialog, "_client") as getter:
             getter.return_value.connected.return_value = False
             dialog = CloudBackupDialog(store=None, restore_callback=lambda x: None)
             try:
-                dialog.show()
-                self.app.processEvents()
+                # Direct key dispatch avoids creating a native Windows top-level
+                # window solely for this test.
                 card = dialog.provider_cards["onedrive"]
                 card.setFocus()
                 QTest.keyClick(card, Qt.Key_Return)
                 self.assertEqual(dialog._provider_id, "onedrive")
             finally:
-                dialog.close()
+                self._dispose(dialog)
 
     def test_empty_state_and_loaded_list_are_distinct(self):
         with patch.object(CloudBackupDialog, "_client") as getter:
@@ -122,7 +131,7 @@ class CloudBackupUiTests(unittest.TestCase):
                 dialog._refresh_buttons()
                 self.assertIs(dialog.backup_stack.currentWidget(), dialog.items)
             finally:
-                dialog.close()
+                self._dispose(dialog)
 
     def test_worker_catches_provider_errors_without_exposing_data(self):
         with patch("app.cloud_backup_dialog.CloudBackupClient") as factory:
