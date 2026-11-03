@@ -94,7 +94,7 @@ jobs:
       - name: Compilar aplicativo Windows com os recursos validados
         shell: pwsh
         run: |
-          python -m PyInstaller --noconfirm --clean --windowed --onedir --name "AURORA AutoFill" --icon "assets/aurora_icon.ico" --add-data "assets;assets" --add-data "app/accessibility_worker.ps1;app" --add-data "app/accessibility_worker.cs;app" --add-data "app/word_worker.ps1;app" --add-data "app/word_worker.cs;app" --collect-submodules pynput main.py
+          python -m PyInstaller --noconfirm --clean --windowed --onedir --name "AURORA AutoFill" --icon "assets/aurora_icon.ico" --add-data "assets;assets" --add-data "app/accessibility_worker.ps1;app" --add-data "app/accessibility_worker.cs;app" --add-data "app/word_worker.ps1;app" --add-data "app/word_worker.cs;app" --collect-submodules pynput --collect-submodules keyring main.py
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Verificar recursos compilados
         shell: pwsh
@@ -271,7 +271,7 @@ jobs:
           xvfb-run -a -s '-screen 0 1366x768x24' python -m PyInstaller \
             --noconfirm --clean --windowed --onedir \
             --name "AURORA AutoFill" --add-data "assets:assets" \
-            --collect-submodules pynput --collect-submodules evdev main.py
+            --collect-submodules pynput --collect-submodules evdev --collect-submodules keyring main.py
       - name: Verificar recursos empacotados
         run: |
           printf '%s\n' "$GITHUB_SHA" > 'dist/AURORA AutoFill/SOURCE-COMMIT.txt'
