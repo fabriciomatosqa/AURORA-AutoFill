@@ -82,6 +82,7 @@ class AuroraFeaturesMixin:
         self.settings_page.backup_requested.connect(self._create_manual_backup)
         self.settings_page.restore_requested.connect(self._restore_user_backup)
         self.settings_page.open_backups_requested.connect(self._open_backups)
+        self.settings_page.cloud_backup_requested.connect(self._open_cloud_backup)
         self.settings_page.check_requested.connect(
             lambda: self._check_updates(manual=True))
         self.settings_page.close_requested.connect(self._show_welcome)
@@ -203,12 +204,26 @@ class AuroraFeaturesMixin:
         except OSError as exc:
             QMessageBox.warning(self, "Backups", str(exc))
 
-    def _restore_user_backup(self):
+    def _open_cloud_backup(self):
+        from .cloud_backup_dialog import CloudBackupDialog
+        if getattr(self, "_cloud_backup_dialog", None) is not None:
+            return
+        dialog = CloudBackupDialog(self.store, self._restore_user_backup, self)
+        self._cloud_backup_dialog = dialog
+        try:
+            dialog.exec()
+        finally:
+            self._cloud_backup_dialog = None
+
+    def _restore_user_backup(self, source=None):
         if not self._confirm_change():
             return
-        selected, _ = QFileDialog.getOpenFileName(
-            self, "Restaurar backup completo", str(backups_directory()),
-            f"Backup AURORA (*{BACKUP_SUFFIX})")
+        if source is None:
+            selected, _ = QFileDialog.getOpenFileName(
+                self, "Restaurar backup completo", str(backups_directory()),
+                f"Backup AURORA (*{BACKUP_SUFFIX})")
+        else:
+            selected = str(source)
         if not selected:
             return
         if QMessageBox.question(

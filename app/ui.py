@@ -2278,6 +2278,16 @@ class AutoFillWindow(ProductivityMixin, AuroraFeaturesMixin, QMainWindow):
             self._resume_queued_expansion()
 
     def closeEvent(self, event):
+        # A QThread owned by the cloud dialog must never be destroyed mid-transfer.
+        cloud = getattr(self, "_cloud_backup_dialog", None)
+        if (cloud is not None and getattr(cloud, "_worker", None) is not None
+                and cloud._worker.isRunning()):
+            cloud._cancel()
+            cloud.status.setText(
+                "Backup em nuvem em andamento. Conclua a operação antes de sair.")
+            self._quitting = False
+            event.ignore()
+            return
         if not self._confirm_change():
             self._quitting = False
             event.ignore()

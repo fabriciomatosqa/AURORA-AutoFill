@@ -35,6 +35,7 @@ class SettingsPage(QWidget):
     backup_requested = Signal()
     restore_requested = Signal()
     open_backups_requested = Signal()
+    cloud_backup_requested = Signal()
     check_requested = Signal()
     close_requested = Signal()
 
@@ -497,6 +498,14 @@ class SettingsPage(QWidget):
             button.clicked.connect(signal.emit)
             self.backup_buttons.append(button)
         area.addLayout(self.backup_buttons_grid)
+        area.addWidget(self._hint(
+            "Nuvem opcional: Google Drive (pasta oculta) ou OneDrive "
+            "(pasta exclusiva do aplicativo). Backup local permanece ativo."))
+        self.cloud_backup_button = self._action(
+            "Backup em nuvem — Google / OneDrive",
+            name="settingsCloudBackupButton", icon="backup")
+        self.cloud_backup_button.clicked.connect(self.cloud_backup_requested.emit)
+        self._button_row(area, self.cloud_backup_button, 320)
 
     def _arrange_backup_buttons(self, horizontal: bool):
         if horizontal == self._backup_horizontal:
