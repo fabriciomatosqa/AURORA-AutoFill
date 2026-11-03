@@ -107,12 +107,17 @@ class CloudBackupTests(unittest.TestCase):
                 client.download_backup("id-123")
 
     def test_restoration_validator_reuses_existing_safe_backup_rules(self):
-        with tempfile.NamedTemporaryFile(suffix=BACKUP_SUFFIX) as dummy:
+        with tempfile.TemporaryDirectory() as directory:
+            source = Path(directory) / ("fixture" + BACKUP_SUFFIX)
+            extracted = Path(directory) / "extracted.sqlite3"
+            source.write_bytes(b"fixture")
+            extracted.write_bytes(b"synthetic")
             with patch("app.cloud_backups.read_backup", return_value=(
-                    Path(dummy.name), None)) as check:
-                validate_download(Path(dummy.name))
+                    extracted, None)) as check:
+                validate_download(source)
             check.assert_called_once()
-            self.assertFalse(Path(dummy.name).exists())
+            self.assertTrue(source.exists())
+            self.assertFalse(extracted.exists())
 
 
 if __name__ == "__main__":
