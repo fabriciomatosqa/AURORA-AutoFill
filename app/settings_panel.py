@@ -161,6 +161,33 @@ class SettingsPage(QWidget):
                 background: #19364b; color: #eaf4ff;
             }
             QPushButton#settingsBack:hover { border-color: #72e6d5; }
+            QFrame#backupLocalPanel {
+                background: #143345; border: 1px solid #28546a;
+                border-radius: 11px;
+            }
+            QFrame#backupCloudPanel {
+                background: #102338; border: 1px solid #416777;
+                border-radius: 11px;
+            }
+            QLabel#backupSectionTitle {
+                color: #eaf4ff; font-size: 15px; font-weight: 750;
+                background: transparent;
+            }
+            QLabel#backupSectionDescription {
+                color: #b8cde0; font-size: 12px; background: transparent;
+            }
+            QLabel#backupSectionFootnote {
+                color: #a8bfd2; font-size: 11px; background: transparent;
+            }
+            QFrame#backupBrandChip {
+                background: #19364b; border: 1px solid #416777;
+                border-radius: 8px;
+            }
+            QLabel#backupBrandName {
+                color: #eaf4ff; font-weight: 650; font-size: 12px;
+                background: transparent;
+            }
+            QLabel#backupBrandLogo { background: transparent; }
         """.replace("CHECK_ICON", check_icon))
 
         root = QVBoxLayout(self)
@@ -475,12 +502,26 @@ class SettingsPage(QWidget):
                 "A inicialização automática exige o aplicativo instalado no Windows."))
 
     def _backup_card(self):
-        area = self._card("backups", "Segurança dos dados",
-                          "Suas pastas e comandos continuam armazenados localmente.",
-                          group="tools", icon_name="backup")
-        area.addWidget(self._hint(
-            "O backup inclui pastas, comandos, formatação e ordem. "
-            "Outro backup é criado antes da instalação de atualizações."))
+        """Separate local safety tools from the optional cloud feature."""
+        from .cloud_brand import provider_pixmap
+
+        area = self._card(
+            "backups", "Segurança dos dados",
+            "Escolha onde guardar uma cópia segura dos seus comandos.",
+            group="tools", icon_name="backup")
+
+        # Keep the three established local actions and their responsive grid.
+        local = QFrame(self.cards["backups"])
+        local.setObjectName("backupLocalPanel")
+        local_layout = QVBoxLayout(local)
+        local_layout.setContentsMargins(14, 13, 14, 14)
+        local_layout.setSpacing(9)
+        local_title = QLabel("Backup neste computador")
+        local_title.setObjectName("backupSectionTitle")
+        local_layout.addWidget(local_title)
+        local_layout.addWidget(self._hint(
+            "Salve suas pastas, textos e formatações em um arquivo local.",
+            name="backupSectionDescription"))
         self.backup_buttons_grid = QGridLayout()
         self.backup_buttons_grid.setContentsMargins(0, 0, 0, 0)
         self.backup_buttons_grid.setHorizontalSpacing(8)
@@ -497,15 +538,61 @@ class SettingsPage(QWidget):
             button = self._action(label, name=object_name, icon=symbol)
             button.clicked.connect(signal.emit)
             self.backup_buttons.append(button)
-        area.addLayout(self.backup_buttons_grid)
-        area.addWidget(self._hint(
-            "Nuvem opcional: Google Drive (pasta oculta) ou OneDrive "
-            "(pasta exclusiva do aplicativo). Backup local permanece ativo."))
+        local_layout.addLayout(self.backup_buttons_grid)
+        local_layout.addWidget(self._hint(
+            "Cópias locais continuam disponíveis mesmo sem internet.",
+            name="backupSectionFootnote"))
+        area.addWidget(local)
+
+        cloud = QFrame(self.cards["backups"])
+        cloud.setObjectName("backupCloudPanel")
+        cloud_layout = QVBoxLayout(cloud)
+        cloud_layout.setContentsMargins(14, 14, 14, 15)
+        cloud_layout.setSpacing(10)
+        cloud_title = QLabel("Backup em nuvem")
+        cloud_title.setObjectName("backupSectionTitle")
+        cloud_layout.addWidget(cloud_title)
+        cloud_layout.addWidget(self._hint(
+            "Guarde cópias na sua conta Google ou Microsoft e recupere "
+            "seus comandos em outro computador.",
+            name="backupSectionDescription"))
+
+        brands = QHBoxLayout()
+        brands.setSpacing(9)
+        self.cloud_provider_chips = {}
+        for provider, title in (
+            ("google", "Google Drive"), ("onedrive", "OneDrive")
+        ):
+            chip = QFrame(cloud)
+            chip.setObjectName("backupBrandChip")
+            mark = QHBoxLayout(chip)
+            mark.setContentsMargins(10, 8, 10, 8)
+            mark.setSpacing(8)
+            logo = QLabel()
+            logo.setObjectName("backupBrandLogo")
+            logo.setPixmap(provider_pixmap(provider, 30))
+            logo.setFixedSize(30, 30)
+            mark.addWidget(logo)
+            name = QLabel(title)
+            name.setObjectName("backupBrandName")
+            mark.addWidget(name)
+            self.cloud_provider_chips[provider] = chip
+            brands.addWidget(chip)
+        brands.addStretch(1)
+        cloud_layout.addLayout(brands)
+
+        cloud_layout.addWidget(self._hint(
+            "Envio manual, apenas com sua autorização. "
+            "Seus backups locais não são afetados.",
+            name="backupSectionFootnote"))
         self.cloud_backup_button = self._action(
-            "Backup em nuvem — Google / OneDrive",
+            "Gerenciar backup em nuvem",
             name="settingsCloudBackupButton", icon="backup")
         self.cloud_backup_button.clicked.connect(self.cloud_backup_requested.emit)
-        self._button_row(area, self.cloud_backup_button, 320)
+        self.cloud_backup_button.setAccessibleName(
+            "Abrir backup em nuvem com Google Drive ou Microsoft OneDrive")
+        self._button_row(cloud_layout, self.cloud_backup_button, 300)
+        area.addWidget(cloud)
 
     def _arrange_backup_buttons(self, horizontal: bool):
         if horizontal == self._backup_horizontal:
