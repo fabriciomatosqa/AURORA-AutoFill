@@ -32,6 +32,30 @@ conta real (login, envio e recuperação de um ZIP) deve preceder a liberação
 do backup ao público. Não confundir a publicação de um instalador com a
 publicação do cliente OAuth em produção no Google Cloud.
 
+### Configuração Google Desktop nesta validação
+
+Este cliente Desktop exige `client_secret` tanto na troca do código de
+autorização quanto na renovação do acesso, mesmo usando PKCE. O Google confirmou
+essa exigência com `invalid_request: client_secret is missing`. O ID público
+sozinho abre a tela de consentimento, mas não conclui a conexão.
+
+No Google Cloud → Clientes → AURORA AutoFill Desktop, baixe o JSON do cliente.
+Se o segredo não estiver mais disponível para download, crie um novo segredo
+**no mesmo cliente** e baixe o JSON imediatamente na tela de criação. Não crie
+outro client ID: isso mudaria o espaço dos backups da aplicação.
+
+No AURORA → Backup em nuvem → Google Drive, use **Configurar Google Drive**
+e selecione esse JSON. Só a configuração Desktop com o ID desta versão é aceita.
+O parâmetro é guardado no cofre do sistema, separado da autorização da conta;
+o arquivo não é copiado para o perfil, banco, instalação ou ZIP de backup.
+Em seguida use **Conectar minha conta**. Essa importação é feita uma vez por
+computador nesta etapa de validação; a configuração da distribuição pública
+continua sendo uma etapa a concluir antes de liberar o recurso para todos.
+
+As URLs do arquivo importado são ignoradas: os endpoints Google permanecem
+fixos no código. PKCE e validação de `state` continuam ativos. Erros OAuth são
+traduzidos para orientações locais, sem exibir a resposta bruta do provedor.
+
 O OneDrive ainda não possui cliente registrado nesta distribuição e permanece
 indisponível até a configuração do seu próprio ID Microsoft.
 
