@@ -22,6 +22,19 @@ usa HTTPS; arquivos na nuvem seguem a proteção do respectivo provedor.
 
 ## Pré-requisitos reais
 
+O cliente público do Google Drive já está incluído em
+`assets/cloud-oauth-clients.json` para validação com as contas cadastradas em
+**Público-alvo → Usuários de teste** no projeto AURORA AutoFill do Google Cloud.
+Não é necessário configurar variáveis de ambiente no computador do usuário.
+Enquanto o projeto estiver em **Testando**, apenas essas contas podem conectar,
+e a autorização expira após sete dias, exigindo nova conexão. A validação com
+conta real (login, envio e recuperação de um ZIP) deve preceder a liberação
+do backup ao público. Não confundir a publicação de um instalador com a
+publicação do cliente OAuth em produção no Google Cloud.
+
+O OneDrive ainda não possui cliente registrado nesta distribuição e permanece
+indisponível até a configuração do seu próprio ID Microsoft.
+
 OAuth exige registro de um aplicativo no Google e na Microsoft. NÃO é possível
 concluir a integração com as contas apenas escrevendo o código, sem client IDs
 e autorização da aplicação junto aos provedores. IDs de cliente são públicos,
