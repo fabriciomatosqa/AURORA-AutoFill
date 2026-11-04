@@ -1,6 +1,8 @@
 __pycache__/
 # Version metadata is generated for each build, never reused from source control.
 /app/_build.py
+# OAuth Desktop registration is injected by CI, never committed.
+/app/_cloud_oauth.py
 *.py[cod]
 .venv/
 venv/

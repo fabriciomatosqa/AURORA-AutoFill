@@ -7,7 +7,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PySide6.QtCore import QCoreApplication, QEvent, Qt
 from PySide6.QtTest import QTest
-from PySide6.QtWidgets import QApplication
+from PySide6.QtWidgets import QApplication, QPushButton
 
 from app.cloud_backups import CloudBackupError
 from app.cloud_backup_dialog import CloudBackupDialog, CloudBackupWorker
@@ -141,35 +141,19 @@ class CloudBackupUiTests(unittest.TestCase):
             self.assertIn("Não há autorização", worker.failure)
             self.assertIsNone(worker.result)
 
-    def test_google_configuration_import_is_explicit_and_available_only_for_google(self):
-        with patch.object(CloudBackupDialog, "_client") as getter, patch(
-                "app.cloud_backup_dialog.QFileDialog.getOpenFileName",
-                return_value=("synthetic-desktop.json", "")), patch(
-                "app.cloud_backup_dialog.import_google_client_configuration") as imported, patch(
-                "app.cloud_backup_dialog.QMessageBox.information"):
+    def test_connect_starts_login_without_any_file_configuration(self):
+        with patch.object(CloudBackupDialog, "_client") as getter, patch.object(
+                CloudBackupDialog, "_start") as started, patch(
+                "PySide6.QtWidgets.QFileDialog.getOpenFileName") as picker:
             getter.return_value.connected.return_value = False
             dialog = CloudBackupDialog(store=None, restore_callback=lambda x: None)
             try:
-                imported.assert_not_called()
-                self.assertFalse(dialog.configure_google_button.isHidden())
-                dialog.configure_google_button.click()
-                self.assertEqual(imported.call_count, 1)
-                self.assertEqual(str(imported.call_args.args[0]), "synthetic-desktop.json")
                 self.assertTrue(dialog.connect_button.isEnabled())
-                dialog._select_provider("onedrive")
-                self.assertTrue(dialog.configure_google_button.isHidden())
-            finally:
-                self._dispose(dialog)
-
-    def test_cancelling_google_file_selection_does_not_modify_configuration(self):
-        with patch.object(CloudBackupDialog, "_client") as getter, patch(
-                "app.cloud_backup_dialog.QFileDialog.getOpenFileName", return_value=("", "")), patch(
-                "app.cloud_backup_dialog.import_google_client_configuration") as imported:
-            getter.return_value.connected.return_value = False
-            dialog = CloudBackupDialog(store=None, restore_callback=lambda x: None)
-            try:
-                dialog.configure_google_button.click()
-                imported.assert_not_called()
+                dialog.connect_button.click()
+                started.assert_called_once_with("connect")
+                picker.assert_not_called()
+                self.assertFalse(any("Configurar Google" in button.text()
+                                     for button in dialog.findChildren(QPushButton)))
             finally:
                 self._dispose(dialog)
 

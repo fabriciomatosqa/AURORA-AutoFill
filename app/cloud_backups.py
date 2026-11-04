@@ -1,7 +1,7 @@
 """Backup remoto opcional: OAuth PKCE e pastas exclusivas de aplicativo.
 
-Este módulo não modifica o SQLite ativo, não salva credenciais nos backups e
-não substitui o mecanismo local. IDs OAuth são públicos, nunca client secrets.
+Este módulo não modifica o SQLite ativo nem salva credenciais nos backups.
+A configuração do cliente Desktop vem da compilação; tokens pessoais ficam no cofre.
 """
 from __future__ import annotations
 
@@ -29,10 +29,8 @@ GOOGLE_CLIENT_SERVICE = KEYRING_SERVICE + ":google-desktop-client"
 GOOGLE_SCOPE = "https://www.googleapis.com/auth/drive.appdata"
 MICROSOFT_SCOPE = "Files.ReadWrite.AppFolder offline_access"
 GOOGLE_CONFIGURATION_HELP = (
-    "O Google exige a configuração completa deste aplicativo. "
-    "Use 'Configurar Google Drive' e selecione o JSON do cliente "
-    "AURORA AutoFill Desktop baixado no Google Cloud. "
-    "Depois, conecte a conta novamente.")
+    "Não foi possível autenticar o AURORA no Google com a configuração desta versão. "
+    "Atualize o aplicativo. Se o problema continuar, entre em contato com o suporte.")
 
 
 class CloudBackupError(RuntimeError):
@@ -122,40 +120,38 @@ def _valid_client_secret(value) -> bool:
             and all(33 <= ord(char) <= 126 for char in value))
 
 
-def import_google_client_configuration(path: Path) -> None:
-    """Import this registered desktop client's configuration into the OS vault.
+def _bundled_google_client_secret(client_id: str, *, allow_fixture=False) -> str:
+    """Public desktop client metadata, supplied by the project during compilation.
 
-    Never copy the JSON into the profile, database, backup or installation.
-    Ignore supplied endpoint URLs: all requests keep using our fixed hosts.
-    A different client ID would select a different appDataFolder, so reject it.
+    This is not a web-client secret or an account token. A native application
+    cannot keep shared registration metadata confidential; PKCE remains required.
+    PR fixtures must never be accepted by the regular authentication flow.
     """
     try:
-        with Path(path).open("rb") as source:
-            raw = source.read(64 * 1024 + 1)
-        if len(raw) > 64 * 1024:
-            raise ValueError
-        document = json.loads(raw)
-        installed = document["installed"]
-        client_id = installed["client_id"]
-        client_secret = installed["client_secret"]
-        if not _valid_client_secret(client_secret):
-            raise ValueError
-    except (OSError, ValueError, KeyError, TypeError):
-        raise CloudBackupError(
-            "Selecione o JSON original do cliente 'App para computador', "
-            "baixado em Google Cloud → Clientes → AURORA AutoFill Desktop.") from None
-    if client_id != client_id_for("google"):
-        raise CloudBackupError(
-            "Esse arquivo pertence a outro aplicativo. Baixe a configuração "
-            "do cliente AURORA AutoFill Desktop usado nesta versão.")
-    try:
-        _secret_store().set_password(GOOGLE_CLIENT_SERVICE, client_id, client_secret)
-    except Exception:
-        raise CloudBackupError(
-            "Não foi possível guardar a configuração do Google no cofre do sistema.") from None
+        from ._cloud_oauth import (
+            GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, IS_TEST_CONFIGURATION,
+        )
+    except ImportError:
+        return ""
+    if (GOOGLE_CLIENT_ID != client_id or
+            (IS_TEST_CONFIGURATION and not allow_fixture) or
+            not _valid_client_secret(GOOGLE_CLIENT_SECRET)):
+        return ""
+    return GOOGLE_CLIENT_SECRET
+
+
+def verify_bundled_google_configuration(*, allow_fixture=False) -> None:
+    """Packaging gate: require the compiled registration, never a local vault entry."""
+    if not _bundled_google_client_secret(client_id_for("google"), allow_fixture=allow_fixture):
+        raise CloudBackupError("A compilação não inclui a configuração Google Desktop esperada.")
 
 
 def _google_client_secret(client_id: str) -> str:
+    configured = _bundled_google_client_secret(client_id)
+    if configured:
+        return configured
+    # Compatibility with the pilot already installed on the maintainer's PC.
+    # New installations use the bundled registration and never import files.
     try:
         value = _secret_store().get_password(GOOGLE_CLIENT_SERVICE, client_id)
     except Exception:
@@ -164,8 +160,7 @@ def _google_client_secret(client_id: str) -> str:
     if value is None or value == "":
         return ""
     if not _valid_client_secret(value):
-        raise CloudBackupError(
-            "Carregue novamente a configuração em 'Configurar Google Drive'.")
+        raise CloudBackupError(GOOGLE_CONFIGURATION_HELP)
     return value
 
 

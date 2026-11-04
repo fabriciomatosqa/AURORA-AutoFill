@@ -1,11 +1,11 @@
-"""Desktop OAuth regressions: loopback callback, PKCE and protected client config."""
+"""Desktop OAuth regressions: fresh-install login, loopback callback and PKCE."""
 import base64
 from hashlib import sha256
 from io import BytesIO
 import json
 import os
-from pathlib import Path
-import tempfile
+import sys
+from types import ModuleType
 from threading import Thread
 import unittest
 from unittest.mock import Mock, patch
@@ -15,7 +15,7 @@ from urllib.request import urlopen
 
 from app.cloud_backups import (
     CloudBackupClient, CloudBackupError, GOOGLE_CLIENT_SERVICE, GOOGLE_SCOPE,
-    KEYRING_SERVICE, _call, import_google_client_configuration,
+    KEYRING_SERVICE, _call, verify_bundled_google_configuration,
 )
 
 CLIENT_ID = "synthetic-desktop.apps.googleusercontent.com"
@@ -36,56 +36,54 @@ class GoogleCloudAuthTests(unittest.TestCase):
         self.vault_patch = patch("app.cloud_backups._secret_store", return_value=self.vault)
         self.vault_patch.start()
         self.addCleanup(self.vault_patch.stop)
+        self.registration = ModuleType("app._cloud_oauth")
+        self.registration.GOOGLE_CLIENT_ID = CLIENT_ID
+        self.registration.GOOGLE_CLIENT_SECRET = CLIENT_SECRET
+        self.registration.IS_TEST_CONFIGURATION = False
+        self.bundle_patch = patch.dict(sys.modules, {"app._cloud_oauth": self.registration})
+        self.bundle_patch.start()
+        self.addCleanup(self.bundle_patch.stop)
 
-    def import_document(self, document):
-        with tempfile.TemporaryDirectory() as directory:
-            source = Path(directory) / "desktop-client.json"
-            source.write_text(json.dumps(document), encoding="utf-8")
-            import_google_client_configuration(source)
-            # The selected source is never copied or rewritten.
-            self.assertEqual(json.loads(source.read_text(encoding="utf-8")), document)
-            self.assertEqual(list(Path(directory).iterdir()), [source])
-
-    def test_import_stores_only_matching_desktop_secret_in_separate_vault_entry(self):
-        self.import_document({"installed": {
-            "client_id": CLIENT_ID, "client_secret": CLIENT_SECRET,
-            "token_uri": "https://untrusted.example/token",
-            "auth_uri": "https://untrusted.example/auth",
-        }, "refresh_token": "not-a-client-setting"})
-        self.assertEqual(self.passwords, {(GOOGLE_CLIENT_SERVICE, CLIENT_ID): CLIENT_SECRET})
-        self.assertEqual(CloudBackupClient("google")._oauth_urls()[1], TOKEN_URL)
-
-    def test_rejects_web_clients_other_client_ids_and_invalid_documents(self):
-        for document in (
-            {"web": {"client_id": CLIENT_ID, "client_secret": CLIENT_SECRET}},
-            {"installed": {"client_id": "different-client", "client_secret": CLIENT_SECRET}},
-            {"installed": {"client_id": CLIENT_ID}},
-            {"installed": {"client_id": CLIENT_ID, "client_secret": ""}},
-            {"installed": {"client_id": CLIENT_ID, "client_secret": "secret\nvalue"}},
-            {"installed": []}, [], None,
-        ):
-            with self.subTest(document=document), self.assertRaises(CloudBackupError):
-                self.import_document(document)
+    def test_fresh_install_uses_bundled_registration_without_local_configuration(self):
         self.assertEqual(self.passwords, {})
-
-    def test_oversized_file_is_rejected_before_vault_write(self):
-        with tempfile.TemporaryDirectory() as directory:
-            path = Path(directory) / "oversized.json"
-            path.write_bytes(b"x" * (64 * 1024 + 1))
-            with self.assertRaises(CloudBackupError):
-                import_google_client_configuration(path)
+        parameters = CloudBackupClient("google")._token_parameters()
+        self.assertEqual(parameters, {"client_id": CLIENT_ID, "client_secret": CLIENT_SECRET})
+        self.vault.get_password.assert_not_called()
         self.vault.set_password.assert_not_called()
+        verify_bundled_google_configuration()
 
-    def test_vault_failure_does_not_echo_configuration_or_exception(self):
-        self.vault.set_password.side_effect = RuntimeError(CLIENT_SECRET)
-        with self.assertRaises(CloudBackupError) as failure:
-            self.import_document({"installed": {
-                "client_id": CLIENT_ID, "client_secret": CLIENT_SECRET}})
-        self.assertNotIn(CLIENT_SECRET, str(failure.exception))
+    def test_updated_registration_takes_precedence_over_pilot_configuration(self):
+        self.passwords[(GOOGLE_CLIENT_SERVICE, CLIENT_ID)] = "old-pilot-configuration"
+        self.assertEqual(CloudBackupClient("google")._token_parameters()["client_secret"], CLIENT_SECRET)
+        self.vault.get_password.assert_not_called()
 
-    def test_browser_callback_pkce_exchange_and_refresh_use_imported_configuration(self):
-        self.import_document({"installed": {
-            "client_id": CLIENT_ID, "client_secret": CLIENT_SECRET}})
+    def test_other_client_registration_is_rejected(self):
+        self.registration.GOOGLE_CLIENT_ID = "another-client.apps.googleusercontent.com"
+        with self.assertRaises(CloudBackupError):
+            CloudBackupClient("google")._token_parameters()
+        with self.assertRaises(CloudBackupError):
+            verify_bundled_google_configuration()
+
+    def test_pr_fixture_cannot_authenticate_or_pass_release_gate(self):
+        self.registration.IS_TEST_CONFIGURATION = True
+        with self.assertRaises(CloudBackupError):
+            CloudBackupClient("google")._token_parameters()
+        with self.assertRaises(CloudBackupError):
+            verify_bundled_google_configuration()
+        verify_bundled_google_configuration(allow_fixture=True)
+
+    def test_pilot_connection_is_preserved_without_a_new_bundled_registration(self):
+        self.registration.GOOGLE_CLIENT_SECRET = ""
+        self.passwords[(GOOGLE_CLIENT_SERVICE, CLIENT_ID)] = CLIENT_SECRET
+        self.passwords[(KEYRING_SERVICE + ":google", CLIENT_ID)] = "synthetic-refresh"
+        client = CloudBackupClient("google")
+        self.assertTrue(client.connected())
+        self.assertEqual(client._token_parameters()["client_secret"], CLIENT_SECRET)
+        # Packaging must not count the maintainer's local settings as a complete installer.
+        with self.assertRaises(CloudBackupError):
+            verify_bundled_google_configuration()
+
+    def test_browser_callback_pkce_exchange_and_refresh_work_on_fresh_install(self):
         authorization = {}
         callbacks = []
         callback_failures = []
@@ -152,7 +150,7 @@ class GoogleCloudAuthTests(unittest.TestCase):
         self.assertEqual(authorization["code_challenge_method"], ["S256"])
         self.assertNotIn("client_secret", authorization)
         self.assertEqual(self.passwords[(KEYRING_SERVICE + ":google", CLIENT_ID)], "rotated-refresh")
-        self.assertEqual(self.passwords[(GOOGLE_CLIENT_SERVICE, CLIENT_ID)], CLIENT_SECRET)
+        self.assertNotIn((GOOGLE_CLIENT_SERVICE, CLIENT_ID), self.passwords)
 
     def test_client_secret_is_never_sent_to_microsoft(self):
         self.passwords[(GOOGLE_CLIENT_SERVICE, CLIENT_ID)] = CLIENT_SECRET
@@ -161,21 +159,20 @@ class GoogleCloudAuthTests(unittest.TestCase):
         self.assertEqual(client._token_parameters(), {"client_id": "synthetic-ms-client"})
 
     def test_missing_configuration_stops_before_browser_or_network_request(self):
+        self.registration.GOOGLE_CLIENT_SECRET = ""
         with patch("app.cloud_backups.webbrowser.open") as browser, patch(
                 "app.cloud_backups._json_call") as request:
-            with self.assertRaisesRegex(CloudBackupError, "Configurar Google Drive"):
+            with self.assertRaisesRegex(CloudBackupError, "Atualize"):
                 CloudBackupClient("google").connect()
         browser.assert_not_called()
         request.assert_not_called()
 
     def test_disconnect_removes_account_authorization_and_preserves_desktop_configuration(self):
-        self.import_document({"installed": {
-            "client_id": CLIENT_ID, "client_secret": CLIENT_SECRET}})
         self.passwords[(KEYRING_SERVICE + ":google", CLIENT_ID)] = "synthetic-refresh"
         client = CloudBackupClient("google")
         client.disconnect()
         self.assertFalse(client.connected())
-        self.assertEqual(self.passwords[(GOOGLE_CLIENT_SERVICE, CLIENT_ID)], CLIENT_SECRET)
+        self.assertNotIn((GOOGLE_CLIENT_SERVICE, CLIENT_ID), self.passwords)
 
     def test_missing_secret_gives_actionable_error_instead_of_generic_http_400(self):
         error = HTTPError(TOKEN_URL, 400, "Bad Request", {}, BytesIO(json.dumps({
@@ -186,7 +183,8 @@ class GoogleCloudAuthTests(unittest.TestCase):
             opener.return_value.open.side_effect = error
             with self.assertRaises(CloudBackupError) as failure:
                 _call(TOKEN_URL, method="POST", body=b"synthetic")
-        self.assertIn("Configurar Google Drive", str(failure.exception))
+        self.assertIn("suporte", str(failure.exception))
+        self.assertNotIn("JSON", str(failure.exception))
         self.assertNotIn("must-not-be-shown", str(failure.exception))
         self.assertTrue(error.closed)
 

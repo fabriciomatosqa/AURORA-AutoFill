@@ -70,6 +70,10 @@ jobs:
           python -m pip install -r requirements.txt pyinstaller==6.16.0 "pillow>=10,<12" "websocket-client>=1.8,<2"
       - name: Gerar PNG e ICO transparentes de forma reproduzível
         run: python scripts/build_branding.py
+      - name: Preparar configuração Google Desktop da distribuição
+        env:
+          AURORA_GOOGLE_DESKTOP_CLIENT_SECRET: ${{ github.event_name != 'pull_request' && secrets.AURORA_GOOGLE_DESKTOP_CLIENT_SECRET || '' }}
+        run: python packaging/build_cloud_configuration.py --ci-event '${{ github.event_name }}'
       - name: Testes automatizados de regressão
         env:
           QT_QPA_PLATFORM: offscreen
@@ -105,7 +109,7 @@ jobs:
       - name: Testar EXE e preservacao de dados em perfil temporario
         shell: pwsh
         run: |
-          python packaging/smoke_frozen.py --exe 'dist/AURORA AutoFill/AURORA AutoFill.exe'
+          python packaging/smoke_frozen.py --exe 'dist/AURORA AutoFill/AURORA AutoFill.exe' --cloud-configuration '${{ github.event_name == 'pull_request' && 'fixture' || 'release' }}'
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python packaging/verify_bundle.py --platform windows --report windows-bundle-report.json
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
@@ -260,6 +264,10 @@ jobs:
           python -m pip install -r requirements.txt pyinstaller==6.16.0 "pillow>=10,<12"
       - name: Gerar PNG e ICO transparentes de forma reproduzível
         run: python scripts/build_branding.py
+      - name: Preparar configuração Google Desktop da distribuição
+        env:
+          AURORA_GOOGLE_DESKTOP_CLIENT_SECRET: ${{ github.event_name != 'pull_request' && secrets.AURORA_GOOGLE_DESKTOP_CLIENT_SECRET || '' }}
+        run: python packaging/build_cloud_configuration.py --ci-event '${{ github.event_name }}'
       - name: Testes (Qt offscreen)
         env:
           QT_QPA_PLATFORM: offscreen
@@ -277,7 +285,7 @@ jobs:
           printf '%s\n' "$GITHUB_SHA" > 'dist/AURORA AutoFill/SOURCE-COMMIT.txt'
           python packaging/verify_bundle.py --platform linux --report linux-bundle-report.json
       - name: Testar EXE Linux sem monitor físico
-        run: python packaging/smoke_frozen.py --exe 'dist/AURORA AutoFill/AURORA AutoFill'
+        run: python packaging/smoke_frozen.py --exe 'dist/AURORA AutoFill/AURORA AutoFill' --cloud-configuration '${{ github.event_name == 'pull_request' && 'fixture' || 'release' }}'
       - name: Testar interface Linux sob X11 virtual
         run: xvfb-run -a -s '-screen 0 1366x768x24' python packaging/smoke_frozen.py --exe 'dist/AURORA AutoFill/AURORA AutoFill' --qt-platform xcb
       - name: Definir versão centralizada

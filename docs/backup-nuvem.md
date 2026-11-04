@@ -32,29 +32,40 @@ conta real (login, envio e recuperação de um ZIP) deve preceder a liberação
 do backup ao público. Não confundir a publicação de um instalador com a
 publicação do cliente OAuth em produção no Google Cloud.
 
-### Configuração Google Desktop nesta validação
+### Conexão do usuário: somente login e autorização
 
-Este cliente Desktop exige `client_secret` tanto na troca do código de
-autorização quanto na renovação do acesso, mesmo usando PKCE. O Google confirmou
-essa exigência com `invalid_request: client_secret is missing`. O ID público
-sozinho abre a tela de consentimento, mas não conclui a conexão.
+O usuário abre Backup em nuvem → Google Drive → Conectar minha conta, faz login
+no navegador e autoriza. Não importa JSON, não configura client IDs ou segredos
+e não precisa de acesso ao Google Cloud. O instalador fornece a configuração
+Desktop registrada pelo responsável do projeto. Os backups permanecem na conta
+de cada usuário; a autorização pessoal fica somente no cofre do sistema.
 
-No Google Cloud → Clientes → AURORA AutoFill Desktop, baixe o JSON do cliente.
-Se o segredo não estiver mais disponível para download, crie um novo segredo
-**no mesmo cliente** e baixe o JSON imediatamente na tela de criação. Não crie
-outro client ID: isso mudaria o espaço dos backups da aplicação.
+### Configuração única do projeto para os instaladores
 
-No AURORA → Backup em nuvem → Google Drive, use **Configurar Google Drive**
-e selecione esse JSON. Só a configuração Desktop com o ID desta versão é aceita.
-O parâmetro é guardado no cofre do sistema, separado da autorização da conta;
-o arquivo não é copiado para o perfil, banco, instalação ou ZIP de backup.
-Em seguida use **Conectar minha conta**. Essa importação é feita uma vez por
-computador nesta etapa de validação; a configuração da distribuição pública
-continua sendo uma etapa a concluir antes de liberar o recurso para todos.
+O responsável cadastra em GitHub → Settings → Secrets and variables → Actions
+um **repository secret** chamado `AURORA_GOOGLE_DESKTOP_CLIENT_SECRET`.
+O valor é somente o campo `client_secret` do cliente **AURORA AutoFill Desktop**
+cujo ID já está em `assets/cloud-oauth-clients.json`, não o arquivo JSON inteiro.
+Esse valor é obtido no Google Cloud uma única vez pelo responsável e não deve
+ser solicitado aos usuários finais.
 
-As URLs do arquivo importado são ignoradas: os endpoints Google permanecem
-fixos no código. PKCE e validação de `state` continuam ativos. Erros OAuth são
-traduzidos para orientações locais, sem exibir a resposta bruta do provedor.
+A compilação gera `app/_cloud_oauth.py`, ignorado pelo Git, e o PyInstaller
+inclui o registro no executável. O valor não é impresso pelo preparador nem
+publicado no código-fonte do repositório. Como todo cliente OAuth Desktop é
+público, o registro compartilhado incluído no aplicativo pode ser extraído do
+instalador; ele não substitui PKCE nem dá acesso à conta de ninguém. Tokens de
+usuários, chaves de serviço e credenciais de clientes web não entram na build.
+
+PRs recebem uma configuração sintética marcada como teste, sem acesso ao secret
+real. Essa configuração não é aceita na autenticação normal nem no teste de
+um pacote de distribuição. Builds de distribuição sem o repository secret
+falham antes da geração dos instaladores. O teste executado dentro do binário
+compilado exige a configuração embutida e não aceita o cofre local como prova.
+Isso impede publicar outra versão que exija arquivos dos usuários.
+
+Para quem já conectou o piloto, a autorização e a configuração local existentes
+continuam funcionando. O registro embutido tem prioridade, permitindo atualizar
+a configuração do projeto sem pedir nova importação aos usuários.
 
 O OneDrive ainda não possui cliente registrado nesta distribuição e permanece
 indisponível até a configuração do seu próprio ID Microsoft.
@@ -62,7 +73,8 @@ indisponível até a configuração do seu próprio ID Microsoft.
 OAuth exige registro de um aplicativo no Google e na Microsoft. NÃO é possível
 concluir a integração com as contas apenas escrevendo o código, sem client IDs
 e autorização da aplicação junto aos provedores. IDs de cliente são públicos,
-mas client secrets e refresh tokens jamais entram no GitHub, logs ou backup.
+mas o valor de configuração Desktop não entra no Git público, logs ou backup.
+Refresh tokens pessoais ficam exclusivamente no cofre do sistema.
 
 1. Google Cloud: habilite Google Drive API, configure tela de consentimento
    e crie cliente OAuth tipo Aplicativo para computador, autorizando apenas

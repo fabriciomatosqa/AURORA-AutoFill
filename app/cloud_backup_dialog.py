@@ -9,14 +9,12 @@ from pathlib import Path
 
 from PySide6.QtCore import Qt, QThread, Signal, QTimer
 from PySide6.QtWidgets import (
-    QDialog, QFileDialog, QFrame, QHBoxLayout, QLabel, QLayout, QListWidget, QListWidgetItem,
+    QDialog, QFrame, QHBoxLayout, QLabel, QLayout, QListWidget, QListWidgetItem,
     QMessageBox, QPushButton, QStackedWidget, QVBoxLayout, QWidget,
 )
 
 from .backups import create_backup
-from .cloud_backups import (
-    CloudBackupClient, CloudBackupError, RemoteBackup, import_google_client_configuration,
-)
+from .cloud_backups import CloudBackupClient, CloudBackupError, RemoteBackup
 from .cloud_brand import BRAND_NAMES, provider_pixmap
 from .icons import icon
 from .themes import set_ui_style
@@ -224,7 +222,7 @@ class CloudBackupDialog(QDialog):
         """)
 
         root = QVBoxLayout(self)
-        # Account configuration and expanded diagnostics must not overlap the
+        # Expanded diagnostics must not overlap the
         # backup list/actions when the dialog's requested size is too small.
         root.setSizeConstraint(QLayout.SetMinimumSize)
         root.setContentsMargins(22, 19, 22, 17)
@@ -274,15 +272,7 @@ class CloudBackupDialog(QDialog):
         self.details_button.setObjectName("cloudDetailsButton")
         self.details_button.setCheckable(True)
         self.details_button.toggled.connect(self._toggle_details)
-        configuration_actions = QHBoxLayout()
-        configuration_actions.addWidget(self.details_button, 0, Qt.AlignLeft)
-        configuration_actions.addStretch(1)
-        self.configure_google_button = QPushButton("Configurar Google Drive")
-        self.configure_google_button.setToolTip(
-            "Carregar o JSON do cliente AURORA AutoFill Desktop baixado no Google Cloud")
-        self.configure_google_button.clicked.connect(self._configure_google)
-        configuration_actions.addWidget(self.configure_google_button)
-        status_layout.addLayout(configuration_actions)
+        status_layout.addWidget(self.details_button, 0, Qt.AlignLeft)
         self.technical_details = QLabel()
         self.technical_details.setObjectName("cloudTechnicalDetails")
         self.technical_details.setWordWrap(True)
@@ -376,25 +366,6 @@ class CloudBackupDialog(QDialog):
     def _client(self):
         return CloudBackupClient(self._provider_id)
 
-    def _configure_google(self):
-        if self._provider_id != "google" or (
-                self._worker is not None and self._worker.isRunning()):
-            return
-        filename, _ = QFileDialog.getOpenFileName(
-            self, "Configuração do Google Drive", "", "Configuração Google (*.json)")
-        if not filename:
-            return
-        try:
-            import_google_client_configuration(Path(filename))
-        except CloudBackupError as exc:
-            QMessageBox.warning(self, "Configuração do Google Drive", str(exc))
-            return
-        self._refresh_buttons()
-        QMessageBox.information(
-            self, "Google Drive configurado",
-            "Configuração guardada no cofre deste computador. "
-            "Agora clique em Conectar minha conta para autorizar o backup.")
-
     def _apply_provider_selection(self):
         for provider, card in self.provider_cards.items():
             card.set_selected(provider == self._provider_id)
@@ -439,8 +410,6 @@ class CloudBackupDialog(QDialog):
     def _refresh_buttons(self):
         active = self._worker is not None and self._worker.isRunning()
         self.cancel_button.setEnabled(active and self._worker.action == "connect")
-        self.configure_google_button.setVisible(self._provider_id == "google")
-        self.configure_google_button.setEnabled(not active)
         provider_name = BRAND_NAMES[self._provider_id]
         connected, ready, technical = False, False, ""
         try:

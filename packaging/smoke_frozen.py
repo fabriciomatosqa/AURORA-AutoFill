@@ -32,6 +32,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--exe', type=Path, required=True)
     parser.add_argument('--qt-platform', choices=('offscreen', 'xcb'), default='offscreen')
+    parser.add_argument('--cloud-configuration', choices=('release', 'fixture'))
     args = parser.parse_args()
     executable = args.exe.resolve(strict=True)
     with temporary_profile() as temporary:
@@ -49,6 +50,12 @@ def main():
                 sys.stderr.write(result.stderr.decode('utf-8', errors='replace'))
                 raise SystemExit(f'Aplicativo compilado terminou com codigo {result.returncode}')
 
+        if args.cloud_configuration:
+            cloud_options = dict(options, env=dict(
+                env, AURORA_CLOUD_CONFIG_SMOKE_TEST=args.cloud_configuration))
+            result = subprocess.run([str(executable)], **cloud_options)
+            if result.returncode:
+                raise SystemExit('Configuração Google Desktop ausente ou inválida no executável.')
         launch()
         database = profile / 'AuroraAutoFill' / 'snippets.sqlite3'
         if not database.is_file():

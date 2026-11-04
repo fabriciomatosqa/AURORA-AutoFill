@@ -9,6 +9,16 @@ def should_start_in_tray(arguments, *, tray_available: bool) -> bool:
 
 
 def main() -> int:
+    # Build gate runs in the frozen executable before Qt, profiles or user data.
+    cloud_check = os.environ.get("AURORA_CLOUD_CONFIG_SMOKE_TEST")
+    if cloud_check in ("release", "fixture"):
+        from app.cloud_backups import CloudBackupError, verify_bundled_google_configuration
+        try:
+            verify_bundled_google_configuration(allow_fixture=cloud_check == "fixture")
+        except CloudBackupError as exc:
+            print(str(exc), file=sys.stderr)
+            return 2
+        return 0
     try:
         from PySide6.QtWidgets import QApplication, QMessageBox
         from app.ui import AutoFillWindow
