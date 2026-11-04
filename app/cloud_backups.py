@@ -25,8 +25,14 @@ from .backups import BACKUP_SUFFIX, backups_directory, read_backup
 
 MAX_CLOUD_BYTES = 120 * 1024 * 1024
 KEYRING_SERVICE = "AURORA-AutoFill-CloudBackup"
+GOOGLE_CLIENT_SERVICE = KEYRING_SERVICE + ":google-desktop-client"
 GOOGLE_SCOPE = "https://www.googleapis.com/auth/drive.appdata"
 MICROSOFT_SCOPE = "Files.ReadWrite.AppFolder offline_access"
+GOOGLE_CONFIGURATION_HELP = (
+    "O Google exige a configuração completa deste aplicativo. "
+    "Use 'Configurar Google Drive' e selecione o JSON do cliente "
+    "AURORA AutoFill Desktop baixado no Google Cloud. "
+    "Depois, conecte a conta novamente.")
 
 
 class CloudBackupError(RuntimeError):
@@ -111,6 +117,89 @@ def _delete_refresh(provider: str, client_id: str) -> None:
         raise CloudBackupError("Não foi possível desconectar a conta localmente.") from exc
 
 
+def _valid_client_secret(value) -> bool:
+    return (isinstance(value, str) and 0 < len(value) <= 256
+            and all(33 <= ord(char) <= 126 for char in value))
+
+
+def import_google_client_configuration(path: Path) -> None:
+    """Import this registered desktop client's configuration into the OS vault.
+
+    Never copy the JSON into the profile, database, backup or installation.
+    Ignore supplied endpoint URLs: all requests keep using our fixed hosts.
+    A different client ID would select a different appDataFolder, so reject it.
+    """
+    try:
+        with Path(path).open("rb") as source:
+            raw = source.read(64 * 1024 + 1)
+        if len(raw) > 64 * 1024:
+            raise ValueError
+        document = json.loads(raw)
+        installed = document["installed"]
+        client_id = installed["client_id"]
+        client_secret = installed["client_secret"]
+        if not _valid_client_secret(client_secret):
+            raise ValueError
+    except (OSError, ValueError, KeyError, TypeError):
+        raise CloudBackupError(
+            "Selecione o JSON original do cliente 'App para computador', "
+            "baixado em Google Cloud → Clientes → AURORA AutoFill Desktop.") from None
+    if client_id != client_id_for("google"):
+        raise CloudBackupError(
+            "Esse arquivo pertence a outro aplicativo. Baixe a configuração "
+            "do cliente AURORA AutoFill Desktop usado nesta versão.")
+    try:
+        _secret_store().set_password(GOOGLE_CLIENT_SERVICE, client_id, client_secret)
+    except Exception:
+        raise CloudBackupError(
+            "Não foi possível guardar a configuração do Google no cofre do sistema.") from None
+
+
+def _google_client_secret(client_id: str) -> str:
+    try:
+        value = _secret_store().get_password(GOOGLE_CLIENT_SERVICE, client_id)
+    except Exception:
+        raise CloudBackupError(
+            "Não foi possível acessar a configuração protegida do Google.") from None
+    if value is None or value == "":
+        return ""
+    if not _valid_client_secret(value):
+        raise CloudBackupError(
+            "Carregue novamente a configuração em 'Configurar Google Drive'.")
+    return value
+
+
+def _http_error_message(url: str, error: HTTPError) -> str:
+    """Translate known OAuth failures without displaying provider text or tokens."""
+    if url in ("https://oauth2.googleapis.com/token",
+               "https://login.microsoftonline.com/common/oauth2/v2.0/token"):
+        try:
+            payload = error.read(8193)
+            answer = json.loads(payload) if len(payload) <= 8192 else {}
+            code = answer.get("error") if isinstance(answer, dict) else None
+            description = answer.get("error_description", "") if isinstance(answer, dict) else ""
+        except (OSError, ValueError):
+            code, description = None, ""
+        if url == "https://oauth2.googleapis.com/token":
+            missing_secret = (code == "invalid_request" and isinstance(description, str)
+                              and "client_secret" in description
+                              and "missing" in description.lower())
+            if missing_secret or code == "invalid_client":
+                return GOOGLE_CONFIGURATION_HELP
+        if code == "invalid_grant":
+            return (
+                "A autorização expirou ou foi revogada. Conecte a conta novamente "
+                "e conclua o login no navegador.")
+        if code == "invalid_scope":
+            return "O provedor não aceitou a permissão de backup configurada no aplicativo."
+        if code in ("invalid_request", "unauthorized_client", "invalid_client"):
+            return (
+                "Não foi possível concluir a autorização do aplicativo "
+                f"(HTTP {error.code}; {code}). Confira o cadastro do aplicativo no provedor.")
+    return (f"A nuvem recusou a operação (HTTP {error.code}). "
+            "Confira autorização, espaço disponível e conexão.")
+
+
 class NoRedirect(HTTPRedirectHandler):
     def redirect_request(self, request, fp, code, msg, headers, newurl):
         return None
@@ -146,19 +235,20 @@ def _call(url: str, token: str = "", *, method="GET", body=None,
                 raise CloudBackupError("Arquivo remoto ultrapassa o limite de segurança.")
             return blob, dict(reply.headers.items()), reply.status
     except HTTPError as exc:
-        if allow_redirect and exc.code in (301, 302, 303, 307, 308):
-            location = exc.headers.get("Location", "")
-            host = (urlparse(location).hostname or "").lower()
-            if (urlparse(location).scheme == "https" and
-                    (host.endswith(".sharepoint.com") or host.endswith(".1drv.com")
-                     or host.endswith(".blob.core.windows.net")
-                     or host == "onedrive.live.com")):
-                # Important: the redirected request must NOT carry Graph's bearer token.
-                return _call(location, allowed_hosts={host},
-                             response_limit=response_limit)
-        raise CloudBackupError(
-            f"A nuvem recusou a operação (HTTP {exc.code}). "
-            "Confira autorização, espaço disponível e conexão.") from None
+        try:
+            if allow_redirect and exc.code in (301, 302, 303, 307, 308):
+                location = exc.headers.get("Location", "")
+                host = (urlparse(location).hostname or "").lower()
+                if (urlparse(location).scheme == "https" and
+                        (host.endswith(".sharepoint.com") or host.endswith(".1drv.com")
+                         or host.endswith(".blob.core.windows.net")
+                         or host == "onedrive.live.com")):
+                    # The redirected request must NOT carry Graph's bearer token.
+                    return _call(location, allowed_hosts={host},
+                                 response_limit=response_limit)
+            raise CloudBackupError(_http_error_message(url, exc)) from None
+        finally:
+            exc.close()
     except (OSError, URLError) as exc:
         raise CloudBackupError("Falha de conexão com a nuvem.") from exc
 
@@ -204,7 +294,19 @@ class CloudBackupClient:
                 "https://login.microsoftonline.com/common/oauth2/v2.0/token",
                 MICROSOFT_SCOPE)
 
+    def _token_parameters(self) -> dict:
+        parameters = {"client_id": self.client_id}
+        if self.provider == "google":
+            secret = _google_client_secret(self.client_id)
+            if not secret:
+                raise CloudBackupError(GOOGLE_CONFIGURATION_HELP)
+            parameters["client_secret"] = secret
+        return parameters
+
     def connect(self, cancelled=lambda: False, timeout=120):
+        # Capture desktop configuration once, before opening the browser.
+        # PKCE is still required; the desktop client secret does not replace it.
+        client_parameters = self._token_parameters()
         auth_url, token_url, scope = self._oauth_urls()
         state = secrets.token_urlsafe(32)
         verifier = secrets.token_urlsafe(64)
@@ -267,7 +369,7 @@ class CloudBackupClient:
             raise CloudBackupError("A conta não autorizou o acesso solicitado.")
         response = _json_call(token_url, method="POST",
                               body=urlencode({
-                                  "client_id": self.client_id,
+                                  **client_parameters,
                                   "redirect_uri": redirect, "code": result["code"],
                                   "code_verifier": verifier, "grant_type": "authorization_code",
                               }).encode("ascii"),
@@ -282,7 +384,7 @@ class CloudBackupClient:
             raise CloudBackupError("Conecte a conta antes de acessar seus backups.")
         _, url, _ = self._oauth_urls()
         answer = _json_call(url, method="POST", body=urlencode({
-            "client_id": self.client_id, "refresh_token": refresh,
+            **self._token_parameters(), "refresh_token": refresh,
             "grant_type": "refresh_token",
             **({"scope": MICROSOFT_SCOPE} if self.provider == "onedrive" else {}),
         }).encode("ascii"), content_type="application/x-www-form-urlencoded")

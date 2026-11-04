@@ -141,6 +141,38 @@ class CloudBackupUiTests(unittest.TestCase):
             self.assertIn("Não há autorização", worker.failure)
             self.assertIsNone(worker.result)
 
+    def test_google_configuration_import_is_explicit_and_available_only_for_google(self):
+        with patch.object(CloudBackupDialog, "_client") as getter, patch(
+                "app.cloud_backup_dialog.QFileDialog.getOpenFileName",
+                return_value=("synthetic-desktop.json", "")), patch(
+                "app.cloud_backup_dialog.import_google_client_configuration") as imported, patch(
+                "app.cloud_backup_dialog.QMessageBox.information"):
+            getter.return_value.connected.return_value = False
+            dialog = CloudBackupDialog(store=None, restore_callback=lambda x: None)
+            try:
+                imported.assert_not_called()
+                self.assertFalse(dialog.configure_google_button.isHidden())
+                dialog.configure_google_button.click()
+                self.assertEqual(imported.call_count, 1)
+                self.assertEqual(str(imported.call_args.args[0]), "synthetic-desktop.json")
+                self.assertTrue(dialog.connect_button.isEnabled())
+                dialog._select_provider("onedrive")
+                self.assertTrue(dialog.configure_google_button.isHidden())
+            finally:
+                self._dispose(dialog)
+
+    def test_cancelling_google_file_selection_does_not_modify_configuration(self):
+        with patch.object(CloudBackupDialog, "_client") as getter, patch(
+                "app.cloud_backup_dialog.QFileDialog.getOpenFileName", return_value=("", "")), patch(
+                "app.cloud_backup_dialog.import_google_client_configuration") as imported:
+            getter.return_value.connected.return_value = False
+            dialog = CloudBackupDialog(store=None, restore_callback=lambda x: None)
+            try:
+                dialog.configure_google_button.click()
+                imported.assert_not_called()
+            finally:
+                self._dispose(dialog)
+
 
 if __name__ == "__main__":
     unittest.main()
