@@ -28,6 +28,11 @@ KEYRING_SERVICE = "AURORA-AutoFill-CloudBackup"
 GOOGLE_CLIENT_SERVICE = KEYRING_SERVICE + ":google-desktop-client"
 GOOGLE_SCOPE = "https://www.googleapis.com/auth/drive.appdata"
 MICROSOFT_SCOPE = "Files.ReadWrite.AppFolder offline_access"
+GOOGLE_CONFIGURATION_HELP = (
+    "O Google exige a configuração completa deste aplicativo. "
+    "Use 'Configurar Google Drive' e selecione o JSON do cliente "
+    "AURORA AutoFill Desktop baixado no Google Cloud. "
+    "Depois, conecte a conta novamente.")
 
 
 class CloudBackupError(RuntimeError):
@@ -180,11 +185,7 @@ def _http_error_message(url: str, error: HTTPError) -> str:
                               and "client_secret" in description
                               and "missing" in description.lower())
             if missing_secret or code == "invalid_client":
-                return (
-                    "O Google exige a configuração completa deste aplicativo. "
-                    "Use 'Configurar Google Drive' e selecione o JSON do cliente "
-                    "AURORA AutoFill Desktop baixado no Google Cloud. "
-                    "Depois, conecte a conta novamente.")
+                return GOOGLE_CONFIGURATION_HELP
         if code == "invalid_grant":
             return (
                 "A autorização expirou ou foi revogada. Conecte a conta novamente "
@@ -297,8 +298,9 @@ class CloudBackupClient:
         parameters = {"client_id": self.client_id}
         if self.provider == "google":
             secret = _google_client_secret(self.client_id)
-            if secret:
-                parameters["client_secret"] = secret
+            if not secret:
+                raise CloudBackupError(GOOGLE_CONFIGURATION_HELP)
+            parameters["client_secret"] = secret
         return parameters
 
     def connect(self, cancelled=lambda: False, timeout=120):

@@ -160,6 +160,14 @@ class GoogleCloudAuthTests(unittest.TestCase):
             client = CloudBackupClient("onedrive")
         self.assertEqual(client._token_parameters(), {"client_id": "synthetic-ms-client"})
 
+    def test_missing_configuration_stops_before_browser_or_network_request(self):
+        with patch("app.cloud_backups.webbrowser.open") as browser, patch(
+                "app.cloud_backups._json_call") as request:
+            with self.assertRaisesRegex(CloudBackupError, "Configurar Google Drive"):
+                CloudBackupClient("google").connect()
+        browser.assert_not_called()
+        request.assert_not_called()
+
     def test_disconnect_removes_account_authorization_and_preserves_desktop_configuration(self):
         self.import_document({"installed": {
             "client_id": CLIENT_ID, "client_secret": CLIENT_SECRET}})
