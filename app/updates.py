@@ -31,6 +31,8 @@ REQUEST_RETRIES = 3
 _RETRY_DELAYS = (0.4, 1.0)
 _DOWNLOAD_HOSTS = {"github.com", "api.github.com", "release-assets.githubusercontent.com",
                    "objects.githubusercontent.com"}
+
+
 class GitHubUnavailable(ValueError):
     """Temporary GitHub/API problem; smaller release listing may still succeed."""
 
@@ -237,6 +239,7 @@ def latest_release(*, include_prereleases: bool = True, platform_name: str | Non
         return _find_latest_release(
             include_prereleases=include_prereleases, platform_name=platform_name,
             machine=machine, page_size=FALLBACK_PAGE_SIZE, pages=FALLBACK_PAGES)
+
 
 def _installer_filename(release):
     _parse_version(release.version)
