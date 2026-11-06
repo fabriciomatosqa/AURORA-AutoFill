@@ -65,7 +65,7 @@ class DiscoveryTests(unittest.TestCase):
     def check(self, records, **kwargs):
         with patch("app.updates._get", return_value=json.dumps(records).encode()) as get:
             found = updates.latest_release(platform_name="win32", **kwargs)
-        self.assertIn("/releases?per_page=100", get.call_args.args[0])
+        self.assertIn(f"/releases?per_page={updates.RELEASE_PAGE_SIZE}", get.call_args.args[0])
         self.assertNotIn("/latest", get.call_args.args[0])
         return found
 
@@ -116,7 +116,7 @@ class DiscoveryTests(unittest.TestCase):
         self.assertEqual(self.check([incomplete, payload()]).version, VERSION)
 
     def test_pagination_is_bounded_and_newest_can_be_on_next_page(self):
-        first = [payload("0.6.0", prerelease=False)] * 100
+        first = [payload("0.6.0", prerelease=False)] * updates.RELEASE_PAGE_SIZE
         with patch("app.updates._get", side_effect=[json.dumps(first).encode(),
                    json.dumps([payload()]).encode()]) as get:
             self.assertEqual(updates.latest_release(platform_name="win32").version, VERSION)
