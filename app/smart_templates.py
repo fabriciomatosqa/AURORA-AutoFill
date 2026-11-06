@@ -13,6 +13,7 @@ import ast
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from html import escape
+from .date_formats import format_date_ptbr
 import operator
 import re
 
@@ -21,7 +22,6 @@ _DATE_RE = re.compile(r"\{\{data:([+-]\d{1,4})\}\}", re.I)
 _FORMAT_RE = re.compile(r"\{\{data_formato:([^{}\r\n]{1,48})\}\}", re.I)
 _CALC_RE = re.compile(r"\{\{calculo:([0-9 .+\-*/()%]{1,75})\}\}", re.I)
 _ACTION_RE = re.compile(r"\{\{(tab|enter|espera(?::\d{1,4})?)\}\}", re.I)
-_ALLOWED_FORMAT = re.compile(r"^(?:[^%{}]|%(?:[%aAbBcdHIjmMpSUwWyYzZ])){1,48}$")
 _ALLOWED_MATH = {
     ast.Add: operator.add, ast.Sub: operator.sub,
     ast.Mult: operator.mul, ast.Div: operator.truediv,
@@ -132,9 +132,7 @@ def advanced_variables(template: str, now: datetime | None = None) -> str:
     result = _DATE_RE.sub(date_offset, template)
     def date_format(match):
         fmt = match.group(1)
-        if not _ALLOWED_FORMAT.fullmatch(fmt):
-            raise ValueError("Formato de data não permitido.")
-        return now.strftime(fmt)[:100]
+        return format_date_ptbr(now, fmt)
     result = _FORMAT_RE.sub(date_format, result)
     return _CALC_RE.sub(lambda m: _math(m.group(1)), result)
 
