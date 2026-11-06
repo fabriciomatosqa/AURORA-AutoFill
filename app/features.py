@@ -18,7 +18,7 @@ from .preferences import (load_preferences, save_preferences, set_windows_startu
 from .settings_panel import SettingsPage
 from .update_threads import ReleaseCheckThread, InstallerDownloadThread
 from .updates import is_newer, launch_installer
-from .version import APP_VERSION
+from .version import APP_VERSION, GITHUB_RELEASES_URL
 from .versioning import display_version
 from .icons import apply_icon
 from .update_cadence import UpdateCadence, computer_uptime_seconds
@@ -418,8 +418,21 @@ class AuroraFeaturesMixin:
         if self._exit_when_updates_done:
             return
         if manual:
-            QMessageBox.warning(self, "Atualizações",
-                                f"Não foi possível consultar o GitHub: {detail}")
+            dialog = QMessageBox(
+                QMessageBox.Warning, "Atualizações",
+                "Não foi possível verificar automaticamente as atualizações.\n\n"
+                f"Detalhes: {detail}\n\n"
+                "Você ainda pode consultar e baixar a versão mais recente "
+                "diretamente no GitHub.",
+                QMessageBox.NoButton, self)
+            browser_button = dialog.addButton(
+                "Abrir versões no GitHub", QMessageBox.ActionRole)
+            close_button = dialog.addButton("Fechar", QMessageBox.RejectRole)
+            dialog.setDefaultButton(close_button)
+            dialog.setEscapeButton(close_button)
+            dialog.exec()
+            if dialog.clickedButton() == browser_button:
+                webbrowser.open(GITHUB_RELEASES_URL)
         else:
             self.statusBar().showMessage("Não foi possível verificar atualizações.", 3000)
 

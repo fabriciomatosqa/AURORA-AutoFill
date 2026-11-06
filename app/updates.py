@@ -4,7 +4,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from hashlib import sha256
 from pathlib import Path
-from urllib.error import HTTPError
+from urllib.error import HTTPError, URLError
 from urllib.parse import unquote, urlparse
 from urllib.request import HTTPRedirectHandler, Request, build_opener
 import json
@@ -15,15 +15,28 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import time
 
 from .version import APP_VERSION, GITHUB_REPOSITORY, GITHUB_RELEASES_API
 from .versioning import (VERSION_PATTERN, parse_version as _parse_version,
                          version_key as _version_key)
 
 MAX_INSTALLER_BYTES = 500 * 1024 * 1024
-MAX_RELEASE_PAGES = 3
+MAX_RELEASE_PAGES = 6
+RELEASE_PAGE_SIZE = 50  # Smaller responses reduce intermittent GitHub proxy timeouts.
+FALLBACK_PAGE_SIZE = 15
+FALLBACK_PAGES = 20  # Preserve the 300-release search bound.
+TRANSIENT_HTTP_CODES = frozenset({408, 500, 502, 503, 504})
+REQUEST_RETRIES = 3
+_RETRY_DELAYS = (0.4, 1.0)
 _DOWNLOAD_HOSTS = {"github.com", "api.github.com", "release-assets.githubusercontent.com",
                    "objects.githubusercontent.com"}
+
+
+class GitHubUnavailable(ValueError):
+    """Temporary GitHub/API problem; smaller release listing may still succeed."""
+
+
 # In-memory receipts avoid a second network request when the UI launches an installer.
 _verified_downloads: dict[Path, tuple[str, str]] = {}
 
@@ -83,12 +96,34 @@ def _request(url, *, json_response=False):
         "X-GitHub-Api-Version": "2022-11-28"})
 
 
-def _get(url: str, *, timeout: float = 8, max_bytes: int = 2 * 1024 * 1024) -> bytes:
-    with urlopen(_request(url, json_response=True), timeout=timeout) as result:
-        data = result.read(max_bytes + 1)
-        if len(data) > max_bytes:
-            raise ValueError("Resposta de atualização maior que o permitido.")
-        return data
+def _get(url: str, *, timeout: float = 12, max_bytes: int = 2 * 1024 * 1024) -> bytes:
+    """Retry only bounded, transient failures when requesting official metadata.
+
+    Never retry invalid content, untrusted URLs, authentication/rate-limit
+    failures or checksum mismatches. Installer binaries are handled separately.
+    """
+    request = _request(url, json_response=True)  # Validate official origin once.
+    for attempt in range(REQUEST_RETRIES):
+        try:
+            with urlopen(request, timeout=timeout) as result:
+                data = result.read(max_bytes + 1)
+                if len(data) > max_bytes:
+                    raise ValueError("Resposta de atualização maior que o permitido.")
+                return data
+        except HTTPError as error:
+            if error.code not in TRANSIENT_HTTP_CODES:
+                raise
+            if attempt + 1 == REQUEST_RETRIES:
+                raise GitHubUnavailable(
+                    f"O GitHub está temporariamente indisponível (HTTP {error.code}). "
+                    "Tente novamente ou abra as versões no navegador.") from error
+        except (URLError, TimeoutError, ConnectionResetError) as error:
+            if attempt + 1 == REQUEST_RETRIES:
+                raise GitHubUnavailable(
+                    "A conexão com o GitHub falhou após algumas tentativas. "
+                    "Confira sua rede ou abra as versões no navegador.") from error
+        time.sleep(_RETRY_DELAYS[attempt])
+    raise AssertionError("Repetições esgotadas sem retornar resultado.")
 
 
 @dataclass(frozen=True)
@@ -160,33 +195,50 @@ def _release_from_payload(payload, *, include_prereleases, platform_name, machin
                    checksum.get("browser_download_url"), prerelease, name, kind, digest, size)
 
 
-def latest_release(*, include_prereleases: bool = True, platform_name: str | None = None,
-                   machine: str | None = None) -> Release | None:
-    """Highest official version, comparing dated releases chronologically."""
+def _find_latest_release(*, include_prereleases: bool, platform_name: str,
+                         machine: str, page_size: int, pages: int) -> Release | None:
+    """Only accept official releases with both installer and checksum assets."""
     candidates = []
-    for page in range(1, MAX_RELEASE_PAGES + 1):
+    for page in range(1, pages + 1):
         try:
-            payload = json.loads(_get(f"{GITHUB_RELEASES_API}?per_page=100&page={page}"))
+            payload = json.loads(_get(
+                f"{GITHUB_RELEASES_API}?per_page={page_size}&page={page}"))
         except HTTPError as exc:
             if exc.code == 404:
                 return None
             if exc.code in {403, 429}:
                 raise ValueError("O GitHub limitou as consultas. Tente novamente mais tarde.") from exc
             raise
-        # Permit existing adapters that return one release instead of a list.
         records = [payload] if isinstance(payload, dict) and "tag_name" in payload else payload
         if not isinstance(records, list):
             raise ValueError("O GitHub retornou uma lista de versões inválida.")
         for record in records:
             release = _release_from_payload(
                 record, include_prereleases=include_prereleases,
-                platform_name=platform_name or sys.platform, machine=machine or platform.machine())
+                platform_name=platform_name, machine=machine)
             if (release and release.installer_url and release.checksum_url
                     and (release.size is None or release.size <= MAX_INSTALLER_BYTES)):
                 candidates.append(release)
-        if len(records) < 100:
+        if len(records) < page_size:
             break
     return max(candidates, key=lambda item: _version_key(item.version), default=None)
+
+
+def latest_release(*, include_prereleases: bool = True, platform_name: str | None = None,
+                   machine: str | None = None) -> Release | None:
+    """Find official releases with retries and a smaller-page API fallback."""
+    platform_name = platform_name or sys.platform
+    machine = machine or platform.machine()
+    try:
+        return _find_latest_release(
+            include_prereleases=include_prereleases, platform_name=platform_name,
+            machine=machine, page_size=RELEASE_PAGE_SIZE, pages=MAX_RELEASE_PAGES)
+    except GitHubUnavailable:
+        # Some gateways time out on large API pages while smaller responses
+        # still work. Try the same official API at reduced page size.
+        return _find_latest_release(
+            include_prereleases=include_prereleases, platform_name=platform_name,
+            machine=machine, page_size=FALLBACK_PAGE_SIZE, pages=FALLBACK_PAGES)
 
 
 def _installer_filename(release):
