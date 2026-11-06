@@ -96,7 +96,7 @@ Windows ou Linux. Exemplos de códigos: `%a`, `%A` (dias da semana),
 `%b`, `%B` (meses), `%d`, `%m`, `%y`, `%Y`, `%H`, `%M`, `%S`,
 `%I`, `%p`, `%f`, `%F`, `%R`, `%T`, `%V`, `%G` e `%%`.
 Para consultar o significado e exemplos de todos os códigos aceitos,
-abra o editor e clique no botão **? → Códigos de data e hora**.
+abra o editor, clique no botão **? → Data e hora** e consulte a tabela no final da aba.
 Códigos não suportados geram um aviso de formato inválido, sem executar código.
 O campo de formato tem limite de 48 caracteres.
 
