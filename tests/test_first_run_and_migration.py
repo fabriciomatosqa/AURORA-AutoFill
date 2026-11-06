@@ -31,7 +31,7 @@ class FirstRunTests(unittest.TestCase):
                 self.assertIn("criar pastas", tutorial.content)
                 self.assertIn("Conheça o AURORA", tutorial.content)
                 self.assertIn("Inserir comando dinâmico", tutorial.content)
-                self.assertIn("Códigos de data e hora", tutorial.content)
+                self.assertIn("No final da aba Data e hora", tutorial.content)
                 self.assertIn("Configurações", tutorial.content)
                 self.assertIn("Formulários interativos", tutorial.content)
                 now = datetime(2026, 10, 19, 20, 44)
