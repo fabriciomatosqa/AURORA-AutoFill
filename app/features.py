@@ -13,8 +13,9 @@ from PySide6.QtWidgets import (QApplication, QFileDialog, QHBoxLayout, QLabel,
 
 from . import audio
 from .backups import BACKUP_SUFFIX, backups_directory, create_backup, restore_backup
-from .preferences import (load_preferences, save_preferences, set_windows_startup,
-                          windows_startup_enabled, windows_startup_supported)
+from .preferences import (load_preferences, save_preferences, preferences_path,
+                          set_windows_startup, windows_startup_enabled,
+                          windows_startup_supported)
 from .settings_panel import SettingsPage
 from .update_threads import ReleaseCheckThread, InstallerDownloadThread
 from .updates import is_newer, launch_installer
@@ -38,7 +39,25 @@ def confirm_update(parent, text):
 
 class AuroraFeaturesMixin:
     def _initialize_features(self):
-        self.preferences = load_preferences(existing_profile=not self.store._fresh_database, initialize=True)
+        # Aplicar estas opções só em instalações realmente novas.
+        # Não reativar automaticamente preferências desmarcadas por quem
+        # já possui comandos e/ou configurações.
+        first_install = bool(self.store._fresh_database) and not preferences_path().exists()
+        self.preferences = load_preferences(
+            existing_profile=not self.store._fresh_database, initialize=True)
+        if first_install:
+            self.preferences["suggest_shortcuts"] = True
+            self.preferences["start_minimized"] = True
+            try:
+                save_preferences(self.preferences)
+            except OSError:
+                pass  # Perfis somente leitura continuam utilizáveis.
+            if windows_startup_supported():
+                try:
+                    set_windows_startup(True, minimized=True)
+                except OSError:
+                    # A interface consulta o registro real, sem fingir sucesso.
+                    pass
         self._undo_actions = []
         self._next_undo_id = 0
         self._check_thread = None

@@ -1,4 +1,4 @@
-"""Textos educativos mostrados exclusivamente em perfis novos do AURORA AutoFill."""
+"""Textos educativos criados exclusivamente em perfis novos do AURORA AutoFill."""
 from __future__ import annotations
 
 from html import escape
@@ -6,88 +6,92 @@ import re
 
 
 # (Nome do comando, atalho, texto com **ênfase** opcional.)
-# Os atalhos no tutorial são hipotéticos; /ola não é um comando predefinido.
+# Somente os quatro atalhos listados aqui são criados na primeira instalação.
+# /ola é um exemplo didático, não um comando já cadastrado.
 _TEMPLATES = (
     (
         "Boas-vindas",
         "/bemvindo",
-        """Olá! 👋 Seja muito bem-vindo ao **AURORA AutoFill**!
+        """👋 **Boas-vindas ao AURORA AutoFill!**
 
-Estamos felizes em ter você por aqui! ✨
+O AURORA transforma pequenos atalhos em textos completos: você prepara uma mensagem uma vez e a reutiliza nos aplicativos compatíveis.
 
-Com o AURORA AutoFill, suas tarefas do dia a dia ficarão mais simples, rápidas e práticas.
+✨ **Três coisas para experimentar:**
+• Abra o comando /tutorial para aprender a criar e organizar seus textos.
+• Abra /datahora para ver as datas preenchidas automaticamente.
+• Crie um comando com o botão **+ Novo** e escolha seu próprio atalho.
 
-Imagine escrever textos inteiros digitando apenas algumas letras. É exatamente isso que o AURORA AutoFill faz por você!
+🚀 **Pronto para usar:** nas novas instalações do Windows, o AURORA vem configurado para iniciar com o sistema, ficar minimizado na bandeja e mostrar sugestões enquanto você digita. Você pode desmarcar qualquer opção em **Configurações**.
 
-**Menos digitação, mais produtividade e mais tempo para o que realmente importa!** 🚀""",
+💡 A expansão depende do campo de destino. Evite utilizar sugestões em senhas e informações sensíveis.
+
+**Menos digitação, mais produtividade e mais tempo para você!** 🌌""",
     ),
     (
         "Atalhos e pastas",
         "/tutorial",
-        """✨ **Você sabia que pode escrever textos completos usando apenas pequenos atalhos?**
+        """📖 **Primeiros passos com o AURORA AutoFill**
 
-Com o **AURORA AutoFill**, é muito fácil!
+⌨️ **1. Crie um atalho**
+Clique em **+ Novo**, informe um nome, um atalho começando com / e o texto que será inserido. O salvamento acontece automaticamente quando os campos estiverem completos.
 
-⌨️ **Como funcionam os atalhos?**
+Exemplo: crie /ola com a mensagem "Olá! Tudo bem?". Ao digitar /ola em um aplicativo compatível, o AURORA poderá inserir a mensagem.
 
-Imagine que você cadastrou o atalho `/ola` com a mensagem:
+✨ **2. Sugestões enquanto digita**
+Digite / para visualizar seus comandos disponíveis. Use ↑/↓ para navegar, Enter ou Tab para inserir e Esc para fechar a lista. Em uma instalação nova, as sugestões já começam ativadas, mas podem ser desmarcadas em **Configurações → Produtividade**.
 
-"Olá! Tudo bem com você? Espero que esteja tendo um ótimo dia!"
+📁 **3. Organize seus textos**
+Você também pode criar pastas para separar os comandos por assunto: Pessoal, Trabalho, Estudos ou qualquer outro. Esta pasta **Conheça o AURORA** já é um exemplo de organização.
 
-Agora, sempre que você digitar `/ola` em um campo de texto compatível, o AURORA AutoFill poderá substituí-lo automaticamente pela mensagem completa.
+⚡ **4. Explore os comandos dinâmicos**
+No editor de um comando, clique em **Inserir comando dinâmico** para incluir datas, horas, cálculos, campos de formulário, listas de escolha, conteúdo da área de transferência e ações de teclado.
 
-Você pode criar quantos atalhos precisar, personalizar suas mensagens e editar tudo quando quiser!
+Clique no botão **?** ao lado desse menu. O guia apresenta uma aba para cada grupo: **Data e hora**, **Área de transferência e cursor**, **Cálculos**, **Formulários interativos** e **Automações**. A aba **Códigos de data e hora** explica diretivas como %a, %A, %b e %B com exemplos em português.
 
-📁 **Organize seus textos com pastas!**
+🔎 **5. Encontre seus comandos**
+Use a busca na lateral ou a pesquisa global com **Ctrl + Shift + Espaço** para localizar e reutilizar seus comandos.
 
-Para facilitar ainda mais sua rotina, o AURORA AutoFill permite criar pastas para organizar seus atalhos por assunto, categoria ou preferência.
+🛡️ **6. Proteja seus dados**
+Em **Configurações → Segurança dos dados**, crie um backup completo e restaure quando precisar. Os backups são locais. Não existe conexão obrigatória com serviços em nuvem.
 
-Por exemplo:
+⚠️ Ações como Tab e Enter dependem da compatibilidade e do foco do aplicativo de destino. Não use comandos de expansão em campos de senha.
 
-• 📁 Pessoal — mensagens para amigos e familiares.
-• 📁 Estudos — anotações e textos utilizados nos estudos.
-• 📁 Dia a dia — mensagens e informações que você utiliza frequentemente.
-
-Assim como esta pasta **Conheça o AURORA**, você pode criar suas próprias pastas e manter tudo organizado e fácil de encontrar!
-
-💡 **Uma dica especial:** comece criando alguns atalhos para as mensagens que você mais digita. Aos poucos, você perceberá quanto tempo consegue economizar!
-
-🚀 **Você cria uma vez, organiza do seu jeito e ganha tempo todos os dias!**""",
+**Você pode criar pastas, atalhos e textos do seu jeito. Explore sem pressa!**""",
     ),
     (
         "Data e hora automáticas",
         "/datahora",
-        """📅 **Que tal deixar o AURORA AutoFill cuidar da data e da hora para você?**
+        """📅 **Datas e horários sem preencher manualmente**
 
-Além de expandir textos, o AURORA AutoFill permite utilizar informações dinâmicas, como a data e a hora atuais.
+Os comandos dinâmicos são atualizados **quando você usa o atalho**, não quando salva o texto.
 
-Assim, você não precisa atualizar essas informações manualmente toda vez que utilizar um texto.
+📅 Data de hoje: {{data}}
+🕒 Horário atual: {{hora}}
+🗓️ Data e hora juntas: {{data_hora}}
+⏩ Daqui a sete dias: {{data:+7}}
+⏪ Ontem: {{data:-1}}
 
-Por exemplo:
+🌎 **Datas por extenso em português**
+Hoje é {{data_formato:%A, %d de %B de %Y}}.
+Dia da semana abreviado: {{data_formato:%a}}.
+Mês por extenso: {{data_formato:%B}}.
 
-📅 Data: {{data}}
-🕒 Hora: {{hora}}
+No editor, clique no botão **?** → **Códigos de data e hora** para descobrir o significado e os exemplos de %d, %m, %Y, %H, %M, %a, %A e muitos outros.
 
-Esses valores são preenchidos automaticamente no momento da utilização do atalho. Você também pode utilizar {{data_hora}} em seus próprios textos.
-
-✨ **Pequenos recursos que fazem uma grande diferença na sua rotina!**""",
+💡 Você também pode usar **Cálculos**, **Formulários interativos** e **Automações** pelo menu **Inserir comando dinâmico**. Consulte o guia antes de usar ações de teclado em outros aplicativos.""",
     ),
     (
         "Agradecimento e motivação",
         "/obrigado",
         """💜 **Obrigado por escolher o AURORA AutoFill!**
 
-É uma alegria saber que nosso programa fará parte do seu dia a dia.
+A ideia do AURORA é simples: escrever menos vezes as mesmas coisas e dedicar mais tempo ao que importa.
 
-O AURORA AutoFill foi criado com um propósito simples: facilitar sua vida, economizar seu tempo e tornar suas atividades mais práticas.
+Comece com os comandos desta pasta, crie seus próprios atalhos e consulte o botão **?** do editor quando quiser explorar as funcionalidades dinâmicas.
 
-Lembre-se: produtividade não significa fazer mais coisas o tempo todo, mas encontrar maneiras inteligentes de fazer o que realmente importa.
+Em **Configurações**, você pode escolher o tema, o comportamento de inicialização, as sugestões de comandos e a forma de proteger seus dados com backups locais.
 
-Cada segundo economizado é uma oportunidade de dedicar mais tempo a você, aos seus sonhos e às pessoas que ama.
-
-🌌 **Que o AURORA AutoFill seja uma pequena ferramenta para grandes conquistas!**
-
-Obrigado por fazer parte dessa jornada! 🚀""",
+🌌 **Que o AURORA AutoFill facilite sua rotina, um atalho de cada vez!** 🚀""",
     ),
 )
 

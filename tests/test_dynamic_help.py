@@ -76,11 +76,11 @@ class DynamicHelpTests(unittest.TestCase):
         try:
             dialog.show()
             self.app.processEvents()
-            self.assertEqual(dialog.tabs.count(), 2)
-            self.assertEqual(dialog.tabs.tabText(1), "Códigos de data e hora")
+            self.assertEqual(dialog.tabs.count(), 6)
+            self.assertEqual(dialog.tabs.tabText(5), "Códigos de data e hora")
             self.assertEqual(dialog.tabs.currentIndex(), 0)
             dialog.date_reference_button.click()
-            self.assertEqual(dialog.tabs.currentIndex(), 1)
+            self.assertEqual(dialog.tabs.currentIndex(), 5)
             self.assertGreater(
                 dialog.date_codes_scroll.verticalScrollBar().maximum(), 0)
             expected = {code for _name, rows in FORMAT_CODE_GROUPS
@@ -97,6 +97,43 @@ class DynamicHelpTests(unittest.TestCase):
             self.assertEqual(dialog.date_code_examples["%A"].text(), "sexta-feira")
             self.assertEqual(dialog.date_code_examples["%b"].text(), "nov")
             self.assertEqual(dialog.date_code_examples["%B"].text(), "novembro")
+        finally:
+            self._dispose(dialog)
+
+    def test_each_command_group_has_its_own_tab_without_duplicate_borders(self):
+        dialog = DynamicCommandsHelpDialog()
+        try:
+            dialog.show()
+            self.app.processEvents()
+            expected_names = [
+                "Data e hora", "Área de transferência e cursor",
+                "Cálculos", "Formulários", "Automações",
+                "Códigos de data e hora",
+            ]
+            self.assertEqual(
+                [dialog.tabs.tabText(i) for i in range(dialog.tabs.count())],
+                expected_names)
+            self.assertEqual(
+                len(dialog.group_pages), len(DYNAMIC_HELP_SECTIONS))
+            self.assertEqual(len(dialog.token_labels), 14)
+            for i, (name, _description, entries) in enumerate(
+                    DYNAMIC_HELP_SECTIONS):
+                dialog.tabs.setCurrentIndex(i)
+                self.app.processEvents()
+                self.assertIs(dialog.tabs.currentWidget(), dialog.group_pages[name])
+                self.assertIs(dialog.sections[name].parent(),
+                              dialog.group_pages[name].widget())
+                # Only this group's tokens are inside the active page.
+                from PySide6.QtWidgets import QLabel
+                labels = dialog.group_pages[name].findChildren(QLabel, "dynamicHelpToken")
+                self.assertEqual([label.text() for label in labels],
+                                 [code for _title, code, _help in entries])
+            # The pane and the selected tab share the same background.
+            self.assertIn("border-top-left-radius: 0px",
+                          dialog.styleSheet())
+            self.assertIn("margin-bottom: -1px",
+                          dialog.styleSheet())
+            self.assertGreaterEqual(dialog.width(), 600)
         finally:
             self._dispose(dialog)
 
