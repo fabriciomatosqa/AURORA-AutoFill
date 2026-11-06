@@ -41,6 +41,7 @@ from .ui_components import (AuroraBanner, AuroraWordmark, AuroraBannerCaption,
 from .features import AuroraFeaturesMixin
 from .productivity_features import ProductivityMixin
 from .smart_templates import fields_in, has_steps
+from .dynamic_help import DynamicCommandsHelpDialog
 from .slash_popup import SlashCommandPopup
 from .smooth_scrolling import install_smooth_scrolling
 from .version import APP_VERSION
@@ -879,6 +880,33 @@ class AutoFillWindow(ProductivityMixin, AuroraFeaturesMixin, QMainWindow):
         self.token_button.setMenu(menu)
         image_tools_row.addWidget(self.token_button)
         image_tools_row.addStretch()
+        # O botão de ajuda ocupa o canto direito da linha, sem alterar menus
+        # nem inserir texto automaticamente no editor.
+        self.dynamic_help_button = QPushButton("?")
+        self.dynamic_help_button.setObjectName("dynamicHelpButton")
+        self.dynamic_help_button.setFixedSize(38, 36)
+        self.dynamic_help_button.setAccessibleName("Ajuda dos comandos dinâmicos")
+        self.dynamic_help_button.setToolTip(
+            "Entenda cada opção de Inserir comando dinâmico")
+        set_ui_style(self.dynamic_help_button, """
+            QPushButton#dynamicHelpButton {
+                background: #143345; color: #8cf1d7;
+                border: 1px solid #416777; border-radius: 8px;
+                font-size: 19px; font-weight: 750;
+                padding: 0px;
+            }
+            QPushButton#dynamicHelpButton:hover {
+                background: #28546a; border-color: #72e6d5;
+                color: #effaff;
+            }
+            QPushButton#dynamicHelpButton:pressed {
+                background: #255763; border-color: #79ead8;
+            }
+        """)
+        self.dynamic_help_button.clicked.connect(
+            self._show_dynamic_commands_help)
+        image_tools_row.addWidget(self.dynamic_help_button)
+        self.dynamic_tools_row = image_tools_row
         v.addLayout(image_tools_row)
         self.body_input.currentCharFormatChanged.connect(self._sync_format_buttons)
         self.body_input.setMinimumHeight(190)
@@ -924,6 +952,10 @@ class AutoFillWindow(ProductivityMixin, AuroraFeaturesMixin, QMainWindow):
         self.body_input.textChanged.connect(self._update_preview)
         self.editor_folder.currentIndexChanged.connect(
             lambda *_: self._autosave_edit("folder_id"))
+
+    def _show_dynamic_commands_help(self):
+        """Abre somente a documentação dos tokens, sem alterar o texto atual."""
+        DynamicCommandsHelpDialog(self).exec()
 
     def _insert_image_file(self):
         path, _ = QFileDialog.getOpenFileName(
