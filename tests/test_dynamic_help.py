@@ -10,7 +10,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 from PySide6.QtCore import QCoreApplication, QEvent, Qt
 from PySide6.QtWidgets import QApplication, QDialog, QScrollArea
 
-from app.dynamic_help import DYNAMIC_HELP_SECTIONS, DynamicCommandsHelpDialog
+from app.dynamic_help import DYNAMIC_HELP_SECTIONS, DynamicCommandsHelpDialog, _alphabetical_label
 from app.date_formats import FORMAT_CODE_GROUPS, format_date_ptbr
 from app.ui import AutoFillWindow
 
@@ -57,7 +57,8 @@ class DynamicHelpTests(unittest.TestCase):
             self.assertEqual(len(dialog.sections), 5)
             self.assertEqual(len(dialog.token_labels), 14)
             expected_tokens = [
-                code for _name, _intro, entries in DYNAMIC_HELP_SECTIONS
+                code for _name, _intro, entries in sorted(
+                    DYNAMIC_HELP_SECTIONS, key=lambda x: _alphabetical_label(x[0]))
                 for _label, code, _description in entries
             ]
             self.assertEqual([label.text() for label in dialog.token_labels],
@@ -66,6 +67,8 @@ class DynamicHelpTests(unittest.TestCase):
                 self.assertEqual(label.textFormat(), Qt.PlainText)
                 self.assertTrue(
                     label.textInteractionFlags() & Qt.TextSelectableByMouse)
+            dialog.tabs.setCurrentWidget(dialog.scroll_area)
+            self.app.processEvents()
             self.assertGreater(dialog.scroll_area.verticalScrollBar().maximum(), 0)
         finally:
             self._dispose(dialog)
@@ -76,13 +79,20 @@ class DynamicHelpTests(unittest.TestCase):
         try:
             dialog.show()
             self.app.processEvents()
-            self.assertEqual(dialog.tabs.count(), 6)
-            self.assertEqual(dialog.tabs.tabText(5), "Códigos de data e hora")
+            self.assertEqual(dialog.tabs.count(), 5)
+            self.assertEqual(dialog.tabs.tabText(3), "Data e hora")
             self.assertEqual(dialog.tabs.currentIndex(), 0)
+            dialog.tabs.setCurrentIndex(3)
+            self.app.processEvents()
+            before = dialog.scroll_area.verticalScrollBar().value()
             dialog.date_reference_button.click()
-            self.assertEqual(dialog.tabs.currentIndex(), 5)
+            self.app.processEvents()
+            self.assertEqual(dialog.tabs.currentIndex(), 3)
             self.assertGreater(
-                dialog.date_codes_scroll.verticalScrollBar().maximum(), 0)
+                dialog.scroll_area.verticalScrollBar().value(), before)
+            self.assertGreater(dialog.scroll_area.verticalScrollBar().maximum(), 0)
+            self.assertIs(
+                dialog.date_codes_content.parent(), dialog.scroll_area.widget())
             expected = {code for _name, rows in FORMAT_CODE_GROUPS
                         for code, _description in rows}
             self.assertEqual(set(dialog.date_code_labels), expected)
@@ -106,9 +116,11 @@ class DynamicHelpTests(unittest.TestCase):
             dialog.show()
             self.app.processEvents()
             expected_names = [
-                "Data e hora", "Área de transferência e cursor",
-                "Cálculos", "Formulários", "Automações",
-                "Códigos de data e hora",
+                "Área de transferência e cursor",
+                "Automações",
+                "Cálculos",
+                "Data e hora",
+                "Formulários",
             ]
             self.assertEqual(
                 [dialog.tabs.tabText(i) for i in range(dialog.tabs.count())],
@@ -117,7 +129,7 @@ class DynamicHelpTests(unittest.TestCase):
                 len(dialog.group_pages), len(DYNAMIC_HELP_SECTIONS))
             self.assertEqual(len(dialog.token_labels), 14)
             for i, (name, _description, entries) in enumerate(
-                    DYNAMIC_HELP_SECTIONS):
+                    sorted(DYNAMIC_HELP_SECTIONS, key=lambda x: _alphabetical_label(x[0]))):
                 dialog.tabs.setCurrentIndex(i)
                 self.app.processEvents()
                 self.assertIs(dialog.tabs.currentWidget(), dialog.group_pages[name])

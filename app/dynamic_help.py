@@ -6,6 +6,7 @@ A janela não altera o banco, o conteúdo editado ou a área de transferência.
 from __future__ import annotations
 
 from datetime import datetime
+import unicodedata
 
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QGuiApplication
@@ -20,6 +21,12 @@ from .date_formats import FORMAT_CODE_GROUPS, format_date_ptbr
 
 # Mantenha estes exemplos sincronizados com o menu em AutoFillWindow._build_editor_page.
 # Cada registro contém: nome visível, token inserido pelo menu e explicação.
+def _alphabetical_label(label: str) -> str:
+    """Ordenação alfabética humana, ignorando os acentos do português."""
+    normalized = unicodedata.normalize("NFKD", label)
+    return "".join(ch for ch in normalized if not unicodedata.combining(ch)).casefold()
+
+
 DYNAMIC_HELP_SECTIONS = (
     ("Data e hora",
      "Valores produzidos na hora de usar o comando, a partir do relógio do computador.",
@@ -254,14 +261,14 @@ class DynamicCommandsHelpDialog(QDialog):
         labels = {
             "Formulários interativos": "Formulários",
         }
-        for group_name, group_description, entries in DYNAMIC_HELP_SECTIONS:
+        # Apenas os cinco grupos do menu em ordem alfabética.
+        # Códigos de data e hora aparecem na própria aba Data e hora.
+        for group_name, group_description, entries in sorted(
+                DYNAMIC_HELP_SECTIONS, key=lambda section: _alphabetical_label(section[0])):
             page = self._build_group_page(group_name, group_description, entries)
             self.group_pages[group_name] = page
             self.tabs.addTab(page, labels.get(group_name, group_name))
-        # Mantém referência para a primeira aba, usada em verificações de UI.
         self.scroll_area = self.group_pages["Data e hora"]
-        self.date_codes_scroll = self._build_date_codes_page()
-        self.tabs.addTab(self.date_codes_scroll, "Códigos de data e hora")
         root.addWidget(self.tabs, 1)
 
         footer = QHBoxLayout()
@@ -305,6 +312,9 @@ class DynamicCommandsHelpDialog(QDialog):
         section = self._section(group_name, group_description, entries, content)
         self.sections[group_name] = section
         layout.addWidget(section)
+        if group_name == "Data e hora":
+            self.date_codes_content = self._build_date_codes_content(content)
+            layout.addWidget(self.date_codes_content)
         layout.addStretch(1)
         scroll.setWidget(content)
         return scroll
@@ -351,26 +361,27 @@ class DynamicCommandsHelpDialog(QDialog):
             self.date_reference_button = QPushButton(
                 "Consultar códigos de formatação (%a, %A, %b, %B, %H...)")
             self.date_reference_button.setObjectName("dateHelpShortcut")
-            self.date_reference_button.clicked.connect(
-                lambda: self.tabs.setCurrentWidget(self.date_codes_scroll))
+            self.date_reference_button.clicked.connect(self._scroll_to_date_codes)
             section_layout.addWidget(self.date_reference_button)
         return frame
 
-    def _build_date_codes_page(self):
-        """Referência de strftime renderizada a partir do mesmo catálogo do motor."""
+    def _scroll_to_date_codes(self):
+        """Rola até a tabela no final de Data e hora, sem trocar de aba."""
+        self.tabs.setCurrentWidget(self.scroll_area)
+        self.scroll_area.ensureWidgetVisible(self.date_codes_heading, 0, 8)
+
+    def _build_date_codes_content(self, parent):
+        """Tabela de strftime no fim da mesma área rolável de Data e hora."""
         sample = datetime(2026, 11, 6, 14, 30, 45, 123456)
-        scroll = QScrollArea(self)
-        scroll.setObjectName("dynamicHelpScroll")
-        scroll.setWidgetResizable(True)
-        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        content = QWidget()
+        content = QWidget(parent)
         content.setObjectName("dynamicHelpContent")
         layout = QVBoxLayout(content)
-        layout.setContentsMargins(13, 13, 13, 13)
+        layout.setContentsMargins(13, 18, 13, 13)
         layout.setSpacing(11)
 
         heading = QLabel("Códigos para personalizar data e hora")
         heading.setObjectName("dateHelpTitle")
+        self.date_codes_heading = heading
         layout.addWidget(heading)
         intro = QLabel(
             "Use os códigos abaixo dentro de {{data_formato:...}}. "
@@ -445,6 +456,4 @@ class DynamicCommandsHelpDialog(QDialog):
         footnote.setObjectName("dateHelpIntro")
         footnote.setWordWrap(True)
         layout.addWidget(footnote)
-        layout.addStretch(1)
-        scroll.setWidget(content)
-        return scroll
+        return content

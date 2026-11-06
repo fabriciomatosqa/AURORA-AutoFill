@@ -46,7 +46,7 @@ Você também pode criar pastas para separar os comandos por assunto: Pessoal, T
 ⚡ **4. Explore os comandos dinâmicos**
 No editor de um comando, clique em **Inserir comando dinâmico** para incluir datas, horas, cálculos, campos de formulário, listas de escolha, conteúdo da área de transferência e ações de teclado.
 
-Clique no botão **?** ao lado desse menu. O guia apresenta uma aba para cada grupo: **Data e hora**, **Área de transferência e cursor**, **Cálculos**, **Formulários interativos** e **Automações**. A aba **Códigos de data e hora** explica diretivas como %a, %A, %b e %B com exemplos em português.
+Clique no botão **?** ao lado desse menu. O guia apresenta cinco abas em ordem alfabética: **Área de transferência e cursor**, **Automações**, **Cálculos**, **Data e hora** e **Formulários interativos**. No final da aba **Data e hora**, você encontra uma tabela de códigos como %a, %A, %b e %B, com exemplos em português.
 
 🔎 **5. Encontre seus comandos**
 Use a busca na lateral ou a pesquisa global com **Ctrl + Shift + Espaço** para localizar e reutilizar seus comandos.
@@ -76,7 +76,7 @@ Hoje é {{data_formato:%A, %d de %B de %Y}}.
 Dia da semana abreviado: {{data_formato:%a}}.
 Mês por extenso: {{data_formato:%B}}.
 
-No editor, clique no botão **?** → **Códigos de data e hora** para descobrir o significado e os exemplos de %d, %m, %Y, %H, %M, %a, %A e muitos outros.
+No editor, clique no botão **?** → **Data e hora** e role até o final (ou use **Consultar códigos de formatação**) para descobrir o significado e os exemplos de %d, %m, %Y, %H, %M, %a, %A e muitos outros.
 
 💡 Você também pode usar **Cálculos**, **Formulários interativos** e **Automações** pelo menu **Inserir comando dinâmico**. Consulte o guia antes de usar ações de teclado em outros aplicativos.""",
     ),
