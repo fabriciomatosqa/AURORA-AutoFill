@@ -8,6 +8,7 @@ from __future__ import annotations
 from datetime import datetime
 
 from PySide6.QtCore import Qt
+from PySide6.QtGui import QGuiApplication
 from PySide6.QtWidgets import (
     QDialog, QFrame, QGridLayout, QHBoxLayout, QLabel, QPushButton,
     QScrollArea, QTabWidget, QVBoxLayout, QWidget,
@@ -91,7 +92,7 @@ class DynamicCommandsHelpDialog(QDialog):
         self.setObjectName("dynamicCommandsHelpDialog")
         self.setWindowTitle("Ajuda — comandos dinâmicos | AURORA AutoFill")
         self.setMinimumSize(600, 460)
-        self.resize(760, 665)
+        self.resize(940, 665)
         set_ui_style(self, """
             QDialog#dynamicCommandsHelpDialog {
                 background: #091426; color: #eaf4ff;
@@ -104,14 +105,13 @@ class DynamicCommandsHelpDialog(QDialog):
                 color: #b8cde0; font-size: 12px; background: transparent;
             }
             QScrollArea#dynamicHelpScroll {
-                background: #091426; border: 0;
+                background: #0c2035; border: none;
             }
             QWidget#dynamicHelpContent {
-                background: #091426;
+                background: #0c2035;
             }
             QFrame#dynamicHelpSection {
-                background: #0c2035; border: 1px solid #28546a;
-                border-radius: 11px;
+                background: transparent; border: none;
             }
             QLabel#dynamicHelpSectionTitle {
                 background: transparent; color: #8cf1d7;
@@ -140,18 +140,33 @@ class DynamicCommandsHelpDialog(QDialog):
                 font-size: 12px;
             }
             QTabWidget#dynamicHelpTabs::pane {
-                background: #091426; border: 1px solid #28546a;
-                border-radius: 9px;
+                background: #0c2035;
+                border: 1px solid #416777;
+                border-top: 1px solid #72e6d5;
+                border-top-left-radius: 0px;
+                border-top-right-radius: 10px;
+                border-bottom-left-radius: 10px;
+                border-bottom-right-radius: 10px;
+                top: -1px;
             }
             QTabWidget#dynamicHelpTabs QTabBar::tab {
                 background: #102338; color: #bdd6e6;
-                border: 1px solid #416777; border-bottom: none;
-                padding: 9px 14px; min-width: 124px;
-                border-top-left-radius: 7px; border-top-right-radius: 7px;
+                border: 1px solid #416777;
+                border-bottom: 1px solid #416777;
+                padding: 10px 13px;
+                margin-right: 3px;
+                border-top-left-radius: 8px;
+                border-top-right-radius: 8px;
+            }
+            QTabWidget#dynamicHelpTabs QTabBar::tab:hover:!selected {
+                background: #19364b; color: #eaf4ff;
+                border-color: #72e6d5;
             }
             QTabWidget#dynamicHelpTabs QTabBar::tab:selected {
-                background: #143345; color: #8cf1d7;
-                border-color: #72e6d5;
+                background: #0c2035; color: #8cf1d7;
+                border: 1px solid #72e6d5;
+                border-bottom: 1px solid #0c2035;
+                margin-bottom: -1px;
             }
             QFrame#dateHelpGroup {
                 background: #0c2035; border: 1px solid #28546a;
@@ -227,26 +242,24 @@ class DynamicCommandsHelpDialog(QDialog):
         intro.setWordWrap(True)
         root.addWidget(intro)
 
-        self.scroll_area = QScrollArea(self)
-        self.scroll_area.setObjectName("dynamicHelpScroll")
-        self.scroll_area.setWidgetResizable(True)
-        self.scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.sections = {}
         self.token_labels = []
-        content = QWidget()
-        content.setObjectName("dynamicHelpContent")
-        content_layout = QVBoxLayout(content)
-        content_layout.setContentsMargins(0, 1, 5, 1)
-        content_layout.setSpacing(11)
-        for group_name, group_description, entries in DYNAMIC_HELP_SECTIONS:
-            section = self._section(group_name, group_description, entries, content)
-            self.sections[group_name] = section
-            content_layout.addWidget(section)
-        content_layout.addStretch(1)
-        self.scroll_area.setWidget(content)
+        self.group_pages = {}
         self.tabs = QTabWidget(self)
         self.tabs.setObjectName("dynamicHelpTabs")
-        self.tabs.addTab(self.scroll_area, "Comandos dinâmicos")
+        self.tabs.setDocumentMode(False)
+        self.tabs.setMovable(False)
+        self.tabs.tabBar().setExpanding(False)
+        self.tabs.tabBar().setUsesScrollButtons(True)
+        labels = {
+            "Formulários interativos": "Formulários",
+        }
+        for group_name, group_description, entries in DYNAMIC_HELP_SECTIONS:
+            page = self._build_group_page(group_name, group_description, entries)
+            self.group_pages[group_name] = page
+            self.tabs.addTab(page, labels.get(group_name, group_name))
+        # Mantém referência para a primeira aba, usada em verificações de UI.
+        self.scroll_area = self.group_pages["Data e hora"]
         self.date_codes_scroll = self._build_date_codes_page()
         self.tabs.addTab(self.date_codes_scroll, "Códigos de data e hora")
         root.addWidget(self.tabs, 1)
@@ -264,6 +277,37 @@ class DynamicCommandsHelpDialog(QDialog):
         self.close_button.clicked.connect(self.accept)
         footer.addWidget(self.close_button, 0, Qt.AlignBottom)
         root.addLayout(footer)
+
+        # A largura acompanha a soma das abas, com limite na área útil
+        # da tela para não cortar botões em notebooks ou monitores pequenos.
+        screen = self.screen() or QGuiApplication.primaryScreen()
+        tab_width = self.tabs.tabBar().sizeHint().width()
+        desired_width = max(850, tab_width + 58)
+        if screen is not None:
+            available = screen.availableGeometry()
+            desired_width = min(desired_width, max(600, available.width() - 36))
+            desired_height = min(680, max(460, available.height() - 72))
+        else:
+            desired_height = 680
+        self.setMinimumWidth(min(850, desired_width))
+        self.resize(desired_width, desired_height)
+
+    def _build_group_page(self, group_name, group_description, entries):
+        """Um grupo por aba, sem contorno duplicado na junção com as abas."""
+        scroll = QScrollArea(self)
+        scroll.setObjectName("dynamicHelpScroll")
+        scroll.setWidgetResizable(True)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        content = QWidget()
+        content.setObjectName("dynamicHelpContent")
+        layout = QVBoxLayout(content)
+        layout.setContentsMargins(12, 12, 12, 12)
+        section = self._section(group_name, group_description, entries, content)
+        self.sections[group_name] = section
+        layout.addWidget(section)
+        layout.addStretch(1)
+        scroll.setWidget(content)
+        return scroll
 
     def _section(self, group_name, group_description, entries, parent):
         frame = QFrame(parent)
@@ -308,7 +352,7 @@ class DynamicCommandsHelpDialog(QDialog):
                 "Consultar códigos de formatação (%a, %A, %b, %B, %H...)")
             self.date_reference_button.setObjectName("dateHelpShortcut")
             self.date_reference_button.clicked.connect(
-                lambda: self.tabs.setCurrentIndex(1))
+                lambda: self.tabs.setCurrentWidget(self.date_codes_scroll))
             section_layout.addWidget(self.date_reference_button)
         return frame
 
