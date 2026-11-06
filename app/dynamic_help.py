@@ -6,6 +6,7 @@ A janela não altera o banco, o conteúdo editado ou a área de transferência.
 from __future__ import annotations
 
 from datetime import datetime
+import unicodedata
 
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QGuiApplication
@@ -20,6 +21,12 @@ from .date_formats import FORMAT_CODE_GROUPS, format_date_ptbr
 
 # Mantenha estes exemplos sincronizados com o menu em AutoFillWindow._build_editor_page.
 # Cada registro contém: nome visível, token inserido pelo menu e explicação.
+def _alphabetical_label(label: str) -> str:
+    """Ordenação alfabética humana, ignorando os acentos do português."""
+    normalized = unicodedata.normalize("NFKD", label)
+    return "".join(ch for ch in normalized if not unicodedata.combining(ch)).casefold()
+
+
 DYNAMIC_HELP_SECTIONS = (
     ("Data e hora",
      "Valores produzidos na hora de usar o comando, a partir do relógio do computador.",
@@ -257,7 +264,7 @@ class DynamicCommandsHelpDialog(QDialog):
         # Apenas os cinco grupos do menu em ordem alfabética.
         # Códigos de data e hora aparecem na própria aba Data e hora.
         for group_name, group_description, entries in sorted(
-                DYNAMIC_HELP_SECTIONS, key=lambda section: section[0].casefold()):
+                DYNAMIC_HELP_SECTIONS, key=lambda section: _alphabetical_label(section[0])):
             page = self._build_group_page(group_name, group_description, entries)
             self.group_pages[group_name] = page
             self.tabs.addTab(page, labels.get(group_name, group_name))
