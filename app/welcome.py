@@ -49,7 +49,7 @@ No editor de um comando, clique em **Inserir comando dinâmico** para incluir da
 Clique no botão **?** ao lado desse menu. O guia apresenta uma aba para cada grupo: **Data e hora**, **Área de transferência e cursor**, **Cálculos**, **Formulários interativos** e **Automações**. A aba **Códigos de data e hora** explica diretivas como %a, %A, %b e %B com exemplos em português.
 
 🔎 **5. Encontre seus comandos**
-Use a busca na lateral ou a pesquisa global com **Ctrl + Shift + Espaço**. Você também pode favoritar seus textos mais usados.
+Use a busca na lateral ou a pesquisa global com **Ctrl + Shift + Espaço** para localizar e reutilizar seus comandos.
 
 🛡️ **6. Proteja seus dados**
 Em **Configurações → Segurança dos dados**, crie um backup completo e restaure quando precisar. Os backups são locais. Não existe conexão obrigatória com serviços em nuvem.
