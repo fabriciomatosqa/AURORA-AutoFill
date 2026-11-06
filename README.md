@@ -84,8 +84,21 @@ Em Windows, após o formulário, o AURORA tenta restaurar e verificar o campo or
 | `{{clipboard}}`, `{{area_transferencia}}` | Conteúdo textual atual do clipboard |
 | `{{cursor}}` | Solicita posicionamento do cursor ao concluir (depende do aplicativo) |
 | `{{data:+7}}`, `{{data:-1}}` | Data deslocada em dias, até 10 anos |
-| `{{data_formato:%Y-%m-%d}}` | Formato customizado de data suportado |
+| `{{data_formato:%Y-%m-%d}}` | Data no formato 2026-11-06 |
+| `{{data_formato:%a - %A}}` | Dia da semana em português: `sex - sexta-feira` |
+| `{{data_formato:%b - %B}}` | Mês em português: `nov - novembro` |
+| `{{data_formato:%A, %d de %B de %Y}}` | Ex.: `sexta-feira, 06 de novembro de 2026` |
 | `{{calculo:12*3}}` | Aritmética simples, sem avaliar código Python |
+
+Os formatos personalizados seguem uma seleção de códigos do `strftime` Python,
+com tradução interna para **português do Brasil**, independentemente do idioma do
+Windows ou Linux. Exemplos de códigos: `%a`, `%A` (dias da semana),
+`%b`, `%B` (meses), `%d`, `%m`, `%y`, `%Y`, `%H`, `%M`, `%S`,
+`%I`, `%p`, `%f`, `%F`, `%R`, `%T`, `%V`, `%G` e `%%`.
+Para consultar o significado e exemplos de todos os códigos aceitos,
+abra o editor e clique no botão **? → Códigos de data e hora**.
+Códigos não suportados geram um aviso de formato inválido, sem executar código.
+O campo de formato tem limite de 48 caracteres.
 
 As variáveis são resolvidas em cada uso, não durante o salvamento. As variáveis desconhecidas continuam visíveis no texto e não causam execução arbitrária.
 
