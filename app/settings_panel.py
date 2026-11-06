@@ -368,7 +368,8 @@ class SettingsPage(QWidget):
         self.suggestions.setAccessibleName(
             "Mostrar sugestões de atalhos enquanto digito em outros aplicativos")
         self.suggestions.setToolTip(
-            "Opcional e desativado por padrão. Pode mostrar dicas sobre campos privados.")
+            "Ativado em instalações novas. Você pode desativar a qualquer momento. "
+            "Não utilize sugestões em campos com informações privadas.")
         self.suggestions.setChecked(prefs.get("suggest_shortcuts", False))
         self.suggestions.toggled.connect(self.suggestions_toggled.emit)
         area.addWidget(self.suggestions)
