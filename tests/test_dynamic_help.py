@@ -66,6 +66,8 @@ class DynamicHelpTests(unittest.TestCase):
                 self.assertEqual(label.textFormat(), Qt.PlainText)
                 self.assertTrue(
                     label.textInteractionFlags() & Qt.TextSelectableByMouse)
+            dialog.tabs.setCurrentWidget(dialog.scroll_area)
+            self.app.processEvents()
             self.assertGreater(dialog.scroll_area.verticalScrollBar().maximum(), 0)
         finally:
             self._dispose(dialog)
