@@ -4,7 +4,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from hashlib import sha256
 from pathlib import Path
-from urllib.error import HTTPError
+from urllib.error import HTTPError, URLError
 from urllib.parse import unquote, urlparse
 from urllib.request import HTTPRedirectHandler, Request, build_opener
 import json
@@ -15,13 +15,18 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import time
 
 from .version import APP_VERSION, GITHUB_REPOSITORY, GITHUB_RELEASES_API
 from .versioning import (VERSION_PATTERN, parse_version as _parse_version,
                          version_key as _version_key)
 
 MAX_INSTALLER_BYTES = 500 * 1024 * 1024
-MAX_RELEASE_PAGES = 3
+MAX_RELEASE_PAGES = 6
+RELEASE_PAGE_SIZE = 50  # Smaller responses reduce intermittent GitHub proxy timeouts.
+TRANSIENT_HTTP_CODES = frozenset({408, 500, 502, 503, 504})
+REQUEST_RETRIES = 3
+_RETRY_DELAYS = (0.4, 1.0)
 _DOWNLOAD_HOSTS = {"github.com", "api.github.com", "release-assets.githubusercontent.com",
                    "objects.githubusercontent.com"}
 # In-memory receipts avoid a second network request when the UI launches an installer.
@@ -83,12 +88,34 @@ def _request(url, *, json_response=False):
         "X-GitHub-Api-Version": "2022-11-28"})
 
 
-def _get(url: str, *, timeout: float = 8, max_bytes: int = 2 * 1024 * 1024) -> bytes:
-    with urlopen(_request(url, json_response=True), timeout=timeout) as result:
-        data = result.read(max_bytes + 1)
-        if len(data) > max_bytes:
-            raise ValueError("Resposta de atualização maior que o permitido.")
-        return data
+def _get(url: str, *, timeout: float = 12, max_bytes: int = 2 * 1024 * 1024) -> bytes:
+    """Retry only bounded, transient failures when requesting official metadata.
+
+    Never retry invalid content, untrusted URLs, authentication/rate-limit
+    failures or checksum mismatches. Installer binaries are handled separately.
+    """
+    request = _request(url, json_response=True)  # Validate official origin once.
+    for attempt in range(REQUEST_RETRIES):
+        try:
+            with urlopen(request, timeout=timeout) as result:
+                data = result.read(max_bytes + 1)
+                if len(data) > max_bytes:
+                    raise ValueError("Resposta de atualização maior que o permitido.")
+                return data
+        except HTTPError as error:
+            if error.code not in TRANSIENT_HTTP_CODES:
+                raise
+            if attempt + 1 == REQUEST_RETRIES:
+                raise ValueError(
+                    f"O GitHub está temporariamente indisponível (HTTP {error.code}). "
+                    "Tente novamente ou abra as versões no navegador.") from error
+        except (URLError, TimeoutError, ConnectionResetError) as error:
+            if attempt + 1 == REQUEST_RETRIES:
+                raise ValueError(
+                    "A conexão com o GitHub falhou após algumas tentativas. "
+                    "Confira sua rede ou abra as versões no navegador.") from error
+        time.sleep(_RETRY_DELAYS[attempt])
+    raise AssertionError("Repetições esgotadas sem retornar resultado.")
 
 
 @dataclass(frozen=True)
@@ -166,7 +193,7 @@ def latest_release(*, include_prereleases: bool = True, platform_name: str | Non
     candidates = []
     for page in range(1, MAX_RELEASE_PAGES + 1):
         try:
-            payload = json.loads(_get(f"{GITHUB_RELEASES_API}?per_page=100&page={page}"))
+            payload = json.loads(_get(f"{GITHUB_RELEASES_API}?per_page={RELEASE_PAGE_SIZE}&page={page}"))
         except HTTPError as exc:
             if exc.code == 404:
                 return None
@@ -184,7 +211,7 @@ def latest_release(*, include_prereleases: bool = True, platform_name: str | Non
             if (release and release.installer_url and release.checksum_url
                     and (release.size is None or release.size <= MAX_INSTALLER_BYTES)):
                 candidates.append(release)
-        if len(records) < 100:
+        if len(records) < RELEASE_PAGE_SIZE:
             break
     return max(candidates, key=lambda item: _version_key(item.version), default=None)
 
