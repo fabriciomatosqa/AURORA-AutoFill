@@ -5,13 +5,16 @@ A janela não altera o banco, o conteúdo editado ou a área de transferência.
 """
 from __future__ import annotations
 
+from datetime import datetime
+
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
-    QDialog, QFrame, QHBoxLayout, QLabel, QPushButton,
-    QScrollArea, QVBoxLayout, QWidget,
+    QDialog, QFrame, QGridLayout, QHBoxLayout, QLabel, QPushButton,
+    QScrollArea, QTabWidget, QVBoxLayout, QWidget,
 )
 
 from .themes import set_ui_style
+from .date_formats import FORMAT_CODE_GROUPS, format_date_ptbr
 
 
 # Mantenha estes exemplos sincronizados com o menu em AutoFillWindow._build_editor_page.
@@ -32,9 +35,9 @@ DYNAMIC_HELP_SECTIONS = (
          ("Data -1 dia", "{{data:-1}}",
           "Calcula a data de ontem. Use valores negativos para voltar dias."),
          ("Data personalizada", "{{data_formato:%Y-%m-%d}}",
-          "Formata a data com códigos aceitos pelo AURORA. Por exemplo: "
-          "%d = dia, %m = mês, %Y = ano, %H = hora, %M = minuto. "
-          "Apenas parte dos códigos strftime do Python é suportada."),
+          "Personalize o formato com os códigos da tabela desta ajuda. "
+          "Use %a para sex, %A para sexta-feira, %b para nov e %B para novembro. "
+          "Os nomes são sempre mostrados em português do Brasil."),
      )),
     ("Área de transferência e cursor",
      "Reaproveite o texto copiado ou indique o ponto onde continuará digitando.",
@@ -136,6 +139,69 @@ class DynamicCommandsHelpDialog(QDialog):
                 background: transparent; color: #d2eafa;
                 font-size: 12px;
             }
+            QTabWidget#dynamicHelpTabs::pane {
+                background: #091426; border: 1px solid #28546a;
+                border-radius: 9px;
+            }
+            QTabWidget#dynamicHelpTabs QTabBar::tab {
+                background: #102338; color: #bdd6e6;
+                border: 1px solid #416777; border-bottom: none;
+                padding: 9px 14px; min-width: 124px;
+                border-top-left-radius: 7px; border-top-right-radius: 7px;
+            }
+            QTabWidget#dynamicHelpTabs QTabBar::tab:selected {
+                background: #143345; color: #8cf1d7;
+                border-color: #72e6d5;
+            }
+            QFrame#dateHelpGroup {
+                background: #0c2035; border: 1px solid #28546a;
+                border-radius: 10px;
+            }
+            QLabel#dateHelpTitle {
+                color: #eaf4ff; font-size: 17px; font-weight: 700;
+                background: transparent;
+            }
+            QLabel#dateHelpSectionTitle {
+                color: #8cf1d7; font-size: 14px; font-weight: 700;
+                background: transparent;
+            }
+            QLabel#dateHelpIntro, QLabel#dateHelpExplanation {
+                color: #bdd6e6; font-size: 12px; background: transparent;
+            }
+            QLabel#dateHelpCode {
+                color: #8cf1d7; font: bold 12px Consolas, monospace;
+                background: #143345; border: 1px solid #416777;
+                border-radius: 5px; padding: 5px 7px;
+            }
+            QLabel#dateHelpExample {
+                color: #edfaff; font-size: 12px;
+                background: transparent;
+            }
+            QLabel#dateHelpColumn {
+                color: #8baec2; font-size: 11px;
+                font-weight: 700; background: transparent;
+            }
+            QFrame#dateHelpPreview {
+                background: #143345; border: 1px solid #416777;
+                border-radius: 9px;
+            }
+            QLabel#dateHelpPreviewCode {
+                color: #8cf1d7; font: 12px Consolas, monospace;
+                background: transparent;
+            }
+            QLabel#dateHelpPreviewOutput {
+                color: #f5faff; font-size: 14px; font-weight: 700;
+                background: transparent;
+            }
+            QPushButton#dateHelpShortcut {
+                background: #19364b; color: #8cf1d7;
+                border: 1px solid #416777; border-radius: 7px;
+                min-height: 30px; padding: 6px 12px;
+                text-align: left;
+            }
+            QPushButton#dateHelpShortcut:hover {
+                border-color: #72e6d5; background: #28546a;
+            }
             QPushButton#dynamicHelpClose {
                 background: #19364b; color: #effaff;
                 border: 1px solid #416777; border-radius: 7px;
@@ -178,7 +244,12 @@ class DynamicCommandsHelpDialog(QDialog):
             content_layout.addWidget(section)
         content_layout.addStretch(1)
         self.scroll_area.setWidget(content)
-        root.addWidget(self.scroll_area, 1)
+        self.tabs = QTabWidget(self)
+        self.tabs.setObjectName("dynamicHelpTabs")
+        self.tabs.addTab(self.scroll_area, "Comandos dinâmicos")
+        self.date_codes_scroll = self._build_date_codes_page()
+        self.tabs.addTab(self.date_codes_scroll, "Códigos de data e hora")
+        root.addWidget(self.tabs, 1)
 
         footer = QHBoxLayout()
         note = QLabel(
@@ -232,4 +303,104 @@ class DynamicCommandsHelpDialog(QDialog):
             help_text.setWordWrap(True)
             entry_layout.addWidget(help_text)
             section_layout.addWidget(entry)
+        if group_name == "Data e hora":
+            self.date_reference_button = QPushButton(
+                "Consultar códigos de formatação (%a, %A, %b, %B, %H...)")
+            self.date_reference_button.setObjectName("dateHelpShortcut")
+            self.date_reference_button.clicked.connect(
+                lambda: self.tabs.setCurrentIndex(1))
+            section_layout.addWidget(self.date_reference_button)
         return frame
+
+    def _build_date_codes_page(self):
+        """Referência de strftime renderizada a partir do mesmo catálogo do motor."""
+        sample = datetime(2026, 11, 6, 14, 30, 45, 123456)
+        scroll = QScrollArea(self)
+        scroll.setObjectName("dynamicHelpScroll")
+        scroll.setWidgetResizable(True)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        content = QWidget()
+        content.setObjectName("dynamicHelpContent")
+        layout = QVBoxLayout(content)
+        layout.setContentsMargins(13, 13, 13, 13)
+        layout.setSpacing(11)
+
+        heading = QLabel("Códigos para personalizar data e hora")
+        heading.setObjectName("dateHelpTitle")
+        layout.addWidget(heading)
+        intro = QLabel(
+            "Use os códigos abaixo dentro de {{data_formato:...}}. "
+            "Os nomes dos dias e dos meses aparecem sempre em português do Brasil, "
+            "mesmo que o Windows ou Linux esteja configurado em outro idioma. "
+            "Os exemplos usam 06/11/2026, sexta-feira, às 14:30:45.")
+        intro.setObjectName("dateHelpIntro")
+        intro.setWordWrap(True)
+        layout.addWidget(intro)
+
+        sample_frame = QFrame(content)
+        sample_frame.setObjectName("dateHelpPreview")
+        sample_layout = QVBoxLayout(sample_frame)
+        sample_layout.setContentsMargins(13, 11, 13, 11)
+        sample_layout.setSpacing(5)
+        sample_token = "{{data_formato:%A, %d de %B de %Y}}"
+        code = QLabel(sample_token)
+        code.setObjectName("dateHelpPreviewCode")
+        code.setTextFormat(Qt.PlainText)
+        code.setTextInteractionFlags(Qt.TextSelectableByMouse | Qt.TextSelectableByKeyboard)
+        code.setWordWrap(True)
+        sample_layout.addWidget(code)
+        sample_output = QLabel(format_date_ptbr(sample, "%A, %d de %B de %Y"))
+        sample_output.setObjectName("dateHelpPreviewOutput")
+        sample_output.setWordWrap(True)
+        sample_layout.addWidget(sample_output)
+        layout.addWidget(sample_frame)
+
+        self.date_code_labels = {}
+        self.date_code_examples = {}
+        for group_title, rows in FORMAT_CODE_GROUPS:
+            group = QFrame(content)
+            group.setObjectName("dateHelpGroup")
+            grid = QGridLayout(group)
+            grid.setContentsMargins(12, 12, 12, 12)
+            grid.setHorizontalSpacing(12)
+            grid.setVerticalSpacing(8)
+            section_title = QLabel(group_title)
+            section_title.setObjectName("dateHelpSectionTitle")
+            grid.addWidget(section_title, 0, 0, 1, 3)
+            for col, label in enumerate(("CÓDIGO", "O QUE SIGNIFICA", "EXEMPLO")):
+                column = QLabel(label)
+                column.setObjectName("dateHelpColumn")
+                grid.addWidget(column, 1, col)
+            for row_num, (specifier, description) in enumerate(rows, 2):
+                code_label = QLabel(specifier)
+                code_label.setObjectName("dateHelpCode")
+                code_label.setTextFormat(Qt.PlainText)
+                code_label.setTextInteractionFlags(
+                    Qt.TextSelectableByMouse | Qt.TextSelectableByKeyboard)
+                code_label.setToolTip("Código usado dentro de {{data_formato:...}}")
+                grid.addWidget(code_label, row_num, 0, Qt.AlignTop)
+                description_label = QLabel(description)
+                description_label.setObjectName("dateHelpExplanation")
+                description_label.setWordWrap(True)
+                grid.addWidget(description_label, row_num, 1)
+                rendered = format_date_ptbr(sample, specifier)
+                example_label = QLabel(rendered or "(vazio sem fuso)")
+                example_label.setObjectName("dateHelpExample")
+                example_label.setWordWrap(True)
+                grid.addWidget(example_label, row_num, 2)
+                self.date_code_labels[specifier] = code_label
+                self.date_code_examples[specifier] = example_label
+            grid.setColumnStretch(1, 3)
+            grid.setColumnStretch(2, 2)
+            layout.addWidget(group)
+        footnote = QLabel(
+            "Atenção: %D usa o formato americano (mês/dia/ano). "
+            "%U e %W contam semanas de modo diferente de %V (ISO). "
+            "%z e %Z ficam vazios quando a data não possui fuso definido. "
+            "O formato personalizado aceita até 48 caracteres.")
+        footnote.setObjectName("dateHelpIntro")
+        footnote.setWordWrap(True)
+        layout.addWidget(footnote)
+        layout.addStretch(1)
+        scroll.setWidget(content)
+        return scroll
