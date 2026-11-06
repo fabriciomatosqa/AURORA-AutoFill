@@ -11,6 +11,7 @@ from PySide6.QtCore import QCoreApplication, QEvent, Qt
 from PySide6.QtWidgets import QApplication, QDialog, QScrollArea
 
 from app.dynamic_help import DYNAMIC_HELP_SECTIONS, DynamicCommandsHelpDialog
+from app.date_formats import FORMAT_CODE_GROUPS, format_date_ptbr
 from app.ui import AutoFillWindow
 
 
@@ -66,6 +67,36 @@ class DynamicHelpTests(unittest.TestCase):
                 self.assertTrue(
                     label.textInteractionFlags() & Qt.TextSelectableByMouse)
             self.assertGreater(dialog.scroll_area.verticalScrollBar().maximum(), 0)
+        finally:
+            self._dispose(dialog)
+
+    def test_date_reference_is_accessible_from_tab_and_date_section(self):
+        from datetime import datetime
+        dialog = DynamicCommandsHelpDialog()
+        try:
+            dialog.show()
+            self.app.processEvents()
+            self.assertEqual(dialog.tabs.count(), 2)
+            self.assertEqual(dialog.tabs.tabText(1), "Códigos de data e hora")
+            self.assertEqual(dialog.tabs.currentIndex(), 0)
+            dialog.date_reference_button.click()
+            self.assertEqual(dialog.tabs.currentIndex(), 1)
+            self.assertGreater(
+                dialog.date_codes_scroll.verticalScrollBar().maximum(), 0)
+            expected = {code for _name, rows in FORMAT_CODE_GROUPS
+                        for code, _description in rows}
+            self.assertEqual(set(dialog.date_code_labels), expected)
+            self.assertEqual(set(dialog.date_code_examples), expected)
+            sample = datetime(2026, 11, 6, 14, 30, 45, 123456)
+            for code in expected:
+                with self.subTest(code=code):
+                    self.assertEqual(
+                        dialog.date_code_examples[code].text(),
+                        format_date_ptbr(sample, code) or "(vazio sem fuso)")
+            self.assertEqual(dialog.date_code_examples["%a"].text(), "sex")
+            self.assertEqual(dialog.date_code_examples["%A"].text(), "sexta-feira")
+            self.assertEqual(dialog.date_code_examples["%b"].text(), "nov")
+            self.assertEqual(dialog.date_code_examples["%B"].text(), "novembro")
         finally:
             self._dispose(dialog)
 
