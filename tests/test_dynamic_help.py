@@ -10,7 +10,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 from PySide6.QtCore import QCoreApplication, QEvent, Qt
 from PySide6.QtWidgets import QApplication, QDialog, QScrollArea
 
-from app.dynamic_help import DYNAMIC_HELP_SECTIONS, DynamicCommandsHelpDialog
+from app.dynamic_help import DYNAMIC_HELP_SECTIONS, DynamicCommandsHelpDialog, _alphabetical_label
 from app.date_formats import FORMAT_CODE_GROUPS, format_date_ptbr
 from app.ui import AutoFillWindow
 
@@ -57,7 +57,8 @@ class DynamicHelpTests(unittest.TestCase):
             self.assertEqual(len(dialog.sections), 5)
             self.assertEqual(len(dialog.token_labels), 14)
             expected_tokens = [
-                code for _name, _intro, entries in DYNAMIC_HELP_SECTIONS
+                code for _name, _intro, entries in sorted(
+                    DYNAMIC_HELP_SECTIONS, key=lambda x: _alphabetical_label(x[0]))
                 for _label, code, _description in entries
             ]
             self.assertEqual([label.text() for label in dialog.token_labels],
@@ -128,7 +129,7 @@ class DynamicHelpTests(unittest.TestCase):
                 len(dialog.group_pages), len(DYNAMIC_HELP_SECTIONS))
             self.assertEqual(len(dialog.token_labels), 14)
             for i, (name, _description, entries) in enumerate(
-                    sorted(DYNAMIC_HELP_SECTIONS, key=lambda x: x[0].casefold())):
+                    sorted(DYNAMIC_HELP_SECTIONS, key=lambda x: _alphabetical_label(x[0]))):
                 dialog.tabs.setCurrentIndex(i)
                 self.app.processEvents()
                 self.assertIs(dialog.tabs.currentWidget(), dialog.group_pages[name])
