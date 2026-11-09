@@ -107,8 +107,10 @@ class ParagraphPanel(QWidget):
         # Tabela no penúltimo espaço da última linha, imediatamente antes do emoji.
         # Cinco botões: 58 + 58 + 58 + 58 + 52 + (4 * 4) = 300 px.
         self.table_button = self._button(
-            None, 'Inserir tabela', 58, lambda _:self.table_button.showMenu(),
-            menu=True, text='▦')
+            None, 'Inserir tabela', 58, None, menu=True, text='▦')
+        # Um único popup nativo para toda a área do botão: o clique no corpo
+        # não deve chamar showMenu() dentro do sinal clicked (loop aninhado).
+        self.table_button.setPopupMode(QToolButton.InstantPopup)
         self.table_button.setMenu(build_table_menu(
             self.table_button, self._insert_table, menu_factory=self._menu_factory))
         self.table_button.setToolTip('Inserir tabela editável')
@@ -146,7 +148,8 @@ class ParagraphPanel(QWidget):
         button.setAccessibleName(label)
         if icon:apply_icon(button,icon,label=label)
         if text:button.setText(text)
-        button.clicked.connect(callback)
+        if callback is not None:
+            button.clicked.connect(callback)
         return button
 
     def _action(self, menu, label, callback):

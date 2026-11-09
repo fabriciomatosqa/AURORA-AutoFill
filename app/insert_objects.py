@@ -7,7 +7,8 @@ from __future__ import annotations
 
 from PySide6.QtGui import QTextLength, QTextTableFormat
 from PySide6.QtWidgets import (
-    QGridLayout, QInputDialog, QMenu, QToolButton, QWidget, QWidgetAction,
+    QDialog, QDialogButtonBox, QFormLayout, QGridLayout, QMenu, QSpinBox,
+    QToolButton, QVBoxLayout, QWidget, QWidgetAction,
 )
 
 
@@ -29,6 +30,48 @@ def insert_table(editor, rows: int, columns: int):
     editor.setTextCursor(table.cellAt(0, 0).firstCursorPosition())
     editor.setFocus()
     return table
+
+
+class TableDimensionsDialog(QDialog):
+    """Uma única janela para definir linhas e colunas da tabela."""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Inserir tabela")
+        self.setModal(True)
+
+        layout = QVBoxLayout(self)
+        fields = QFormLayout()
+        self.rows_input = QSpinBox(self)
+        self.rows_input.setAccessibleName("Número de linhas")
+        self.rows_input.setRange(1, 12)
+        self.rows_input.setValue(3)
+        fields.addRow("Número de linhas:", self.rows_input)
+
+        self.columns_input = QSpinBox(self)
+        self.columns_input.setAccessibleName("Número de colunas")
+        self.columns_input.setRange(1, 8)
+        self.columns_input.setValue(3)
+        fields.addRow("Número de colunas:", self.columns_input)
+        layout.addLayout(fields)
+
+        # Respeita o limite global de 80 células sem mostrar dois diálogos.
+        self.rows_input.valueChanged.connect(self._limit_columns)
+        self._limit_columns(self.rows_input.value())
+
+        buttons = QDialogButtonBox(
+            QDialogButtonBox.Ok | QDialogButtonBox.Cancel, parent=self)
+        buttons.accepted.connect(self.accept)
+        buttons.rejected.connect(self.reject)
+        layout.addWidget(buttons)
+        self.rows_input.setFocus()
+        self.rows_input.selectAll()
+
+    def _limit_columns(self, rows):
+        self.columns_input.setMaximum(min(8, 80 // rows))
+
+    def dimensions(self):
+        return self.rows_input.value(), self.columns_input.value()
 
 
 def build_table_menu(button, callback, *, menu_factory=QMenu):
@@ -54,15 +97,9 @@ def build_table_menu(button, callback, *, menu_factory=QMenu):
     menu.addAction(action)
 
     def custom_table():
-        rows, ok = QInputDialog.getInt(button.window(), "Inserir tabela",
-                                       "Número de linhas:", 3, 1, 12)
-        if not ok:
-            return
-        columns, ok = QInputDialog.getInt(
-            button.window(), "Inserir tabela",
-            "Número de colunas:", 3, 1, min(8, 80 // rows))
-        if ok:
-            callback(rows, columns)
+        dialog = TableDimensionsDialog(button.window())
+        if dialog.exec() == QDialog.Accepted:
+            callback(*dialog.dimensions())
 
     menu.addAction("Definir linhas e colunas…", custom_table)
     return menu

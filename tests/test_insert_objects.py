@@ -8,12 +8,12 @@ from unittest.mock import patch
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PySide6.QtCore import QCoreApplication, QEvent
-from PySide6.QtWidgets import QApplication, QWidgetAction
+from PySide6.QtWidgets import QApplication, QDialog, QToolButton, QWidgetAction
 
 from app.clipboard_content import expansion_mime
 from app.formatting import has_rich_formatting
 from app.inline_images import AuroraImageEditor
-from app.insert_objects import build_table_menu, insert_table
+from app.insert_objects import TableDimensionsDialog, build_table_menu, insert_table
 from app.paragraph_panel import ParagraphPanel
 
 
@@ -71,6 +71,10 @@ class TableInParagraphTests(unittest.TestCase):
             self.assertEqual(panel.table_button.accessibleName(), "Inserir tabela")
             self.assertEqual(panel.controls.width(), 300)
             self.assertEqual(panel.width(), 300)
+            # Tanto o corpo quanto a seta usam o mesmo popup nativo;
+            # não há showMenu() reentrante no sinal clicked.
+            self.assertEqual(panel.table_button.popupMode(),
+                             QToolButton.InstantPopup)
             menu = panel.table_button.menu()
             self.assertIsNotNone(menu)
             action = next(a for a in menu.actions() if isinstance(a, QWidgetAction))
@@ -86,6 +90,44 @@ class TableInParagraphTests(unittest.TestCase):
                 [58, 58, 58, 58, 52])
             panel._insert_table(2, 3)
             self.assertIn("<table", editor.toHtml().lower())
+        finally:
+            self.dispose(panel)
+            self.dispose(editor)
+
+    def test_custom_dimensions_dialog_shows_both_inputs_at_once(self):
+        dialog = TableDimensionsDialog()
+        try:
+            self.assertEqual(dialog.windowTitle(), "Inserir tabela")
+            self.assertEqual(dialog.rows_input.accessibleName(), "Número de linhas")
+            self.assertEqual(dialog.columns_input.accessibleName(), "Número de colunas")
+            self.assertEqual(dialog.dimensions(), (3, 3))
+            dialog.columns_input.setValue(8)
+            dialog.rows_input.setValue(12)
+            self.assertEqual(dialog.columns_input.maximum(), 6)
+            self.assertEqual(dialog.dimensions(), (12, 6))
+            dialog.rows_input.setValue(2)
+            self.assertEqual(dialog.columns_input.maximum(), 8)
+            dialog.columns_input.setValue(8)
+            self.assertEqual(dialog.dimensions(), (2, 8))
+        finally:
+            self.dispose(dialog)
+
+    def test_menu_custom_action_accepts_or_cancels_once(self):
+        editor = AuroraImageEditor()
+        panel = ParagraphPanel(editor)
+        try:
+            action = panel.table_button.menu().actions()[-1]
+            with patch("app.insert_objects.TableDimensionsDialog") as dialog_cls:
+                dialog = dialog_cls.return_value
+                dialog.exec.return_value = QDialog.Accepted
+                dialog.dimensions.return_value = (2, 3)
+                action.trigger()
+                self.assertIn("<table", editor.toHtml().lower())
+            before = editor.toHtml()
+            with patch("app.insert_objects.TableDimensionsDialog") as dialog_cls:
+                dialog_cls.return_value.exec.return_value = QDialog.Rejected
+                action.trigger()
+            self.assertEqual(editor.toHtml(), before)
         finally:
             self.dispose(panel)
             self.dispose(editor)
