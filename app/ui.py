@@ -127,6 +127,21 @@ QFrame#fontToolbar QToolButton#fontTool[paragraphMenu="true"]::menu-button {
 QFrame#fontToolbar QToolButton#fontTool[paragraphMenu="true"]::menu-arrow {
   image: none; width: 0px; height: 0px;
 }
+/* Terceira coluna: botões maiores, independentes dos controles de fonte (27 px). */
+QFrame#fontToolbar QToolButton#insertObjectButton {
+  min-height: 86px; max-height: 86px;
+  min-width: 96px; max-width: 96px;
+  background: #19364b; color: #eaffff;
+  border: 1px solid #365a71; border-radius: 7px;
+  font-size: 13px; font-weight: 700;
+  padding: 4px;
+}
+QFrame#fontToolbar QToolButton#insertObjectButton:hover {
+  background: #28546a; border-color: #79ead8;
+}
+QFrame#fontToolbar QToolButton#insertObjectButton:pressed {
+  background: #2c6870; border-color: #79ead8;
+}
 QLabel#ribbonGroupTitle { color: #a8bfd2; font-size: 11px; font-weight: 500; }
 QFrame#fontToolbar QComboBox#fontFamily,
 QFrame#fontToolbar QSpinBox#fontSize {
