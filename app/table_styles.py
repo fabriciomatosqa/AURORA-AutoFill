@@ -102,6 +102,8 @@ def apply_table_style(table, style: TableStyle, *, header: bool = True,
             cell_format = cell.format()
             cell_format.setBackground(QBrush(background))
             cell.setFormat(cell_format)
+    from .insert_objects import stabilize_table_columns
+    stabilize_table_columns(table)
     return table
 
 
