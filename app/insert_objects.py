@@ -12,6 +12,44 @@ from PySide6.QtWidgets import (
 )
 
 
+def stabilize_table_columns(table) -> bool:
+    """Evita autofit: cada coluna ocupa a mesma parcela fixa da tabela.
+
+    Mantém dimensões personalizadas já existentes em tabelas importadas.
+    A largura total continua responsiva (90% da área de edição).
+    """
+    columns = table.columns()
+    if columns < 1:
+        return False
+    fmt = table.format()
+    if len(fmt.columnWidthConstraints()) == columns:
+        return False
+    portion = 100.0 / columns
+    fmt.setColumnWidthConstraints([
+        QTextLength(QTextLength.PercentageLength, portion)
+        for _ in range(columns)
+    ])
+    table.setFormat(fmt)
+    return True
+
+
+def stabilize_document_tables(document) -> None:
+    """Normaliza somente tabelas antigas sem largura definida por coluna."""
+    from PySide6.QtGui import QTextCursor
+
+    tables = []
+    seen = set()
+    block = document.begin()
+    while block.isValid():
+        table = QTextCursor(block).currentTable()
+        if table is not None and table.firstPosition() not in seen:
+            seen.add(table.firstPosition())
+            tables.append(table)
+        block = block.next()
+    for table in tables:
+        stabilize_table_columns(table)
+
+
 def insert_table(editor, rows: int, columns: int):
     """Insere uma tabela nativa e posiciona o foco na primeira célula."""
     if not 1 <= rows <= 12 or not 1 <= columns <= 8 or rows * columns > 80:
@@ -24,6 +62,10 @@ def insert_table(editor, rows: int, columns: int):
         table_format.setCellPadding(5)
         table_format.setCellSpacing(0)
         table_format.setWidth(QTextLength(QTextLength.PercentageLength, 90))
+        table_format.setColumnWidthConstraints([
+            QTextLength(QTextLength.PercentageLength, 100.0 / columns)
+            for _ in range(columns)
+        ])
         table = cursor.insertTable(rows, columns, table_format)
     finally:
         cursor.endEditBlock()
