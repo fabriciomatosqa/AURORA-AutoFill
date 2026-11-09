@@ -236,5 +236,28 @@ class TableInParagraphTests(unittest.TestCase):
                     QCoreApplication.sendPostedEvents(None, QEvent.DeferredDelete)
 
 
+class CustomTableStylePreferencesTests(unittest.TestCase):
+    def test_custom_styles_survive_settings_save_and_invalid_entries_are_ignored(self):
+        from app.preferences import load_preferences, save_preferences
+        with tempfile.TemporaryDirectory() as directory:
+            destination = Path(directory) / "settings.json"
+            preferences = load_preferences(destination)
+            preferences['table_styles'] = [
+                {'name': 'Azul pessoal', 'accent': '#2878cc', 'variant': 'grid'},
+                {'name': 'Azul pessoal', 'accent': '#2878cc', 'variant': 'grid'},
+                {'name': 'Inseguro', 'accent': 'url(file:///etc/passwd)', 'variant': 'grid'},
+                {'name': 'Listrado', 'accent': '#208b77', 'variant': 'list'},
+            ]
+            save_preferences(preferences, destination)
+            restored = load_preferences(destination)
+            self.assertEqual(restored['table_styles'], [
+                {'name': 'Azul pessoal', 'accent': '#2878cc', 'variant': 'grid'},
+                {'name': 'Listrado', 'accent': '#208b77', 'variant': 'list'}])
+            restored['sound_volume'] = 40
+            save_preferences(restored, destination)
+            self.assertEqual(load_preferences(destination)['table_styles'],
+                             restored['table_styles'])
+
+
 if __name__ == "__main__":
     unittest.main()
