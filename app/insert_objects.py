@@ -33,6 +33,9 @@ def insert_table(editor, rows: int, columns: int):
         table = cursor.insertTable(rows, columns, table_format)
     finally:
         cursor.endEditBlock()
+    # QTextEdit não segue automaticamente a cópia local do QTextCursor.
+    # Colocar o cursor na primeira célula permite digitar imediatamente.
+    editor.setTextCursor(table.cellAt(0, 0).firstCursorPosition())
     editor.setFocus()
     return table
 
