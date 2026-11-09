@@ -135,7 +135,7 @@ def usage_report(connection: sqlite3.Connection,
     month = today_text[:7]
     year = today_text[:4]
     total = connection.execute(
-        "SELECT COALESCE(SUM(uses), 0) FROM usage_daily"
+        "SELECT COALESCE(SUM(uses), 0) FROM usage_store.usage_daily"
     ).fetchone()[0]
     def count(prefix):
         return int(connection.execute(
@@ -186,7 +186,7 @@ def usage_day_top(connection: sqlite3.Connection, day: date,
     """Optional day breakdown; never stores or retrieves text typed elsewhere."""
     rows = connection.execute("""
         SELECT COALESCE(s.title, u.shortcut) AS label, SUM(u.uses) AS n
-        FROM usage_daily u
+        FROM usage_store.usage_daily u
         LEFT JOIN snippets s ON s.id = u.snippet_id
         WHERE u.day = ?
         GROUP BY u.snippet_id ORDER BY n DESC, label LIMIT ?
