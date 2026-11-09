@@ -179,13 +179,13 @@ def restore_backup(store, archive_path: Path) -> None:
             try:
                 with closing(sqlite3.connect(file)) as source:
                     source.backup(store.connection)
-                # Restaurar o catálogo não descarta os contadores mais recentes:
-                # reconcilia o espelho do backup com o histórico independente.
-                reconcile_usage(store.connection)
                 # Settings are optional: old backups do not reset preferences.
                 if settings is not None:
                     from .preferences import save_preferences
                     save_preferences(settings)
+                # Só após a restauração completa reconciliamos o histórico;
+                # uma falha ao salvar preferências não altera contadores reais.
+                reconcile_usage(store.connection)
             except Exception:
                 previous.backup(store.connection)
                 raise
