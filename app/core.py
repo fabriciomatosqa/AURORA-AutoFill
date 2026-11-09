@@ -6,7 +6,7 @@ from collections import OrderedDict
 
 from .data_paths import application_db_path
 from .welcome import initial_snippets
-from .productivity_data import (initialize_productivity, search_ids, record_success,
+from .productivity_data import (initialize_productivity, reconcile_usage, search_ids, record_success,
                                 usage_report, usage_days, usage_day_top, reset_usage)
 from .smart_templates import advanced_variables
 from datetime import date, datetime
@@ -135,7 +135,10 @@ class SnippetStore:
         if "sort_order" not in columns:
             self.connection.execute("ALTER TABLE snippets ADD COLUMN sort_order INTEGER NOT NULL DEFAULT 0")
         self.connection.commit()
-        self._fts_available = initialize_productivity(self.connection)
+        # Estatísticas vivem em um SQLite próprio, junto ao perfil do usuário.
+        # Bancos temporários (ex.: validação de backup) nunca tocam nessa cópia.
+        stats_path = path.with_name("usage.sqlite3") if path.name == "snippets.sqlite3" else None
+        self._fts_available = initialize_productivity(self.connection, stats_path=stats_path)
         self._shortcut_version = None
         self._shortcut_ids = {}
         self._snippet_cache = OrderedDict()
