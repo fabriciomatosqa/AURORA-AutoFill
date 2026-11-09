@@ -8,8 +8,8 @@ from __future__ import annotations
 
 import math
 from PySide6.QtCore import Qt, QRectF, QPointF, QSize
-from PySide6.QtGui import (QColor, QFont, QImage, QPainter, QPainterPath,
-                           QPen, QPolygonF, QTextCursor, QTextTableFormat)
+from PySide6.QtGui import (QColor, QFont, QImage, QPainter,
+                           QPen, QPolygonF, QTextLength, QTextTableFormat)
 from PySide6.QtWidgets import (QComboBox, QDialog, QDialogButtonBox, QFrame, QGridLayout,
                                QHBoxLayout, QInputDialog, QLabel, QLineEdit, QMenu,
                                QMessageBox, QPlainTextEdit, QToolButton, QVBoxLayout,
@@ -29,7 +29,7 @@ def insert_table(editor, rows: int, columns: int):
         table_format.setBorder(1)
         table_format.setCellPadding(5)
         table_format.setCellSpacing(0)
-        table_format.setWidth(90)
+        table_format.setWidth(QTextLength(QTextLength.PercentageLength, 90))
         table = cursor.insertTable(rows, columns, table_format)
     finally:
         cursor.endEditBlock()
