@@ -12,6 +12,7 @@ import re
 from html.parser import HTMLParser
 
 from PySide6.QtCore import QBuffer, QByteArray, QIODevice, QUrl, Signal, Qt
+from PySide6.QtGui import QTextOption
 from PySide6.QtGui import QImage, QImageReader, QPixmap, QTextCursor, QTextDocument, QTextImageFormat
 from PySide6.QtWidgets import QTextEdit
 
@@ -172,6 +173,9 @@ class AuroraImageEditor(QTextEdit):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setDocument(EmbeddedImageDocument(self))
+        # Respeita a borda da célula: palavras longas quebram sem alargar
+        # tabelas nem deslocar colunas (vale para editor e pré-visualização).
+        self.setWordWrapMode(QTextOption.WrapAtWordBoundaryOrAnywhere)
         self.document().setProperty('auroraHasParagraphMetadata', False)
 
     def setPlainText(self, text):
@@ -284,8 +288,12 @@ class AuroraImageEditor(QTextEdit):
 
     def _restore_paragraphs(self, html):
         from .paragraph_format import normalize_contextual_spacing, restore_metadata
+        from .insert_objects import stabilize_document_tables
         restore_metadata(self.document(), html)
         normalize_contextual_spacing(self.document())
+        # Tabelas criadas antes da correção também recebem largura estável
+        # ao abrir um comando, sem sobrescrever larguras já personalizadas.
+        stabilize_document_tables(self.document())
         self.document().clearUndoRedoStacks()
 
 
