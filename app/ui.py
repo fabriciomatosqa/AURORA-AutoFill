@@ -48,6 +48,7 @@ from .version import APP_VERSION
 from .icons import apply_icon
 from .font_catalog import AuroraFontCombo, AuroraFontSizeSpinBox
 from .paragraph_panel import ParagraphPanel
+from .insert_objects import InsertObjectsPanel
 from .ribbon import RibbonFooter
 from .font_dialog import FontDialog
 from .color_dialog import AuroraColorDialog
@@ -820,7 +821,17 @@ class AutoFillWindow(ProductivityMixin, AuroraFeaturesMixin, QMainWindow):
                                               save_default=self._set_paragraph_defaults)
         self.paragraph_panel.setAccessibleName('Parágrafo')
         toolbar_layout.addWidget(self.paragraph_panel)
-        toolbar_layout.addStretch()
+        insert_divider = QFrame()
+        insert_divider.setObjectName("fontDivider")
+        insert_divider.setFrameShape(QFrame.VLine)
+        insert_divider.setFixedWidth(1)
+        insert_divider.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Expanding)
+        toolbar_layout.addWidget(insert_divider)
+        # Terceira coluna exatamente no espaço livre à direita de Parágrafo.
+        self.insert_objects_panel = InsertObjectsPanel(
+            self.body_input, menu_factory=AuroraMenu)
+        toolbar_layout.addWidget(self.insert_objects_panel)
+        toolbar_layout.addStretch(0)
         v.addWidget(self.font_toolbar)
         image_tools_row = QHBoxLayout()
         image_tools_row.setSpacing(8)
