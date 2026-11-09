@@ -5,6 +5,7 @@ from pathlib import Path
 from copy import deepcopy
 import json
 import os
+import re
 import sys
 import tempfile
 
@@ -20,6 +21,7 @@ DEFAULTS = {
     "suggest_shortcuts": False,
     "theme": "system",
     "paragraph_defaults": {},
+    "table_styles": [],
 }
 RUN_NAME = "AURORAAutoFill"
 RUN_KEY = r"Software\Microsoft\Windows\CurrentVersion\Run"
@@ -49,6 +51,28 @@ def normalize_preferences(raw: dict) -> dict:
                     settings['paragraph_defaults'] = json.loads(encoded)
             except (TypeError, ValueError, RecursionError):
                 pass
+        # Até 16 estilos personalizados; nomes e cores estritamente validados.
+        custom = raw.get("table_styles")
+        if isinstance(custom, list):
+            known = set()
+            for item in custom[:32]:
+                if not isinstance(item, dict):
+                    continue
+                name, accent, variant = (item.get("name"), item.get("accent"),
+                                         item.get("variant"))
+                if (not isinstance(name, str) or not 1 <= len(name.strip()) <= 40
+                        or not isinstance(accent, str)
+                        or not re.fullmatch(r"#[0-9a-fA-F]{6}", accent)
+                        or variant not in ("grid", "list", "simple")):
+                    continue
+                name = name.strip()
+                if name.casefold() in known:
+                    continue
+                known.add(name.casefold())
+                settings["table_styles"].append({
+                    "name": name, "accent": accent.lower(), "variant": variant})
+                if len(settings["table_styles"]) >= 16:
+                    break
     return settings
 
 
