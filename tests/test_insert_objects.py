@@ -8,15 +8,17 @@ from unittest.mock import patch
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PySide6.QtCore import QCoreApplication, QEvent, QPointF, Qt
-from PySide6.QtWidgets import QApplication, QDialog, QToolButton, QWidgetAction
-from PySide6.QtGui import QMouseEvent
+from PySide6.QtWidgets import QApplication, QDialog, QToolButton, QWidgetAction, QTextEdit
+from PySide6.QtGui import QMouseEvent, QTextCursor, QTextLength, QTextOption
 from unittest.mock import Mock
 from types import SimpleNamespace
 
 from app.clipboard_content import expansion_mime
 from app.formatting import has_rich_formatting
 from app.inline_images import AuroraImageEditor
-from app.insert_objects import TableDimensionsDialog, build_table_menu, insert_table
+from app.insert_objects import (
+    TableDimensionsDialog, build_table_menu, insert_table, stabilize_document_tables,
+)
 from app.paragraph_panel import ParagraphPanel
 from app.table_styles import TABLE_STYLES, TableStylePreview, apply_table_style, build_table_styles_menu
 from app.ribbon import TableSplitButton
@@ -57,6 +59,69 @@ class TableInParagraphTests(unittest.TestCase):
                 self.dispose(restored)
         finally:
             self.dispose(editor)
+
+    def test_new_table_has_equal_width_constraints_and_wraps_text(self):
+        editor = AuroraImageEditor()
+        editor.resize(760, 260)
+        try:
+            table = insert_table(editor, 3, 3)
+            widths = table.format().columnWidthConstraints()
+            self.assertEqual(len(widths), 3)
+            self.assertTrue(all(w.type() == QTextLength.PercentageLength for w in widths))
+            self.assertAlmostEqual(sum(w.rawValue() for w in widths), 100.0, places=4)
+            self.assertEqual(
+                editor.wordWrapMode(), QTextOption.WrapAtWordBoundaryOrAnywhere)
+
+            # A segunda coluna deve ficar parada enquanto digitamos na primeira.
+            editor.show()
+            self.app.processEvents()
+            before = editor.cursorRect(table.cellAt(0, 1).firstCursorPosition()).x()
+            first = table.cellAt(0, 0).firstCursorPosition()
+            editor.setTextCursor(first)
+            editor.insertPlainText("sequencia" * 32)
+            self.app.processEvents()
+            after = editor.cursorRect(table.cellAt(0, 1).firstCursorPosition()).x()
+            self.assertLessEqual(abs(after - before), 3)
+            self.assertEqual(len(table.format().columnWidthConstraints()), 3)
+        finally:
+            self.dispose(editor)
+
+    def test_existing_auto_sized_tables_gain_constraints_on_loading(self):
+        source = QTextEdit()
+        try:
+            cursor = source.textCursor()
+            old = cursor.insertTable(2, 3)
+            self.assertEqual(len(old.format().columnWidthConstraints()), 0)
+            html = source.toHtml()
+            editor = AuroraImageEditor()
+            try:
+                editor.setHtml(html)
+                # Primeiro bloco da tabela, localizado sem depender do cursor visível.
+                block = editor.document().begin()
+                table = None
+                while block.isValid():
+                    table = QTextCursor(block).currentTable()
+                    if table is not None:
+                        break
+                    block = block.next()
+                self.assertIsNotNone(table)
+                self.assertEqual(len(table.format().columnWidthConstraints()), 3)
+                serialized = editor.toHtml()
+                preview = AuroraImageEditor()
+                try:
+                    preview.setHtml(serialized)
+                    self.assertEqual(preview.wordWrapMode(),
+                                     QTextOption.WrapAtWordBoundaryOrAnywhere)
+                    self.assertIn("<table", preview.toHtml().lower())
+                finally:
+                    self.dispose(preview)
+                # Normalização idempotente, sem substituir tabelas estilizadas.
+                stabilize_document_tables(editor.document())
+                self.assertEqual(len(table.format().columnWidthConstraints()), 3)
+            finally:
+                self.dispose(editor)
+        finally:
+            self.dispose(source)
 
     def test_limits_prevent_oversized_tables(self):
         editor = AuroraImageEditor()
