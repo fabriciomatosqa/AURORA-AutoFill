@@ -117,10 +117,7 @@ class TableInParagraphTests(unittest.TestCase):
         panel = ParagraphPanel(editor)
         try:
             action = panel.table_button.menu().actions()[-1]
-            with patch("app.insert_objects.TableDimensionsDialog") as dialog_cls, \\
-                 patch.object(panel, "_insert_table") as unused:
-                # A ação já capturou o método original antes deste patch;
-                # inspecionamos a tabela criada no editor.
+            with patch("app.insert_objects.TableDimensionsDialog") as dialog_cls:
                 dialog = dialog_cls.return_value
                 dialog.exec.return_value = QDialog.Accepted
                 dialog.dimensions.return_value = (2, 3)
