@@ -176,7 +176,10 @@ class TableInParagraphTests(unittest.TestCase):
             self.assertEqual(len(previews), len(TABLE_STYLES))
             self.assertEqual({spec.group for spec in TABLE_STYLES},
                              {"Tabelas Simples", "Tabelas de Grade", "Tabelas de Lista"})
-            self.assertIn("Limpar formatação", styles_menu.actions()[-1].text())
+            action_labels = [a.text() for a in styles_menu.actions()]
+            self.assertTrue(any("Limpar formatação" in name for name in action_labels))
+            self.assertTrue(any("Modificar Estilo" in name for name in action_labels))
+            self.assertTrue(any("Novo Estilo" in name for name in action_labels))
         finally:
             self.dispose(panel)
             self.dispose(editor)
