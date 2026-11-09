@@ -63,6 +63,7 @@ class ProductivityDataTests(unittest.TestCase):
     def test_usage_survives_catalog_replacement_and_legacy_migration(self):
         from datetime import date
         import sqlite3
+        from contextlib import closing
         path = Path(self.tmp.name) / "snippets.sqlite3"
         self.store.register_expansion(self.one, date(2026, 11, 9))
         self.store.register_expansion(self.one, date(2026, 11, 9))
@@ -76,7 +77,9 @@ class ProductivityDataTests(unittest.TestCase):
         self.assertEqual(self.store.usage_days(2026, 11), {9: 2})
         # Se o catálogo antigo reaparecer, não somar o mesmo histórico duas vezes.
         self.store.close()
-        with sqlite3.connect(path) as conn:
+        # 'with sqlite3.connect' COMMITA mas não FECHA a conexão.
+        # Windows bloqueia exclusão de bancos ainda abertos no tearDown.
+        with closing(sqlite3.connect(path)) as conn, conn:
             conn.execute("""
                 INSERT INTO usage_daily(day, snippet_id, shortcut, uses)
                 VALUES ('2026-11-09', ?, '/saudacao', 2)
