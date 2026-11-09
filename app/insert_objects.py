@@ -283,7 +283,7 @@ class InsertObjectsPanel(QWidget):
     @staticmethod
     def _tool(symbol, title, tooltip):
         button = QToolButton()
-        button.setObjectName("fontTool")
+        button.setObjectName("insertObjectButton")
         button.setText(symbol + "\n" + title)
         button.setToolTip(tooltip)
         button.setAccessibleName(title)
