@@ -46,7 +46,7 @@ TABLE_STYLES = (
     TableStyle("list-red", "Vermelho", "Tabelas de Lista", "#bf515b", "list"),
     TableStyle("list-lime", "Verde claro", "Tabelas de Lista", "#63a74d", "list"),
 )
-DEFAULT_STYLE = TABLE_STYLES[0]
+DEFAULT_STYLE = next(style for style in TABLE_STYLES if style.key == "plain")
 
 
 def _tint(color: str, strength: int = 225) -> QColor:
