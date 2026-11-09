@@ -90,7 +90,7 @@ def apply_table_style(table, style: TableStyle, *, header: bool = True,
     fmt.setCellPadding(5)
     fmt.setCellSpacing(0)
     fmt.setWidth(fmt.width())
-    fmt.setBorder(0 if style.variant == "plain" else 1)
+    fmt.setBorder(0 if style.variant in ("plain", "list", "horizontal") else 1)
     fmt.setBorderBrush(QBrush(QColor(style.accent)))
     table.setFormat(fmt)
     for row in range(table.rows()):
@@ -131,10 +131,10 @@ class TableStylePreview(QToolButton):
                 rect = QRectF(x, y, w / cols, h / rows)
                 painter.fillRect(rect.adjusted(0.65, 0.65, -0.65, -0.65), bg)
                 variant = self.style_spec.variant
-                if variant not in ("plain", "horizontal") and variant != "outer":
+                if variant in ("grid", "thin", "simple"):
                     painter.setPen(QPen(border, 0.55))
                     painter.drawRect(rect)
-                elif variant == "horizontal":
+                elif variant in ("list", "horizontal"):
                     painter.setPen(QPen(border, 0.65))
                     painter.drawLine(rect.bottomLeft(), rect.bottomRight())
         if self.style_spec.variant == "outer":
