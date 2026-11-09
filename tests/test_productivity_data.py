@@ -80,6 +80,8 @@ class ProductivityDataTests(unittest.TestCase):
             conn.execute("""
                 INSERT INTO usage_daily(day, snippet_id, shortcut, uses)
                 VALUES ('2026-11-09', ?, '/saudacao', 2)
+                ON CONFLICT(day, snippet_id) DO UPDATE SET
+                    uses=excluded.uses, shortcut=excluded.shortcut
             """, (self.one,))
         self.store = SnippetStore(path)
         self.assertEqual(self.store.usage_report(date(2026, 11, 9))["total"], 2)
