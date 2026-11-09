@@ -48,6 +48,7 @@ from .version import APP_VERSION
 from .icons import apply_icon
 from .font_catalog import AuroraFontCombo, AuroraFontSizeSpinBox
 from .paragraph_panel import ParagraphPanel
+from .insert_objects import InsertObjectsPanel
 from .ribbon import RibbonFooter
 from .font_dialog import FontDialog
 from .color_dialog import AuroraColorDialog
@@ -125,6 +126,21 @@ QFrame#fontToolbar QToolButton#fontTool[paragraphMenu="true"]::menu-button {
 }
 QFrame#fontToolbar QToolButton#fontTool[paragraphMenu="true"]::menu-arrow {
   image: none; width: 0px; height: 0px;
+}
+/* Terceira coluna: botões maiores, independentes dos controles de fonte (27 px). */
+QFrame#fontToolbar QToolButton#insertObjectButton {
+  min-height: 86px; max-height: 86px;
+  min-width: 96px; max-width: 96px;
+  background: #19364b; color: #eaffff;
+  border: 1px solid #365a71; border-radius: 7px;
+  font-size: 13px; font-weight: 700;
+  padding: 4px;
+}
+QFrame#fontToolbar QToolButton#insertObjectButton:hover {
+  background: #28546a; border-color: #79ead8;
+}
+QFrame#fontToolbar QToolButton#insertObjectButton:pressed {
+  background: #2c6870; border-color: #79ead8;
 }
 QLabel#ribbonGroupTitle { color: #a8bfd2; font-size: 11px; font-weight: 500; }
 QFrame#fontToolbar QComboBox#fontFamily,
@@ -820,7 +836,17 @@ class AutoFillWindow(ProductivityMixin, AuroraFeaturesMixin, QMainWindow):
                                               save_default=self._set_paragraph_defaults)
         self.paragraph_panel.setAccessibleName('Parágrafo')
         toolbar_layout.addWidget(self.paragraph_panel)
-        toolbar_layout.addStretch()
+        insert_divider = QFrame()
+        insert_divider.setObjectName("fontDivider")
+        insert_divider.setFrameShape(QFrame.VLine)
+        insert_divider.setFixedWidth(1)
+        insert_divider.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Expanding)
+        toolbar_layout.addWidget(insert_divider)
+        # Terceira coluna exatamente no espaço livre à direita de Parágrafo.
+        self.insert_objects_panel = InsertObjectsPanel(
+            self.body_input, menu_factory=AuroraMenu)
+        toolbar_layout.addWidget(self.insert_objects_panel)
+        toolbar_layout.addStretch(0)
         v.addWidget(self.font_toolbar)
         image_tools_row = QHBoxLayout()
         image_tools_row.setSpacing(8)
