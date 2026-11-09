@@ -42,7 +42,7 @@ As instalações novas recebem a pasta **Conheça o AURORA**, com exemplos `/bem
 ### Aparência, editor e clipboard
 
 - Temas: **Claro**, **Escuro** ou **Seguir o sistema**. A faixa de paisagem usa banners correspondentes dia/noite com composição alinhada, mesmo logotipo e controles.
-- Editor rico: fontes locais, negrito, itálico, sublinhado, riscado, cores, alinhamento, espaçamentos e estilos de parágrafo. O botão **Tabela** tem duas ações: clique no ícone para escolher linhas e colunas, ou na seta para abrir uma galeria de estilos (simples, grade e lista), aplicáveis a tabelas existentes ou novas.
+- Editor rico: fontes locais, negrito, itálico, sublinhado, riscado, cores, alinhamento, espaçamentos e estilos de parágrafo. O botão **Tabela** tem duas ações: clique no ícone para escolher linhas e colunas, ou na seta para abrir uma galeria de estilos (simples, grade e lista), aplicáveis a tabelas existentes ou novas. A galeria inclui **Modificar**, **Limpar** e **Novo estilo**; estilos personalizados são armazenados nas preferências e preservados em backups e atualizações.
 - Emojis: seletor com categorias, busca e ícones Fluent coloridos; o conteúdo inserido permanece Unicode editável.
 - Imagens: PNG/JPG/WebP/BMP e prints colados. As figuras são incorporadas no HTML do comando, com limites de tamanho e quantidade, sem dependência de URL externa.
 - Pré-visualização: espelho visual sem foco ou comandos de edição.
