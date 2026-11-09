@@ -145,6 +145,7 @@ class TableStylePreview(QToolButton):
 
 
 def build_table_styles_menu(button, on_style, on_clear, *,
+                            custom_styles=(), on_new=None, on_modify=None,
                             menu_factory=QMenu):
     """Galeria agrupada com miniaturas e estilos realmente aplicáveis."""
     menu = menu_factory(button)
@@ -160,7 +161,11 @@ def build_table_styles_menu(button, on_style, on_clear, *,
     intro.setStyleSheet("font-size: 11px; color: #96c6d4;")
     root.addWidget(intro)
 
-    for group in ("Tabelas Simples", "Tabelas de Grade", "Tabelas de Lista"):
+    groups = ["Tabelas Simples", "Tabelas de Grade", "Tabelas de Lista"]
+    if custom_styles:
+        groups.append("Meus Estilos")
+    styles = TABLE_STYLES + tuple(custom_styles)
+    for group in groups:
         label = QLabel(group)
         label.setStyleSheet("font-size: 12px; font-weight: 700; color: #d3edf5;")
         root.addWidget(label)
@@ -168,7 +173,7 @@ def build_table_styles_menu(button, on_style, on_clear, *,
         grid.setContentsMargins(0, 0, 0, 0)
         grid.setHorizontalSpacing(5)
         grid.setVerticalSpacing(5)
-        for idx, style in enumerate(item for item in TABLE_STYLES
+        for idx, style in enumerate(item for item in styles
                                     if item.group == group):
             preview = TableStylePreview(style, host)
             preview.clicked.connect(lambda _=False, s=style: (
@@ -180,6 +185,12 @@ def build_table_styles_menu(button, on_style, on_clear, *,
     action.setDefaultWidget(host)
     menu.addAction(action)
     menu.addSeparator()
+    if on_modify is not None:
+        modify_action = menu.addAction("Modificar Estilo de Tabela…")
+        modify_action.triggered.connect(lambda _=False: on_modify())
     clear_action = menu.addAction("Limpar formatação da tabela")
     clear_action.triggered.connect(lambda _=False: on_clear())
+    if on_new is not None:
+        new_action = menu.addAction("Novo Estilo de Tabela…")
+        new_action.triggered.connect(lambda _=False: on_new())
     return menu
