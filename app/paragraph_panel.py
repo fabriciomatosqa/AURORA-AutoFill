@@ -14,6 +14,7 @@ from .paragraph_format import options, settings_from_format
 from .ribbon import RibbonFooter, RibbonToolButton, TableSplitButton
 from .insert_objects import TableDimensionsDialog, build_table_menu, insert_table
 from .table_styles import DEFAULT_STYLE, TableStyle, apply_table_style, build_table_styles_menu
+from .preferences import load_preferences, save_preferences
 
 
 class ParagraphPanel(QWidget):
@@ -113,9 +114,7 @@ class ParagraphPanel(QWidget):
         apply_icon(self.table_button, 'table-grid', label='Inserir tabela')
         self.table_button.setMenu(build_table_menu(
             self.table_button, self._insert_table, menu_factory=self._menu_factory))
-        self.table_button.styles_menu = build_table_styles_menu(
-            self.table_button, self._apply_table_style, self._clear_table_style,
-            menu_factory=self._menu_factory)
+        self._refresh_table_styles_menu()
         self.table_button.setToolTip(
             'Ícone: inserir tabela | Seta: escolher estilo de tabela')
         row3.addWidget(self.table_button, 1)
@@ -131,6 +130,86 @@ class ParagraphPanel(QWidget):
         self.emoji_picker = None
         self.controller.updated.connect(self.sync)
         self.sync()
+
+    def _style_preferences(self):
+        # Usar as mesmas preferências em memória do app, evitando que uma
+        # mudança posterior no tema sobrescreva os estilos personalizados.
+        owner = self.window()
+        if isinstance(getattr(owner, 'preferences', None), dict):
+            return owner.preferences
+        return load_preferences()
+
+    def _refresh_table_styles_menu(self):
+        old = getattr(self.table_button, 'styles_menu', None)
+        custom = [
+            TableStyle('custom-' + str(index), item['name'], 'Meus Estilos',
+                       item['accent'], item['variant'])
+            for index, item in enumerate(self._style_preferences().get('table_styles', []))
+        ]
+        self.table_button.styles_menu = build_table_styles_menu(
+            self.table_button, self._apply_table_style, self._clear_table_style,
+            custom_styles=custom, on_new=self._new_table_style,
+            on_modify=self._modify_table_style, menu_factory=self._menu_factory)
+        if old is not None:
+            old.close()
+            old.deleteLater()
+
+    def _new_table_style(self):
+        name, ok = QInputDialog.getText(
+            self.window(), 'Novo Estilo de Tabela', 'Nome do estilo:')
+        if not ok or not name.strip():
+            return
+        name = name.strip()[:40]
+        variant_name, ok = QInputDialog.getItem(
+            self.window(), 'Novo Estilo de Tabela', 'Modelo:',
+            ['Grade', 'Lista', 'Simples'], 0, False)
+        if not ok:
+            return
+        color = AuroraColorDialog.get_color(
+            '#1976b9', self.window(), 'Cor principal da tabela')
+        if not color.isValid():
+            return
+        prefs = self._style_preferences()
+        styles = prefs.get('table_styles', [])
+        if len(styles) >= 16:
+            QMessageBox.information(self.window(), 'Estilos de tabela',
+                                    'O limite é de 16 estilos personalizados.')
+            return
+        if any(item['name'].casefold() == name.casefold() for item in styles):
+            QMessageBox.warning(self.window(), 'Estilos de tabela',
+                                'Já existe um estilo com esse nome.')
+            return
+        variant = {'Grade': 'grid', 'Lista': 'list', 'Simples': 'simple'}[variant_name]
+        prefs['table_styles'] = styles + [
+            {'name': name, 'accent': color.name(), 'variant': variant}]
+        save_preferences(prefs)
+        self._refresh_table_styles_menu()
+
+    def _modify_table_style(self):
+        prefs = self._style_preferences()
+        styles = list(prefs.get('table_styles', []))
+        if not styles:
+            QMessageBox.information(
+                self.window(), 'Modificar Estilo de Tabela',
+                'Crie um estilo personalizado antes de modificá-lo.')
+            return
+        selected, ok = QInputDialog.getItem(
+            self.window(), 'Modificar Estilo de Tabela', 'Escolha o estilo:',
+            [style['name'] for style in styles], 0, False)
+        if not ok:
+            return
+        index = next((i for i, s in enumerate(styles)
+                      if s['name'] == selected), None)
+        if index is None:
+            return
+        color = AuroraColorDialog.get_color(
+            styles[index]['accent'], self.window(), 'Nova cor principal')
+        if not color.isValid():
+            return
+        styles[index] = {**styles[index], 'accent': color.name()}
+        prefs['table_styles'] = styles
+        save_preferences(prefs)
+        self._refresh_table_styles_menu()
 
     def _insert_table(self, rows, columns):
         try:
