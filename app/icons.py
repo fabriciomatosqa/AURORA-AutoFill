@@ -9,7 +9,8 @@ from PySide6.QtSvg import QSvgRenderer
 ICON_NAMES = ('settings', 'home', 'save', 'trash', 'plus', 'minus', 'export', 'import', 'undo', 'folder', 'play', 'pause', 'volume', 'update', 'backup', 'restore', 'back', 'check', 'close', 'bolt', 'bold', 'italic', 'underline', 'image', 'font-increase', 'font-decrease')
 ICON_NAMES += ('align-left','align-center','align-right','align-justify','list-bullets',
                'list-numbered','list-multilevel','indent-less','indent-more','line-spacing',
-               'paragraph-shading','paragraph-border','sort-text','paragraph-settings')
+               'paragraph-shading','paragraph-border','sort-text','paragraph-settings',
+               'table-grid')
 ROOT = Path(__file__).resolve().parents[1] / 'assets/icons'
 
 
