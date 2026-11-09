@@ -7,9 +7,9 @@ from unittest.mock import patch
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-from PySide6.QtCore import QCoreApplication, QEvent, QPoint, Qt
+from PySide6.QtCore import QCoreApplication, QEvent, QPointF, Qt
 from PySide6.QtWidgets import QApplication, QDialog, QToolButton, QWidgetAction
-from PySide6.QtTest import QTest
+from PySide6.QtGui import QMouseEvent
 from unittest.mock import Mock
 from types import SimpleNamespace
 
@@ -153,11 +153,14 @@ class TableInParagraphTests(unittest.TestCase):
             original = button.styles_menu
             button.styles_menu = SimpleNamespace(popup=popup)
             try:
-                QTest.mousePress(button, Qt.LeftButton,
-                                 pos=QPoint(button.width() - 3, 12))
+                # Testa a lógica do clique sem disparar eventos nativos de
+                # popup, que podem prender um runner Windows sem desktop.
+                event = QMouseEvent(
+                    QEvent.MouseButtonPress,
+                    QPointF(button.width() - 3, 12),
+                    Qt.LeftButton, Qt.LeftButton, Qt.NoModifier)
+                button.mousePressEvent(event)
                 self.assertEqual(popup.call_count, 1)
-                QTest.mouseRelease(button, Qt.LeftButton,
-                                   pos=QPoint(button.width() - 3, 12))
             finally:
                 button.styles_menu = original
         finally:
