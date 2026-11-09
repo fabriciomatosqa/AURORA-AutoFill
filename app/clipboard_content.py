@@ -150,9 +150,10 @@ def expansion_mime(text: str, html: str = "", *, image_only: bool = False,
     payload.setText(text)
     if html:
         sources = image_sources(html)
-        if sources:
-            # Não converter documentos com imagens para RTF, que não suporta
-            # aqui anexos independentes. HTML original preserva cada <img>.
+        if sources or "<table" in html.lower():
+            # Imagens e tabelas editáveis precisam da estrutura HTML original.
+            # O conversor RTF de parágrafos não representa células; evitar
+            # que o Word prefira um RTF que achate as tabelas.
             payload.setHtml(mixed_paragraph_html(html))
         else:
             # Fragmento HTML plano e inline: mantém cor, realce, fonte e
