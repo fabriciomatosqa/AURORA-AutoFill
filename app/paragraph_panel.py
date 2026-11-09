@@ -12,6 +12,7 @@ from .paragraph_dialog import ParagraphDialog, ParagraphSortDialog
 from .paragraph_editor import ParagraphEditor
 from .paragraph_format import options, settings_from_format
 from .ribbon import RibbonFooter, RibbonToolButton
+from .insert_objects import build_table_menu, insert_table
 
 
 class ParagraphPanel(QWidget):
@@ -84,14 +85,14 @@ class ParagraphPanel(QWidget):
         marks.setCheckable(True)
         self.buttons['marks'] = marks
         row2.addWidget(marks,1)
-        shade = self._button('paragraph-shading','Sombreamento do parágrafo',72,
+        shade = self._button('paragraph-shading','Sombreamento do parágrafo',58,
                              lambda _:self.controller.shade(self._shade_color), menu=True)
         menu = self._menu_factory(shade)
         self._action(menu,'Escolher cor…',self._choose_shading)
         self._action(menu,'Sem cor',lambda:self.controller.shade(None))
         shade.setMenu(menu)
         row3.addWidget(shade,1)
-        border = self._button('paragraph-border','Bordas do parágrafo',72,
+        border = self._button('paragraph-border','Bordas do parágrafo',58,
                               lambda _:self._border('outside'), menu=True)
         menu = self._menu_factory(border)
         for label, mode in (('Sem borda','none'),('Todas as bordas','all'),('Borda externa','outside'),
@@ -102,8 +103,17 @@ class ParagraphPanel(QWidget):
         self._action(menu,'Espessura da borda…',self._border_size)
         border.setMenu(menu)
         row3.addWidget(border,1)
-        row3.addWidget(self._button('sort-text','Classificar parágrafos',72,lambda _:self._sort()),1)
-        self.emoji_button = self._button(None,'Inserir emoji',72,lambda _:self.open_emoji_picker())
+        row3.addWidget(self._button('sort-text','Classificar parágrafos',58,lambda _:self._sort()),1)
+        # Tabela no penúltimo espaço da última linha, imediatamente antes do emoji.
+        # Cinco botões: 58 + 58 + 58 + 58 + 52 + (4 * 4) = 300 px.
+        self.table_button = self._button(
+            None, 'Inserir tabela', 58, lambda _:self.table_button.showMenu(),
+            menu=True, text='▦')
+        self.table_button.setMenu(build_table_menu(
+            self.table_button, self._insert_table, menu_factory=self._menu_factory))
+        self.table_button.setToolTip('Inserir tabela editável')
+        row3.addWidget(self.table_button, 1)
+        self.emoji_button = self._button(None,'Inserir emoji',52,lambda _:self.open_emoji_picker())
         # Exibir SVG colorido, não um glifo dependente da fonte do Windows.
         self.emoji_button.setIcon(emoji_icon('🙂'))
         self.emoji_button.setIconSize(QSize(26,26))
@@ -115,6 +125,12 @@ class ParagraphPanel(QWidget):
         self.emoji_picker = None
         self.controller.updated.connect(self.sync)
         self.sync()
+
+    def _insert_table(self, rows, columns):
+        try:
+            insert_table(self.editor, rows, columns)
+        except ValueError as exc:
+            QMessageBox.warning(self.window(), 'Tabela', str(exc))
 
     def open_emoji_picker(self):
         if self.emoji_picker is None:
