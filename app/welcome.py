@@ -48,10 +48,10 @@ No editor de um comando, clique em **Inserir comando dinâmico** para incluir da
 
 Clique no botão **?** ao lado desse menu. O guia apresenta cinco abas em ordem alfabética: **Área de transferência e cursor**, **Automações**, **Cálculos**, **Data e hora** e **Formulários interativos**. No final da aba **Data e hora**, você encontra uma tabela de códigos como %a, %A, %b e %B, com exemplos em português.
 
-📊 **5. Insira tabelas, formas e gráficos**
-Na faixa **FORMATAÇÃO**, à direita do grupo Parágrafo, abra o grupo **Inserir**. Use **Tabelas** para criar células editáveis, **Formas** para incluir figuras e **Gráficos** para montar colunas, linhas ou pizza com dados simples.
+📋 **5. Insira tabelas editáveis**
+Na faixa **FORMATAÇÃO**, no grupo **Parágrafo**, use o ícone de tabela na última linha, logo antes do botão de emoji. Escolha linhas e colunas na grade ou informe dimensões personalizadas.
 
-Tabelas continuam editáveis dentro do AURORA; as formas e os gráficos são salvos como imagens incorporadas. A colagem rica em outros programas depende de cada editor aceitar HTML ou imagens.
+As células continuam editáveis dentro do AURORA. Ao colar em outros programas, a formatação da tabela depende do suporte do aplicativo de destino.
 
 🔎 **6. Encontre seus comandos**
 Use a busca na lateral ou a pesquisa global com **Ctrl + Shift + Espaço** para localizar e reutilizar seus comandos.
