@@ -10,7 +10,41 @@ import re
 import sqlite3
 
 
-def initialize_productivity(connection: sqlite3.Connection) -> bool:
+def reconcile_usage(connection: sqlite3.Connection) -> None:
+    """Sincroniza históricos sem somar novamente as mesmas expansões.
+
+    O arquivo usage.sqlite3 é independente do catálogo principal. A tabela
+    antiga em main permanece como espelho para compatibilidade de backups.
+    """
+    with connection:
+        for target, source in (("usage_store", "main"), ("main", "usage_store")):
+            connection.execute(f"""
+                INSERT INTO {target}.usage_daily(day, snippet_id, shortcut, uses)
+                SELECT day, snippet_id, shortcut, uses
+                FROM {source}.usage_daily WHERE 1
+                ON CONFLICT(day, snippet_id) DO UPDATE SET
+                    uses = MAX(usage_daily.uses, excluded.uses),
+                    shortcut = CASE WHEN excluded.uses > usage_daily.uses
+                                    THEN excluded.shortcut ELSE usage_daily.shortcut END
+            """)
+
+
+def initialize_productivity(connection: sqlite3.Connection, *,
+                            stats_path=None) -> bool:
+    # SQLite ATTACH mantém o histórico separado da recriação do catálogo.
+    connection.execute("ATTACH DATABASE ? AS usage_store",
+                       (str(stats_path) if stats_path is not None else ":memory:",))
+    connection.execute("""
+        CREATE TABLE IF NOT EXISTS usage_store.usage_daily (
+            day TEXT NOT NULL,
+            snippet_id INTEGER NOT NULL,
+            shortcut TEXT NOT NULL,
+            uses INTEGER NOT NULL DEFAULT 0 CHECK (uses >= 0),
+            PRIMARY KEY(day, snippet_id)
+        )
+    """)
+    connection.execute(
+        "CREATE INDEX IF NOT EXISTS usage_store.idx_usage_month ON usage_daily(day)")
     connection.execute("""
         CREATE TABLE IF NOT EXISTS usage_daily (
             day TEXT NOT NULL,
@@ -21,6 +55,7 @@ def initialize_productivity(connection: sqlite3.Connection) -> bool:
         )
     """)
     connection.execute("CREATE INDEX IF NOT EXISTS idx_usage_month ON usage_daily(day)")
+    reconcile_usage(connection)
     previous = connection.execute(
         "SELECT 1 FROM sqlite_master WHERE name='snippet_fts' AND type='table'"
     ).fetchone()
@@ -81,12 +116,15 @@ def record_success(connection: sqlite3.Connection, snippet_id: int,
         return False
     day = (when or date.today()).isoformat()
     with connection:
-        connection.execute("""
-            INSERT INTO usage_daily(day, snippet_id, shortcut, uses)
-            VALUES (?, ?, ?, 1)
-            ON CONFLICT(day, snippet_id) DO UPDATE SET
-                uses = usage_daily.uses + 1, shortcut=excluded.shortcut
-        """, (day, snippet_id, str(row[0])))
+        # Atualização atômica do histórico independente e de seu espelho no
+        # catálogo (este último continua compatível com o backup legado).
+        for table in ("usage_store.usage_daily", "main.usage_daily"):
+            connection.execute(f"""
+                INSERT INTO {table}(day, snippet_id, shortcut, uses)
+                VALUES (?, ?, ?, 1)
+                ON CONFLICT(day, snippet_id) DO UPDATE SET
+                    uses = usage_daily.uses + 1, shortcut=excluded.shortcut
+            """, (day, snippet_id, str(row[0])))
     return True
 
 
@@ -97,27 +135,27 @@ def usage_report(connection: sqlite3.Connection,
     month = today_text[:7]
     year = today_text[:4]
     total = connection.execute(
-        "SELECT COALESCE(SUM(uses), 0) FROM usage_daily"
+        "SELECT COALESCE(SUM(uses), 0) FROM usage_store.usage_daily"
     ).fetchone()[0]
     def count(prefix):
         return int(connection.execute(
-            "SELECT COALESCE(SUM(uses), 0) FROM usage_daily WHERE day LIKE ?",
+            "SELECT COALESCE(SUM(uses), 0) FROM usage_store.usage_daily WHERE day LIKE ?",
             (prefix + "%",)
         ).fetchone()[0])
     daily = connection.execute(
-        "SELECT COALESCE(SUM(uses), 0) FROM usage_daily WHERE day=?",
+        "SELECT COALESCE(SUM(uses), 0) FROM usage_store.usage_daily WHERE day=?",
         (today_text,)
     ).fetchone()[0]
     monthly = connection.execute("""
         SELECT substr(day, 1, 7) AS period, SUM(uses) AS n
-        FROM usage_daily WHERE day >= ?
+        FROM usage_store.usage_daily WHERE day >= ?
         GROUP BY period ORDER BY period
     """, (f"{now.year - 1:04d}-01-01",)).fetchall()
     top = connection.execute("""
         SELECT u.snippet_id, COALESCE(s.title, u.shortcut) AS label,
                COALESCE(s.shortcut, u.shortcut) AS shortcut,
                SUM(u.uses) AS n
-        FROM usage_daily u LEFT JOIN snippets s ON s.id=u.snippet_id
+        FROM usage_store.usage_daily u LEFT JOIN snippets s ON s.id=u.snippet_id
         GROUP BY u.snippet_id ORDER BY n DESC, label LIMIT 10
     """).fetchall()
     return {"today": int(daily), "month": count(month), "year": count(year),
@@ -128,7 +166,8 @@ def usage_report(connection: sqlite3.Connection,
 
 def reset_usage(connection: sqlite3.Connection) -> None:
     with connection:
-        connection.execute("DELETE FROM usage_daily")
+        connection.execute("DELETE FROM usage_store.usage_daily")
+        connection.execute("DELETE FROM main.usage_daily")
 
 def usage_days(connection: sqlite3.Connection, year: int, month: int) -> dict[int, int]:
     """Aggregated daily totals for one month, without reading typed content."""
@@ -136,7 +175,7 @@ def usage_days(connection: sqlite3.Connection, year: int, month: int) -> dict[in
         raise ValueError("Mês inválido.")
     prefix = f"{year:04d}-{month:02d}-"
     rows = connection.execute(
-        "SELECT day, SUM(uses) FROM usage_daily WHERE day LIKE ? "
+        "SELECT day, SUM(uses) FROM usage_store.usage_daily WHERE day LIKE ? "
         "GROUP BY day ORDER BY day", (prefix + "%",)
     ).fetchall()
     return {int(str(day)[-2:]): int(count) for day, count in rows}
@@ -147,7 +186,7 @@ def usage_day_top(connection: sqlite3.Connection, day: date,
     """Optional day breakdown; never stores or retrieves text typed elsewhere."""
     rows = connection.execute("""
         SELECT COALESCE(s.title, u.shortcut) AS label, SUM(u.uses) AS n
-        FROM usage_daily u
+        FROM usage_store.usage_daily u
         LEFT JOIN snippets s ON s.id = u.snippet_id
         WHERE u.day = ?
         GROUP BY u.snippet_id ORDER BY n DESC, label LIMIT ?

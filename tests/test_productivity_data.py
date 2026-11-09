@@ -60,5 +60,47 @@ class ProductivityDataTests(unittest.TestCase):
         self.assertTrue(self.store._fts_available or self.store.snippets(query="retorno"))
 
 
+    def test_usage_survives_catalog_replacement_and_legacy_migration(self):
+        from datetime import date
+        import sqlite3
+        from contextlib import closing
+        path = Path(self.tmp.name) / "snippets.sqlite3"
+        self.store.register_expansion(self.one, date(2026, 11, 9))
+        self.store.register_expansion(self.one, date(2026, 11, 9))
+        self.assertTrue((Path(self.tmp.name) / "usage.sqlite3").exists())
+        self.store.close()
+        # Simula instalador que substituiu o SQLite de comandos, mas não o
+        # arquivo independente de estatísticas dentro do perfil.
+        path.unlink()
+        self.store = SnippetStore(path)
+        self.assertEqual(self.store.usage_report(date(2026, 11, 9))["total"], 2)
+        self.assertEqual(self.store.usage_days(2026, 11), {9: 2})
+        # Se o catálogo antigo reaparecer, não somar o mesmo histórico duas vezes.
+        self.store.close()
+        # 'with sqlite3.connect' COMMITA mas não FECHA a conexão.
+        # Windows bloqueia exclusão de bancos ainda abertos no tearDown.
+        with closing(sqlite3.connect(path)) as conn, conn:
+            conn.execute("""
+                INSERT INTO usage_daily(day, snippet_id, shortcut, uses)
+                VALUES ('2026-11-09', ?, '/saudacao', 2)
+                ON CONFLICT(day, snippet_id) DO UPDATE SET
+                    uses=excluded.uses, shortcut=excluded.shortcut
+            """, (self.one,))
+        self.store = SnippetStore(path)
+        self.assertEqual(self.store.usage_report(date(2026, 11, 9))["total"], 2)
+
+    def test_usage_reset_clears_both_databases_and_stays_cleared_after_reopen(self):
+        date_used = date(2026, 11, 9)
+        self.store.register_expansion(self.one, date_used)
+        self.store.reset_usage()
+        self.assertEqual(self.store.connection.execute(
+            "SELECT COUNT(*) FROM main.usage_daily").fetchone()[0], 0)
+        self.assertEqual(self.store.connection.execute(
+            "SELECT COUNT(*) FROM usage_store.usage_daily").fetchone()[0], 0)
+        self.store.close()
+        self.store = SnippetStore(Path(self.tmp.name) / "snippets.sqlite3")
+        self.assertEqual(self.store.usage_report(date_used)["total"], 0)
+
+
 if __name__ == "__main__":
     unittest.main()

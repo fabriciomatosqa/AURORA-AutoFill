@@ -11,6 +11,7 @@ import sqlite3
 import tempfile
 
 from .core import SnippetStore, application_db_path, validate_shortcut
+from .productivity_data import reconcile_usage
 from .preferences import normalize_preferences, preferences_path
 
 BACKUP_SUFFIX = ".aurora-backup.zip"
@@ -182,6 +183,9 @@ def restore_backup(store, archive_path: Path) -> None:
                 if settings is not None:
                     from .preferences import save_preferences
                     save_preferences(settings)
+                # Só após a restauração completa reconciliamos o histórico;
+                # uma falha ao salvar preferências não altera contadores reais.
+                reconcile_usage(store.connection)
             except Exception:
                 previous.backup(store.connection)
                 raise

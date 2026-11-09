@@ -1,5 +1,5 @@
 """Ribbon controls with predictable icon geometry on Windows and Linux."""
-from PySide6.QtCore import QPointF, QRect, QRectF, QSize, Qt
+from PySide6.QtCore import QPoint, QPointF, QRect, QRectF, QSize, Qt
 from PySide6.QtGui import QColor, QPainter, QPen
 from PySide6.QtWidgets import QHBoxLayout, QLabel, QToolButton, QWidget
 
@@ -53,6 +53,53 @@ class RibbonToolButton(QToolButton):
             painter.setPen(QColor('#ffffff') if active else ui_color('#effaff'))
             painter.drawText(self.rect(),Qt.AlignCenter,self.text())
         painter.end()
+
+
+class TableSplitButton(RibbonToolButton):
+    """Dois menus reais: corpo abre dimensões, seta abre galeria de estilos.
+
+    O popup da área principal permanece InstantPopup nativo, sem disparar
+    showMenu() no sinal clicked (que causava travamento/reentrância).
+    """
+
+    ARROW_WIDTH = 14
+
+    def __init__(self, parent=None):
+        super().__init__(parent, menu=True)
+        self.setPopupMode(QToolButton.InstantPopup)
+        self.styles_menu = None
+        self.setFocusPolicy(Qt.StrongFocus)
+
+    def icon_rect(self):
+        # Centraliza a arte na área principal, não sobre a divisória da seta.
+        size = self.iconSize().boundedTo(
+            QSize(self.width() - self.ARROW_WIDTH - 8, self.height() - 6))
+        return QRect(
+            (self.width() - self.ARROW_WIDTH - size.width()) // 2,
+            (self.height() - size.height()) // 2, size.width(), size.height())
+
+    def is_styles_arrow(self, x):
+        return x >= self.width() - self.ARROW_WIDTH
+
+    def mousePressEvent(self, event):
+        if (event.button() == Qt.LeftButton and self.styles_menu is not None
+                and self.is_styles_arrow(event.position().x())):
+            # popup() não cria o loop de eventos aninhado de exec().
+            self.styles_menu.popup(self.mapToGlobal(
+                QPoint(self.width() - self.ARROW_WIDTH, self.height())))
+            event.accept()
+            return
+        super().mousePressEvent(event)
+
+    def keyPressEvent(self, event):
+        if (self.styles_menu is not None
+                and event.key() == Qt.Key_Down
+                and event.modifiers() & Qt.AltModifier):
+            self.styles_menu.popup(self.mapToGlobal(
+                QPoint(self.width() - self.ARROW_WIDTH, self.height())))
+            event.accept()
+            return
+        super().keyPressEvent(event)
 
 
 class RibbonFooter(QWidget):
