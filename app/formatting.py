@@ -30,6 +30,9 @@ def has_rich_formatting(html: str) -> bool:
         return False
     if "<img" in html.lower() and "data:image/" in html.lower():
         return True
+    # Native QTextTable cells must travel as HTML rather than plain text.
+    if re.search(r"<table(?:\s|>)", html, re.I):
+        return True
     # Qt coloca font-family/font-size padrão no <body> de *todo* QTextEdit.
     # Não marcar texto simples como HTML formatado só por esse estilo base.
     content = re.sub(r"<body\b[^>]*>", "<body>", html, count=1, flags=re.I)
