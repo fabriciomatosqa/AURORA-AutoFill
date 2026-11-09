@@ -24,7 +24,7 @@ As versões de desenvolvimento podem ser **Pre-release**. Em **Configurações**
 
 - Windows: `%APPDATA%\AuroraAutoFill`
 - Linux: `~/.local/share/AuroraAutoFill` (respeita `XDG_DATA_HOME`)
-- Arquivos: `snippets.sqlite3`, `settings.json`, subpasta `backups`.
+- Arquivos: `snippets.sqlite3` (comandos e espelho das métricas), `usage.sqlite3` (histórico de uso independente), `settings.json` e subpasta `backups`.
 
 Nenhuma atualização apaga ou recria seus comandos. O diretório legado `AutoFillStudio` não é importado automaticamente: utilize **Exportar / Importar** ou um backup, se necessário.
 
@@ -42,7 +42,7 @@ As instalações novas recebem a pasta **Conheça o AURORA**, com exemplos `/bem
 ### Aparência, editor e clipboard
 
 - Temas: **Claro**, **Escuro** ou **Seguir o sistema**. A faixa de paisagem usa banners correspondentes dia/noite com composição alinhada, mesmo logotipo e controles.
-- Editor rico: fontes locais, negrito, itálico, sublinhado, riscado, cores, alinhamento, espaçamentos e estilos de parágrafo.
+- Editor rico: fontes locais, negrito, itálico, sublinhado, riscado, cores, alinhamento, espaçamentos e estilos de parágrafo. O botão **Tabela** tem duas ações: clique no ícone para escolher linhas e colunas, ou na seta para abrir uma galeria de estilos (simples, grade e lista), aplicáveis a tabelas existentes ou novas.
 - Emojis: seletor com categorias, busca e ícones Fluent coloridos; o conteúdo inserido permanece Unicode editável.
 - Imagens: PNG/JPG/WebP/BMP e prints colados. As figuras são incorporadas no HTML do comando, com limites de tamanho e quantidade, sem dependência de URL externa.
 - Pré-visualização: espelho visual sem foco ou comandos de edição.
@@ -119,7 +119,7 @@ Abra **Estatísticas** no painel esquerdo para consultar o total de comandos uti
 - São incrementadas **somente expansões confirmadas** pelo mecanismo principal. Ações manuais ou inserções sem verificação podem não ser contabilizadas.
 - Apenas IDs, atalhos e quantidades diárias são armazenados em `usage_daily` no SQLite. Nenhum conteúdo digitado em outros aplicativos, senha ou histórico de teclas é salvo como métrica.
 - **Limpar estatísticas** apaga os contadores, sem excluir os modelos.
-- Os backups completos incluem os contadores; exportar comandos em JSON não inclui métricas.
+- O histórico de uso é preservado em `usage.sqlite3`, separado do banco de comandos, e também espelhado no banco principal para que os backups completos continuem incluindo os contadores. Ao atualizar ou restaurar, o AURORA reconcilia os valores sem duplicá-los. Exportar apenas comandos em JSON não inclui métricas.
 
 ### Busca indexada
 
