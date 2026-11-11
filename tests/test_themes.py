@@ -110,7 +110,18 @@ class AppearanceTests(unittest.TestCase):
         settings = self.win.settings_page
         general = settings.groups["general"]
         tools = settings.groups["tools"]
+        self.win.stack.setCurrentWidget(settings)
         self.choose("light")
+        self.app.processEvents()
+        # Verificar pixels realmente pintados, não apenas texto do QSS.
+        # A regressão anterior tinha QSS claro nos rótulos, mas fundo azul.
+        card = settings.cards["appearance"]
+        general_color = general.grab().toImage().pixelColor(
+            general.width() - 7, 38)
+        card_color = card.grab().toImage().pixelColor(
+            card.width() - 18, 32)
+        self.assertGreater(general_color.lightnessF(), 0.75)
+        self.assertGreater(card_color.lightnessF(), 0.85)
         style = general.styleSheet()
         self.assertIn("background-color: #edf5fb", style)
         self.assertIn("background-color: #ffffff", style)
