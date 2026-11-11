@@ -39,8 +39,8 @@ def focus_dialog_input(dialog, control):
     control.setFocus(Qt.ActiveWindowFocusReason)
 
 
-def dialog_style():
-    if current_theme() == "light":
+def dialog_style(theme=None):
+    if (theme or current_theme()) == "light":
         return """
         QDialog { background: #f5fbff; color: #18314b; }
         QLabel { color: #18314b; }
@@ -297,7 +297,7 @@ MONTH_NAMES = (
     "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
     "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro",
 )
-WEEKDAY_NAMES = ("Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom")
+WEEKDAY_NAMES = ("Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb")
 
 
 class UsageStatisticsDialog(QDialog):
@@ -312,10 +312,11 @@ class UsageStatisticsDialog(QDialog):
         self.selected_day = anchor.day
         self.day_buttons = {}
         self.day_counts = {}
+        self._statistics_theme = current_theme()
+        self.setObjectName("usageStatisticsDialog")
         self.setWindowTitle("Estatísticas locais — AURORA")
         self.setMinimumSize(590, 640)
         self.resize(610, 665)
-        self.setStyleSheet(dialog_style())
         root = QVBoxLayout(self)
         root.setSpacing(9)
 
@@ -360,6 +361,7 @@ class UsageStatisticsDialog(QDialog):
             weekdays.addWidget(heading, 0, column)
         calendar_layout.addLayout(weekdays)
         self.days_host = QWidget()
+        self.days_host.setObjectName("usageCalendarHost")
         self.days_layout = QGridLayout(self.days_host)
         self.days_layout.setContentsMargins(0, 0, 0, 0)
         self.days_layout.setHorizontalSpacing(5)
@@ -393,7 +395,33 @@ class UsageStatisticsDialog(QDialog):
         close.clicked.connect(self.close)
         row.addWidget(close)
         root.addLayout(row)
+        self._apply_statistics_theme(self._statistics_theme)
+        # Uma janela de estatísticas aberta acompanha mudanças do tema.
+        controller = getattr(parent, "theme_controller", None)
+        if controller is not None:
+            controller.changed.connect(self._apply_statistics_theme)
         self.refresh()
+
+    def _apply_statistics_theme(self, theme):
+        self._statistics_theme = theme
+        light = theme == "light"
+        background = "#f5fbff" if light else "#0b1a2c"
+        foreground = "#18314b" if light else "#e6f6ff"
+        # Seletores específicos impedem que a folha geral do app mantenha
+        # elementos escuros em uma janela clara.
+        self.setStyleSheet(dialog_style(theme) + f"""
+            QDialog#usageStatisticsDialog {{
+                background-color: {background}; color: {foreground};
+            }}
+            QWidget#usageCalendarHost {{
+                background-color: {background};
+            }}
+            QLabel#usageDayDetails {{
+                color: {foreground};
+            }}
+        """)
+        for day, button in self.day_buttons.items():
+            button.setStyleSheet(self._day_style(day))
 
     def _shift_month(self, offset: int):
         serial = self.display_month.year * 12 + self.display_month.month - 1 + offset
@@ -407,7 +435,7 @@ class UsageStatisticsDialog(QDialog):
     def _day_style(self, day: int):
         count = self.day_counts.get(day, 0)
         peak = max(self.day_counts.values(), default=0)
-        light = current_theme() == "light"
+        light = self._statistics_theme == "light"
         if count == 0:
             background = "#f1f5f9" if light else "#172d42"
         else:
@@ -444,7 +472,8 @@ class UsageStatisticsDialog(QDialog):
         self.month_label.setText(f"{MONTH_NAMES[first.month - 1]} {first.year}")
         self.day_counts = self.store.usage_days(first.year, first.month)
         total_days = monthrange(first.year, first.month)[1]
-        start_weekday = first.weekday()
+        # Python: segunda=0. Interface: domingo=0.
+        start_weekday = (first.weekday() + 1) % 7
         for day in range(1, total_days + 1):
             index = start_weekday + day - 1
             count = self.day_counts.get(day, 0)
