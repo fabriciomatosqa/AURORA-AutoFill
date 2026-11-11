@@ -15,8 +15,35 @@ from PySide6.QtWidgets import (
 )
 
 from .icons import apply_icon, icon
-from .themes import set_ui_style
+from .themes import current_theme, set_ui_style
 from .version import IS_PRERELEASE
+
+
+
+# Escopo exclusivo do quadro "Geral": a conversão automática de cores não
+# reconhecia os fundos #0d253d e #0c2035. As letras ficavam escuras sobre
+# cartões ainda escuros. Não alterar estilos de outras áreas do aplicativo.
+GENERAL_LIGHT_STYLESHEET = """
+    QFrame#settingsGroup {
+        background-color: #edf5fb;
+        border: 1px solid #b6d2df;
+        border-radius: 13px;
+    }
+    QFrame#settingsCard {
+        background-color: #ffffff;
+        border: 1px solid #c9dbe6;
+        border-radius: 10px;
+    }
+    QLabel#settingsGroupTitle {
+        color: #086b78;
+        background: transparent;
+    }
+    QFrame#settingsAccent {
+        background-color: #009e96;
+        border: none;
+        border-radius: 2px;
+    }
+"""
 
 
 class SettingsPage(QWidget):
@@ -245,6 +272,13 @@ class SettingsPage(QWidget):
         # scrollbar appears or disappears, so listen to its geometry too.
         self.scroller.viewport().installEventFilter(self)
         self._reflow_groups(force=True)
+        self.set_general_theme(current_theme())
+
+    def set_general_theme(self, theme: str) -> None:
+        """Alterna apenas o fundo dos cartões de Geral, sem tocar nos controles."""
+        group = self.groups["general"]
+        group.setStyleSheet(
+            GENERAL_LIGHT_STYLESHEET if theme == "light" else "")
 
     def _group(self, key: str, title: str, summary: str):
         frame = QFrame(self.groups_host)
