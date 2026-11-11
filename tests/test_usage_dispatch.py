@@ -85,9 +85,9 @@ class UsageDispatchTests(unittest.TestCase):
         snippet = self.store.snippet_by_shortcut("/chamado")
         copied = SimpleNamespace(text=lambda: text)
         with patch("app.productivity_features.QApplication.clipboard",
-                   return_value=copied), \\
-             patch("app.productivity_features.restore_target", return_value=True), \\
-             patch("app.clipboard_content.materialize_clipboard"), \\
+                   return_value=copied), \
+             patch("app.productivity_features.restore_target", return_value=True), \
+             patch("app.clipboard_content.materialize_clipboard"), \
              patch("app.productivity_features.paste_clipboard") as paste:
             ProductivityMixin._safe_paste_selected(
                 self.window, context, text, snippet, shortcut=None)
@@ -99,7 +99,7 @@ class UsageDispatchTests(unittest.TestCase):
         context = SimpleNamespace(window=1, control=1)
         snippet = self.store.snippet_by_shortcut("/chamado")
         with patch("app.productivity_features.QApplication.clipboard",
-                   return_value=SimpleNamespace(text=lambda: text)), \\
+                   return_value=SimpleNamespace(text=lambda: text)), \
              patch("app.productivity_features.restore_target", return_value=False):
             ProductivityMixin._safe_paste_selected(
                 self.window, context, text, snippet, shortcut=None)
