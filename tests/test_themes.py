@@ -106,6 +106,37 @@ class AppearanceTests(unittest.TestCase):
             self.assertEqual(color.name(), "#16324f" if expected == "light" else "#f5faff")
             self.assertEqual(self.win.banner.height(), 168)
 
+    def test_general_settings_group_has_readable_light_cards_and_dark_reset(self):
+        settings = self.win.settings_page
+        general = settings.groups["general"]
+        tools = settings.groups["tools"]
+        self.win.stack.setCurrentWidget(settings)
+        self.choose("light")
+        self.app.processEvents()
+        # Verificar pixels realmente pintados, não apenas texto do QSS.
+        # A regressão anterior tinha QSS claro nos rótulos, mas fundo azul.
+        card = settings.cards["appearance"]
+        general_color = general.grab().toImage().pixelColor(
+            general.width() - 7, 38)
+        card_color = card.grab().toImage().pixelColor(
+            card.width() - 18, 32)
+        self.assertGreater(general_color.lightnessF(), 0.75)
+        self.assertGreater(card_color.lightnessF(), 0.85)
+        style = general.styleSheet()
+        self.assertIn("background-color: #edf5fb", style)
+        self.assertIn("background-color: #ffffff", style)
+        self.assertIn("color: #086b78", style)
+        self.assertIn("border: 1px solid #c9dbe6", style)
+        # Não alterar outros grupos nem as preferências da pessoa.
+        self.assertEqual(tools.styleSheet(), "")
+        self.assertEqual(settings.theme.currentData(), "light")
+        self.choose("dark")
+        self.assertEqual(general.styleSheet(), "")
+        self.assertEqual(tools.styleSheet(), "")
+        self.choose("light")
+        self.assertIn("background-color: #ffffff", general.styleSheet())
+        self.assertEqual(settings.theme.currentData(), "light")
+
     def test_failed_save_keeps_previous_theme_and_picker(self):
         self.choose("dark")
         with patch("app.features.save_preferences", side_effect=OSError("Disk full")), patch("app.features.QMessageBox.warning"):
