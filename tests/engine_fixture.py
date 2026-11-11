@@ -117,7 +117,7 @@ class EngineFixture:
             elif name.startswith(('_expand', '_expansion_succeeded', '_candidate', '_edit_snapshot', '_owns_clipboard',
                                   '_clipboard_', '_perform_expansion', '_submit_expansion', '_begin_keyboard_verification',
                                   '_begin_word_expansion', '_poll_word_expansion',
-                                  '_confirm_', '_check_cursor', '_set_caret', '_clear_failed_selection', '_paste_verified_selection', '_expansion_sent', '_finish_', '_resume_', '_restore_', '_toggle_listener', '_sync_quick_search_hotkey')):
+                                  '_confirm_', '_check_cursor', '_set_caret', '_clear_failed_selection', '_paste_verified_selection', '_expansion_sent', '_record_', '_finish_', '_resume_', '_restore_', '_toggle_listener', '_sync_quick_search_hotkey')):
                 setattr(self.host, name, MethodType(value, self.host))
 
     @property
