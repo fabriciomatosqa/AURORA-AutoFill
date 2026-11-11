@@ -164,6 +164,7 @@ class GlobalHotkeyListener:
         self._callback_failed = False
         self._health = HookHealth()
         self._status = "stopped"
+        self._startup_checked = False
 
     def update_shortcuts(self, shortcuts: list[str]) -> None:
         # Compile outside the hook's lock; large catalogs must not hold up
@@ -404,6 +405,28 @@ class GlobalHotkeyListener:
         except Exception as exc:
             self.stop()
             return False, f"Atalhos globais indisponíveis: {exc}"
+
+    def rearm_after_startup_if_idle(self) -> bool:
+        """Reinstala uma única vez hooks que ainda não observaram teclas.
+
+        Algumas inicializações pós-instalador deixam o hook sem receber
+        eventos, embora sua thread esteja viva. Repetir o preparo tem o
+        mesmo efeito do toggle manual, sem pausar a preferência do usuário.
+        Se já capturamos teclado, não interromper comandos em andamento.
+        """
+        with self._lifecycle_lock:
+            if self._startup_checked or not self._running or not self._enabled:
+                return False
+            self._startup_checked = True
+            with self._state_lock:
+                if self._health.keyboard_tick is not None:
+                    return False
+                self._needs_rearm = True
+                self.invalidate()
+                self._modifiers.clear()
+            self._report_state("recovering")
+            self._wake.set()
+            return True
 
     def _retire_hooks(self) -> None:
         listeners = self._listener, self._mouse_listener
