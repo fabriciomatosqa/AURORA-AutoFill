@@ -212,6 +212,9 @@ class ProductivityWidgetsTests(unittest.TestCase):
             self.assertIn("Total: 3", stats.summary.text())
             self.assertEqual(stats.month_label.text(), "Outubro 2026")
             self.assertEqual(len(stats.day_buttons), 31)
+            # 01/10/2026 foi quinta-feira: domingo=0, quinta=4.
+            index = stats.days_layout.indexOf(stats.day_buttons[1])
+            self.assertEqual(stats.days_layout.getItemPosition(index)[:2], (0, 4))
             self.assertIn("2 usos", stats.day_buttons[29].text())
             QTest.mouseClick(stats.day_buttons[29], Qt.LeftButton)
             self.assertIn("29/10/2026 — 2 usos", stats.day_details.text())
@@ -233,6 +236,40 @@ class ProductivityWidgetsTests(unittest.TestCase):
         finally:
             stats.close()
             stats.deleteLater()
+
+    def test_calendar_starts_with_sunday_and_november_first_is_first_column(self):
+        from app.productivity_widgets import WEEKDAY_NAMES
+        self.assertEqual(WEEKDAY_NAMES,
+                         ("Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"))
+        dlg = UsageStatisticsDialog(self.store, today=date(2026, 11, 11))
+        try:
+            first = dlg.days_layout.indexOf(dlg.day_buttons[1])
+            self.assertEqual(dlg.days_layout.getItemPosition(first)[:2], (0, 0))
+            yesterday = dlg.days_layout.indexOf(dlg.day_buttons[10])
+            self.assertEqual(dlg.days_layout.getItemPosition(yesterday)[:2], (1, 2))
+        finally:
+            dlg.close()
+            dlg.deleteLater()
+
+    def test_statistics_dialog_light_theme_and_live_switch(self):
+        previous = self.app.property("auroraTheme")
+        self.app.setProperty("auroraTheme", "light")
+        dlg = UsageStatisticsDialog(self.store, today=date(2026, 11, 11))
+        try:
+            self.assertIn("QDialog#usageStatisticsDialog", dlg.styleSheet())
+            self.assertIn("background-color: #f5fbff", dlg.styleSheet())
+            self.assertEqual(dlg._statistics_theme, "light")
+            self.assertIn("background: #f1f5f9", dlg.day_buttons[1].styleSheet())
+            dlg._apply_statistics_theme("dark")
+            self.assertIn("background-color: #0b1a2c", dlg.styleSheet())
+            self.assertIn("background: #172d42", dlg.day_buttons[1].styleSheet())
+            dlg._apply_statistics_theme("light")
+            self.assertIn("background-color: #f5fbff", dlg.styleSheet())
+            self.assertIn("background: #f1f5f9", dlg.day_buttons[1].styleSheet())
+        finally:
+            dlg.close()
+            dlg.deleteLater()
+            self.app.setProperty("auroraTheme", previous)
 
     def test_settings_productivity_buttons_emit_and_explain_usage(self):
         page = SettingsPage(dict(DEFAULTS), startup_supported=False,

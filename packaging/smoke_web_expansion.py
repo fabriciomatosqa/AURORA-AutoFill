@@ -165,7 +165,7 @@ def main():
             if name.startswith(('_expand', '_expansion_', '_candidate', '_edit_snapshot', '_owns_clipboard',
                                 '_clipboard_', '_perform_', '_submit_', '_begin_', '_poll_',
                                 '_confirm_', '_restore_', '_finish_', '_resume_', '_clear_',
-                                '_paste_verified_', '_check_cursor', '_set_caret')):
+                                '_paste_verified_', '_check_cursor', '_set_caret', '_record_')):
                 setattr(host, name, MethodType(getattr(AutoFillWindow, name), host))
         host._clone_clipboard_mime = AutoFillWindow._clone_clipboard_mime
         host._normal_text = AutoFillWindow._normal_text

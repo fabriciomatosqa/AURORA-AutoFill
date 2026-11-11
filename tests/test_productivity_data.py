@@ -52,6 +52,21 @@ class ProductivityDataTests(unittest.TestCase):
         self.assertEqual(self.store.usage_report()["total"], 0)
         self.assertEqual(self.store.usage_days(2026, 10), {})
 
+    def test_daily_count_across_yesterday_today_and_reopen(self):
+        yesterday = date(2026, 11, 10)
+        today = date(2026, 11, 11)
+        self.assertTrue(self.store.register_expansion(self.one, yesterday))
+        self.assertTrue(self.store.register_expansion(self.one, today))
+        self.assertTrue(self.store.register_expansion(self.two, today))
+        report = self.store.usage_report(today)
+        self.assertEqual((report["today"], report["month"], report["total"]),
+                         (2, 3, 3))
+        self.assertEqual(self.store.usage_days(2026, 11), {10: 1, 11: 2})
+        self.store.close()
+        self.store = SnippetStore(Path(self.tmp.name) / "snippets.sqlite3")
+        self.assertEqual(self.store.usage_days(2026, 11), {10: 1, 11: 2})
+        self.assertEqual(self.store.usage_report(today)["total"], 3)
+
     def test_no_record_before_success_and_backward_compatible_tables(self):
         self.assertFalse(self.store.register_expansion(99999, date(2026, 10, 29)))
         self.assertEqual(self.store.usage_report()["total"], 0)

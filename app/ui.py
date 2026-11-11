@@ -1942,6 +1942,7 @@ class AutoFillWindow(ProductivityMixin, AuroraFeaturesMixin, QMainWindow):
             QTimer.singleShot(10, lambda op=operation: self._poll_word_expansion(op))
             return
         if result.get('status') == 'pasted':
+            self._record_expansion_usage(operation)
             # O GetClipboardData do processo STA pode materializar formatos
             # atrasados e avançar a sequência. Só aceitar a revisão do ACK
             # nativo enquanto token, conteúdo e contexto continuam nossos.
@@ -2135,7 +2136,32 @@ class AutoFillWindow(ProductivityMixin, AuroraFeaturesMixin, QMainWindow):
         except Exception as exc:
             self._finish_expansion(operation, f"Não foi possível expandir: {exc}")
 
+    def _record_snippet_usage(self, snippet_id: int) -> bool:
+        """Grava uma inserção enviada sem armazenar conteúdo do usuário."""
+        try:
+            return bool(self.store.register_expansion(snippet_id))
+        except (sqlite3.Error, OSError):
+            # A expansão já foi enviada; uma falha do SQLite não a desfaz.
+            return False
+
+    def _record_expansion_usage(self, operation) -> bool:
+        """Registra uma única vez por operação, mesmo com callbacks assíncronos."""
+        if operation.usage_recorded:
+            return True
+        try:
+            snippet = self.store.snippet_by_shortcut(
+                operation.candidate.selected_shortcut or operation.candidate.shortcut)
+            recorded = bool(snippet and self._record_snippet_usage(snippet.id))
+        except (sqlite3.Error, OSError):
+            recorded = False
+        operation.usage_recorded = recorded
+        operation.usage_error = not recorded
+        return recorded
+
     def _expansion_sent(self, operation):
+        # Registra o envio após a API de colagem retornar sem erro.
+        # Não depende da leitura do destino, que muitos editores não fornecem.
+        self._record_expansion_usage(operation)
         # O som informa somente que Ctrl+V foi enviado, não comprova
         # aceitação ou upload no editor externo.
         if (operation.image_count or operation.before is None
@@ -2157,7 +2183,10 @@ class AutoFillWindow(ProductivityMixin, AuroraFeaturesMixin, QMainWindow):
                 raise ValueError("Contexto alterado após envio; resultado não confirmado.")
             before = operation.before
             if before is None:
-                self._finish_expansion(operation, f"Enviado: {operation.candidate.selected_shortcut or operation.candidate.shortcut}")
+                message = f"Enviado: {operation.candidate.selected_shortcut or operation.candidate.shortcut}"
+                if operation.usage_error:
+                    message += " · Estatística de uso não registrada."
+                self._finish_expansion(operation, message)
                 return
             snapshot = self._edit_snapshot(accessibility=bool(before.identity))
             if snapshot is not None and snapshot.identity != before.identity:
@@ -2230,15 +2259,11 @@ class AutoFillWindow(ProductivityMixin, AuroraFeaturesMixin, QMainWindow):
         if operation.stage == "confirmed":
             return
         operation.stage = "confirmed"
-        try:
-            item = self.store.snippet_by_shortcut(
-                operation.candidate.selected_shortcut or operation.candidate.shortcut)
-            if item:
-                self.store.register_expansion(item.id)
-        except (OSError, sqlite3.Error):
-            # Uma falha de métricas não desfaz uma expansão confirmada.
-            pass
+        # Se a colagem já foi contada no envio, a confirmação não soma de novo.
+        self._record_expansion_usage(operation)
         message = f"Expandido: {operation.candidate.selected_shortcut or operation.candidate.shortcut}"
+        if operation.usage_error:
+            message += " · Não foi possível registrar a estatística de uso."
         if operation.image_count and not operation.images_confirmed:
             message += " · Imagens não verificadas no destino. Confira os anexos antes de enviar."
         self.statusBar().showMessage(message, 10000 if operation.image_count else 3000)

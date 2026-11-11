@@ -290,9 +290,11 @@ class ProductivityMixin:
                 replace_shortcut(len(shortcut))
             else:
                 paste_clipboard()
-            self.statusBar().showMessage(
-                "Colagem acionada; confirme o resultado no aplicativo de destino.", 7000)
-            # Não contar como sucesso confirmado sem retorno do aplicativo.
+            recorded = self._record_snippet_usage(snippet.id)
+            notice = ("Colagem acionada; uso registrado."
+                      if recorded else "Colagem acionada, mas estatística não registrada.")
+            self.statusBar().showMessage(notice, 7000)
+            # A métrica é de inserção enviada; não afirma confirmação remota.
         except (OSError, ValueError, ContextUnavailable) as error:
             self.statusBar().showMessage(f"Nenhuma substituição automática: {error}", 9000)
 
@@ -347,6 +349,11 @@ class ProductivityMixin:
                     replace_shortcut(len(state["shortcut"]))
                 else:
                     paste_clipboard()
+                if not state.get("usage_recorded"):
+                    state["usage_recorded"] = self._record_snippet_usage(state["snippet"])
+                    if not state["usage_recorded"]:
+                        self.statusBar().showMessage(
+                            "Texto enviado, mas estatística não registrada.", 8000)
             elif kind in ("tab", "enter"):
                 from pynput.keyboard import Controller, Key
                 Controller().tap(Key.tab if kind == "tab" else Key.enter)
