@@ -106,6 +106,26 @@ class AppearanceTests(unittest.TestCase):
             self.assertEqual(color.name(), "#16324f" if expected == "light" else "#f5faff")
             self.assertEqual(self.win.banner.height(), 168)
 
+    def test_general_settings_group_has_readable_light_cards_and_dark_reset(self):
+        settings = self.win.settings_page
+        general = settings.groups["general"]
+        tools = settings.groups["tools"]
+        self.choose("light")
+        style = general.styleSheet()
+        self.assertIn("background-color: #edf5fb", style)
+        self.assertIn("background-color: #ffffff", style)
+        self.assertIn("color: #086b78", style)
+        self.assertIn("border: 1px solid #c9dbe6", style)
+        # Não alterar outros grupos nem as preferências da pessoa.
+        self.assertEqual(tools.styleSheet(), "")
+        self.assertEqual(settings.theme.currentData(), "light")
+        self.choose("dark")
+        self.assertEqual(general.styleSheet(), "")
+        self.assertEqual(tools.styleSheet(), "")
+        self.choose("light")
+        self.assertIn("background-color: #ffffff", general.styleSheet())
+        self.assertEqual(settings.theme.currentData(), "light")
+
     def test_failed_save_keeps_previous_theme_and_picker(self):
         self.choose("dark")
         with patch("app.features.save_preferences", side_effect=OSError("Disk full")), patch("app.features.QMessageBox.warning"):
