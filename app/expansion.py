@@ -97,6 +97,10 @@ class ExpansionOperation:
     image_only: bool = False
     images_confirmed: bool = False
     feedback_played: bool = False
+    # Métricas representam inserções enviadas, inclusive quando o destino
+    # não expõe a confirmação por acessibilidade. Nunca duplicar por ACK.
+    usage_recorded: bool = False
+    usage_error: bool = False
     # Segunda via para Word/Teams: só cola após Ctrl+C confirmar que a seleção
     # contém exatamente o atalho; não depende da leitura integral por UIA.
     keyboard_verify: bool = False
