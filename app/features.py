@@ -82,9 +82,9 @@ class AuroraFeaturesMixin:
             startup_enabled=windows_startup_enabled())
         self.settings_page.theme_changed.connect(
             lambda value: self._change_preference("theme", value))
-        # Executar depois da reaplicação global: cores claras apenas no
-        # painel Geral, inclusive quando o modo Sistema troca de tema.
-        self.theme_controller.changed.connect(self.settings_page.set_general_theme)
+        # Depois da paleta global, atualizar os dois grupos de Configurações.
+        # A mudança também acompanha o modo Sistema em tempo real.
+        self.theme_controller.changed.connect(self.settings_page.set_groups_theme)
         self.settings_page.sound_toggled.connect(
             lambda checked: self._change_preference("sound_enabled", checked))
         self.settings_page.volume_changed.connect(

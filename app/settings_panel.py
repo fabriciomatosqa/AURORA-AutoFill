@@ -20,10 +20,10 @@ from .version import IS_PRERELEASE
 
 
 
-# Escopo exclusivo do quadro "Geral": a conversão automática de cores não
-# reconhecia os fundos #0d253d e #0c2035. As letras ficavam escuras sobre
-# cartões ainda escuros. Não alterar estilos de outras áreas do aplicativo.
-GENERAL_LIGHT_STYLESHEET = """
+# Aplicar os mesmos fundos claros nos dois grupos das Configurações.
+# A conversão automática anterior cobria textos, mas não os cartões escuros.
+# Escopo local: nada fora da tela de Configurações é alterado.
+SETTINGS_GROUP_LIGHT_STYLESHEET = """
     QFrame#settingsGroup {
         background-color: #edf5fb;
         border: 1px solid #b6d2df;
@@ -43,6 +43,22 @@ GENERAL_LIGHT_STYLESHEET = """
         border: none;
         border-radius: 2px;
     }
+    QFrame#settingsToolTile {
+        background-color: #f2f8fc;
+        border: 1px solid #d1e2eb;
+        border-radius: 9px;
+    }
+    QLabel#settingsCardTitle, QLabel#settingsToolName,
+    QLabel#settingsFieldLabel {
+        color: #16324f;
+        background: transparent;
+    }
+    QLabel#settingsGroupIntro, QLabel#settingsCardIntro, QLabel#settingsHint {
+        color: #4f6b86;
+        background: transparent;
+    }
+    QCheckBox { color: #16324f; background: transparent; }
+    QCheckBox:disabled { color: #657d91; }
 """
 
 
@@ -86,7 +102,8 @@ class SettingsPage(QWidget):
         set_ui_style(self, r"""
             QWidget#settingsPage, QWidget#settingsContent,
             QWidget#settingsViewport, QWidget#settingsDashboard,
-            QWidget#settingsGroupsHost {
+            QWidget#settingsGroupsHost,
+            QWidget#settingsFixedHeader {
                 background: #091426; color: #eaf4ff;
             }
             QScrollArea#settingsScroll {
@@ -191,32 +208,22 @@ class SettingsPage(QWidget):
 
         root = QVBoxLayout(self)
         root.setContentsMargins(0, 0, 0, 0)
-        self.scroller = QScrollArea(self)
-        self.scroller.setObjectName("settingsScroll")
-        self.scroller.setFrameShape(QFrame.NoFrame)
-        self.scroller.viewport().setObjectName("settingsViewport")
-        self.scroller.setWidgetResizable(True)
-        self.scroller.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        root.setSpacing(0)
 
-        body = QWidget()
-        body.setObjectName("settingsContent")
-        outer = QHBoxLayout(body)
-        outer.setContentsMargins(self.SIDE_PADDING, 16,
-                                 self.SIDE_PADDING, 20)
-        outer.setSpacing(0)
-        outer.addStretch(0)
-        self.dashboard = QWidget(body)
-        self.dashboard.setObjectName("settingsDashboard")
-        self.dashboard.setMaximumWidth(self.MAX_DASHBOARD_WIDTH)
-        content = QVBoxLayout(self.dashboard)
-        content.setContentsMargins(0, 0, 0, 0)
-        content.setSpacing(18)
-        # Give the dashboard all available width below its desktop maximum.
-        # Zero-stretch side spacers center it only when that maximum is reached.
-        outer.addWidget(self.dashboard, 1)
-        outer.addStretch(0)
-
-        head = QHBoxLayout()
+        # Cabeçalho irmão do QScrollArea, não filho do conteúdo rolável:
+        # "Configurações" e "Voltar" permanecem visíveis ao rolar os cartões.
+        self.header_host = QWidget(self)
+        self.header_host.setObjectName("settingsFixedHeader")
+        self.header_host.setAttribute(Qt.WA_StyledBackground, True)
+        header_outer = QHBoxLayout(self.header_host)
+        header_outer.setContentsMargins(
+            self.SIDE_PADDING, 16, self.SIDE_PADDING, 12)
+        header_outer.setSpacing(0)
+        self.header_content = QWidget(self.header_host)
+        self.header_content.setMaximumWidth(self.MAX_DASHBOARD_WIDTH)
+        head = QHBoxLayout(self.header_content)
+        head.setContentsMargins(0, 0, 0, 0)
+        head.setSpacing(12)
         heading_column = QVBoxLayout()
         heading_column.setSpacing(4)
         heading = QLabel("Configurações")
@@ -231,7 +238,35 @@ class SettingsPage(QWidget):
         back.setObjectName("settingsBack")
         back.clicked.connect(self.close_requested.emit)
         head.addWidget(back, 0, Qt.AlignTop)
-        content.addLayout(head)
+        header_outer.addStretch(0)
+        header_outer.addWidget(self.header_content, 1)
+        header_outer.addStretch(0)
+        root.addWidget(self.header_host, 0)
+
+        self.scroller = QScrollArea(self)
+        self.scroller.setObjectName("settingsScroll")
+        self.scroller.setFrameShape(QFrame.NoFrame)
+        self.scroller.viewport().setObjectName("settingsViewport")
+        self.scroller.setWidgetResizable(True)
+        self.scroller.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+
+        body = QWidget()
+        body.setObjectName("settingsContent")
+        outer = QHBoxLayout(body)
+        outer.setContentsMargins(self.SIDE_PADDING, 12,
+                                 self.SIDE_PADDING, 20)
+        outer.setSpacing(0)
+        outer.addStretch(0)
+        self.dashboard = QWidget(body)
+        self.dashboard.setObjectName("settingsDashboard")
+        self.dashboard.setMaximumWidth(self.MAX_DASHBOARD_WIDTH)
+        content = QVBoxLayout(self.dashboard)
+        content.setContentsMargins(0, 0, 0, 0)
+        content.setSpacing(18)
+        # Give the dashboard all available width below its desktop maximum.
+        # Zero-stretch side spacers center it only when that maximum is reached.
+        outer.addWidget(self.dashboard, 1)
+        outer.addStretch(0)
 
         # A pair of large grouped panels, not a masonry grid of six cards.
         # On narrow windows the panels stack and each fills the viewport.
@@ -272,13 +307,13 @@ class SettingsPage(QWidget):
         # scrollbar appears or disappears, so listen to its geometry too.
         self.scroller.viewport().installEventFilter(self)
         self._reflow_groups(force=True)
-        self.set_general_theme(current_theme())
+        self.set_groups_theme(current_theme())
 
-    def set_general_theme(self, theme: str) -> None:
-        """Alterna apenas o fundo dos cartões de Geral, sem tocar nos controles."""
-        group = self.groups["general"]
-        group.setStyleSheet(
-            GENERAL_LIGHT_STYLESHEET if theme == "light" else "")
+    def set_groups_theme(self, theme: str) -> None:
+        """Aplica a paleta a Geral e Produtividade sem alterar suas funções."""
+        light_style = SETTINGS_GROUP_LIGHT_STYLESHEET if theme == "light" else ""
+        for group in self.groups.values():
+            group.setStyleSheet(light_style)
 
     def _group(self, key: str, title: str, summary: str):
         frame = QFrame(self.groups_host)

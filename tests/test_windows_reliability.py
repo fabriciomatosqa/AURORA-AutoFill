@@ -217,6 +217,41 @@ class RecognitionTests(unittest.TestCase):
         self.assertEqual(received, [])
 
 
+class StartupCaptureTests(unittest.TestCase):
+    def test_startup_rearm_is_once_and_never_unpauses_disabled_shortcuts(self):
+        listener = GlobalHotkeyListener(lambda _: None)
+        listener._running = True
+        listener._enabled = True
+        with patch.object(listener._wake, "set") as wake:
+            self.assertTrue(listener.rearm_after_startup_if_idle())
+            self.assertTrue(listener._needs_rearm)
+            self.assertTrue(listener._enabled)
+            self.assertEqual(listener.status, "recovering")
+            self.assertFalse(listener.rearm_after_startup_if_idle())
+            wake.assert_called_once()
+        paused = GlobalHotkeyListener(lambda _: None)
+        paused._running = True
+        paused._enabled = False
+        self.assertFalse(paused.rearm_after_startup_if_idle())
+        self.assertFalse(paused._enabled)
+        self.assertFalse(paused._needs_rearm)
+
+    def test_existing_keyboard_input_is_not_disrupted_by_bootstrap(self):
+        listener = GlobalHotkeyListener(lambda _: None)
+        listener._running = True
+        listener._health.observe("keyboard", 1234)
+        with patch.object(listener._wake, "set") as wake:
+            self.assertFalse(listener.rearm_after_startup_if_idle())
+            self.assertFalse(listener._needs_rearm)
+            self.assertFalse(listener.rearm_after_startup_if_idle())
+            wake.assert_not_called()
+
+    def test_bootstrap_is_noop_after_application_stops(self):
+        listener = GlobalHotkeyListener(lambda _: None)
+        self.assertFalse(listener.rearm_after_startup_if_idle())
+        self.assertFalse(listener._needs_rearm)
+
+
 class InjectionTests(unittest.TestCase):
     def test_failed_paste_does_not_send_delete_or_backspace(self):
         sent = []

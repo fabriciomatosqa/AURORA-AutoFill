@@ -9,7 +9,7 @@ from unittest.mock import patch
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 from PySide6.QtCore import QCoreApplication, QEvent, Qt
 from PySide6.QtGui import QColor, QPalette, QPixmap, QTextCursor
-from PySide6.QtWidgets import QApplication, QLabel, QPushButton
+from PySide6.QtWidgets import QApplication, QLabel, QPushButton, QScrollBar
 from app import preferences
 from app.themes import ThemeController, current_theme, resolved_theme
 from app.ui import AutoFillWindow, AuroraBanner, AuroraMenu
@@ -106,36 +106,63 @@ class AppearanceTests(unittest.TestCase):
             self.assertEqual(color.name(), "#16324f" if expected == "light" else "#f5faff")
             self.assertEqual(self.win.banner.height(), 168)
 
-    def test_general_settings_group_has_readable_light_cards_and_dark_reset(self):
+    def test_both_settings_groups_have_readable_light_cards_and_dark_reset(self):
         settings = self.win.settings_page
-        general = settings.groups["general"]
-        tools = settings.groups["tools"]
         self.win.stack.setCurrentWidget(settings)
         self.choose("light")
         self.app.processEvents()
-        # Verificar pixels realmente pintados, não apenas texto do QSS.
-        # A regressão anterior tinha QSS claro nos rótulos, mas fundo azul.
-        card = settings.cards["appearance"]
-        general_color = general.grab().toImage().pixelColor(
-            general.width() - 7, 38)
-        card_color = card.grab().toImage().pixelColor(
-            card.width() - 18, 32)
-        self.assertGreater(general_color.lightnessF(), 0.75)
-        self.assertGreater(card_color.lightnessF(), 0.85)
-        style = general.styleSheet()
-        self.assertIn("background-color: #edf5fb", style)
-        self.assertIn("background-color: #ffffff", style)
-        self.assertIn("color: #086b78", style)
-        self.assertIn("border: 1px solid #c9dbe6", style)
-        # Não alterar outros grupos nem as preferências da pessoa.
-        self.assertEqual(tools.styleSheet(), "")
+        # O defeito anterior clareava somente Geral; renderizar também os
+        # cartões de Produtividade e dados para não repetir essa regressão.
+        for key, card_name in (("general", "appearance"), ("tools", "productivity")):
+            with self.subTest(group=key):
+                group = settings.groups[key]
+                card = settings.cards[card_name]
+                general_color = group.grab().toImage().pixelColor(
+                    group.width() - 7, 38)
+                card_color = card.grab().toImage().pixelColor(
+                    card.width() - 18, 32)
+                self.assertGreater(general_color.lightnessF(), 0.75)
+                self.assertGreater(card_color.lightnessF(), 0.85)
+                style = group.styleSheet()
+                self.assertIn("background-color: #edf5fb", style)
+                self.assertIn("background-color: #ffffff", style)
+                self.assertIn("color: #086b78", style)
+                self.assertIn("border: 1px solid #c9dbe6", style)
+                self.assertIn("color: #16324f", style)
         self.assertEqual(settings.theme.currentData(), "light")
         self.choose("dark")
-        self.assertEqual(general.styleSheet(), "")
-        self.assertEqual(tools.styleSheet(), "")
+        for group in settings.groups.values():
+            self.assertEqual(group.styleSheet(), "")
         self.choose("light")
-        self.assertIn("background-color: #ffffff", general.styleSheet())
+        for group in settings.groups.values():
+            self.assertIn("background-color: #ffffff", group.styleSheet())
         self.assertEqual(settings.theme.currentData(), "light")
+
+    def test_settings_heading_and_back_button_remain_fixed_while_scrolling(self):
+        settings = self.win.settings_page
+        self.win.stack.setCurrentWidget(settings)
+        self.win.resize(1180, 760)
+        self.app.processEvents()
+        self.assertIs(settings.header_host.parentWidget(), settings)
+        self.assertIs(settings.scroller.parentWidget(), settings)
+        # Cabeçalho nunca é parte do QWidget definido em setWidget(scroller).
+        ancestor = settings.header_host.parentWidget()
+        while ancestor is not None:
+            self.assertIsNot(ancestor, settings.scroller)
+            ancestor = ancestor.parentWidget()
+        scrollbar = settings.scroller.verticalScrollBar()
+        self.assertGreater(scrollbar.maximum(), 0)
+        header_before = settings.header_host.geometry()
+        scrollbar.setValue(scrollbar.maximum())
+        self.app.processEvents()
+        self.assertEqual(settings.header_host.geometry(), header_before)
+        self.assertTrue(settings.header_host.isVisible())
+        self.assertTrue(settings.header_host.findChild(QPushButton, "settingsBack").isVisible())
+        self.assertEqual(scrollbar.value(), scrollbar.maximum())
+        # Ao voltar ao topo, não pular ou duplicar o título.
+        scrollbar.setValue(0)
+        self.app.processEvents()
+        self.assertEqual(settings.header_host.geometry(), header_before)
 
     def test_failed_save_keeps_previous_theme_and_picker(self):
         self.choose("dark")
