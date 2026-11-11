@@ -339,6 +339,11 @@ class AutoFillWindow(ProductivityMixin, AuroraFeaturesMixin, QMainWindow):
             warm_accessibility()
             warm_word()
         self._input_start_failure = "" if started else message
+        # A thread do hook pode ficar viva sem receber as primeiras teclas
+        # após uma atualização. Revalidar uma única vez ao abrir no Windows;
+        # não muda a preferência de ativação, nem reativa atalhos pausados.
+        if started and sys.platform == "win32":
+            QTimer.singleShot(700, self._stabilize_startup_shortcuts)
         self.listen_button.setText("Atalhos ativos" if started else "Atalhos indisponíveis")
         apply_icon(self.listen_button, "bolt" if started else "pause")
         # Permitir consultar o motivo e tentar novamente após conceder acesso.
@@ -1551,6 +1556,13 @@ class AutoFillWindow(ProductivityMixin, AuroraFeaturesMixin, QMainWindow):
             quick_search_warning or (
                 "Expansão ativa." if self._hotkeys_enabled else "Expansão pausada."
             ), 8000 if quick_search_warning else 4000)
+
+    def _stabilize_startup_shortcuts(self):
+        """Acorda a recuperação nativa só se a inicialização ficou sem entrada."""
+        if (self._quitting or not self._hotkeys_enabled
+                or self._input_start_failure):
+            return
+        self.hotkeys.rearm_after_startup_if_idle()
 
     def _listener_state_changed(self, _state):
         if self._quitting:
